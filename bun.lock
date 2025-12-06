@@ -2,7 +2,11 @@
   "lockfileVersion": 1,
   "configVersion": 1,
   "workspaces": {
-    "": {},
+    "": {
+      "devDependencies": {
+        "prettier": "^3.7.4",
+      },
+    },
     "packages/auth": {
       "name": "@starmode/auth",
       "version": "0.0.1",
@@ -10,5 +14,7 @@
   },
   "packages": {
     "@starmode/auth": ["@starmode/auth@workspace:packages/auth"],
+
+    "prettier": ["prettier@3.7.4", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-v6UNi1+3hSlVvv8fSaoUbggEM5VErKmmpGA7Pl3HF8V6uKY7rvClBOJlH6yNwQtfTueNkGVpOv/mtWL9L4bgRA=="],
   }
 }

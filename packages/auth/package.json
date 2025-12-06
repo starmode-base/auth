@@ -6,5 +6,8 @@
     ".": "./index.ts",
     "./client": "./client/index.ts"
   },
-  "files": ["*.ts", "client/"]
+  "files": [
+    "*.ts",
+    "client/"
+  ]
 }
