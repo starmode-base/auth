@@ -1,0 +1,10 @@
+{
+  "name": "@starmode/auth",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./client": "./client/index.ts"
+  },
+  "files": ["*.ts", "client/"]
+}

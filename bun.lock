@@ -1,0 +1,14 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {},
+    "packages/auth": {
+      "name": "@starmode/auth",
+      "version": "0.0.1",
+    },
+  },
+  "packages": {
+    "@starmode/auth": ["@starmode/auth@workspace:packages/auth"],
+  }
+}
