@@ -8,5 +8,11 @@
   },
   "files": [
     "src/"
-  ]
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "neon-testing": "^2.3.1"
+  }
 }
