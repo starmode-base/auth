@@ -95,14 +95,14 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 
 ```ts
 import {
-  createAuth,
+  makeAuth,
   createAuthHandler,
   otpEmailAdapterMinimal,
   otpSendAdapterConsole,
   sessionTokenAdapterJwt,
 } from "@starmode/auth";
 
-const auth = createAuth({
+const auth = makeAuth({
   // OTP persistence
   storeOtp: async (email, code, expiresAt) => {
     /* your ORM */
@@ -135,8 +135,8 @@ const auth = createAuth({
     /* your ORM */
   },
 
-  // Session token format
-  sessionToken: sessionTokenAdapterJwt({
+  // Session token (encode/decode are separate adapters, but tightly coupled)
+  ...sessionTokenAdapterJwt({
     secret: process.env.SESSION_SECRET,
     ttl: 600, // 10 min — after expiry, validates against DB
   }),
@@ -162,9 +162,9 @@ We don't touch your database. You write the persistence functions using whatever
 ```ts
 import type {
   // Main function
-  CreateAuth,
-  CreateAuthConfig,
-  CreateAuthReturn,
+  MakeAuth,
+  MakeAuthConfig,
+  MakeAuthReturn,
 
   // Handler
   CreateAuthHandler,
@@ -181,7 +181,8 @@ import type {
   StoreSessionAdapter,
   GetSessionAdapter,
   DeleteSessionAdapter,
-  SessionTokenAdapter,
+  EncodeSessionTokenAdapter,
+  DecodeSessionTokenAdapter,
 
   // OTP adapters
   OtpEmailAdapter,
@@ -231,16 +232,17 @@ type GetSessionAdapter = (
 ) => Promise<{ userId: string; expiresAt: Date } | null>;
 type DeleteSessionAdapter = (sessionId: string) => Promise<void>;
 
-// Session token format adapter
-type SessionTokenAdapter = {
-  encode: (payload: { sessionId: string; userId: string }) => string;
-  decode: (token: string) => {
-    sessionId: string;
-    userId: string;
-    valid: boolean;
-    expired: boolean;
-  } | null;
-};
+// Session token adapters (separate encode/decode, but tightly coupled)
+type EncodeSessionTokenAdapter = (payload: {
+  sessionId: string;
+  userId: string;
+}) => string;
+type DecodeSessionTokenAdapter = (token: string) => {
+  sessionId: string;
+  userId: string;
+  valid: boolean;
+  expired: boolean;
+} | null;
 
 // OTP delivery adapters
 type OtpEmailAdapter = (code: string) => { subject: string; body: string };
@@ -254,7 +256,7 @@ type RequestOtpAdapter = (email: string) => Promise<{ success: boolean }>;
 type VerifyOtpReturnAdapter = (
   email: string,
   code: string,
-) => Promise<{ valid: boolean; userId?: string }>;
+) => Promise<{ valid: boolean; userId?: string; token?: string }>;
 type GenerateRegistrationOptionsAdapter = (
   userId: string,
 ) => Promise<PublicKeyCredentialCreationOptions>;
@@ -269,7 +271,7 @@ type VerifyAuthenticationAdapter = (
 ) => Promise<{ valid: boolean; userId: string }>;
 
 // Config
-type CreateAuthConfig = {
+type MakeAuthConfig = {
   storeOtp: StoreOtpAdapter;
   verifyOtp: VerifyOtpAdapter;
   upsertUser: UpsertUserAdapter;
@@ -278,15 +280,18 @@ type CreateAuthConfig = {
   storeSession: StoreSessionAdapter;
   getSession: GetSessionAdapter;
   deleteSession: DeleteSessionAdapter;
-  sessionToken: SessionTokenAdapter;
+  encodeSessionToken: EncodeSessionTokenAdapter;
+  decodeSessionToken: DecodeSessionTokenAdapter;
   email: OtpEmailAdapter;
   send: OtpSendAdapter;
 };
 
 // Return
-type CreateAuthReturn = {
+type MakeAuthReturn = {
   requestOtp: RequestOtpAdapter;
   verifyOtp: VerifyOtpReturnAdapter;
+  getSession: (token: string) => Promise<{ userId: string } | null>;
+  deleteSession: (token: string) => Promise<void>;
   generateRegistrationOptions: GenerateRegistrationOptionsAdapter;
   verifyRegistration: VerifyRegistrationAdapter;
   generateAuthenticationOptions: GenerateAuthenticationOptionsAdapter;
@@ -294,33 +299,33 @@ type CreateAuthReturn = {
 };
 
 // Main function
-type CreateAuth = (config: CreateAuthConfig) => CreateAuthReturn;
+type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
 
 // Handler
 type AuthHandler = (
   method: string,
   args: Record<string, unknown>,
 ) => Promise<unknown>;
-type CreateAuthHandler = (auth: CreateAuthReturn) => AuthHandler;
+type CreateAuthHandler = (auth: MakeAuthReturn) => AuthHandler;
 ```
 
 **Shipped Adapters:**
 
 Naming pattern: `{TypeName}` → `{typeName}{Variant}` (camelCase type + variant suffix)
 
-| Type                     | Adapters                                                                                                                              |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `OtpEmailAdapter`        | `otpEmailAdapterMinimal()`, `otpEmailAdapterBranded({ appName, color })`                                                              |
-| `OtpSendAdapter`         | `otpSendAdapterConsole()`, `otpSendAdapterAuth({ apiKey })`, `otpSendAdapterResend({ apiKey })`, `otpSendAdapterSendgrid({ apiKey })` |
-| `StoreOtpAdapter`        | `storeOtpAdapterPg(pool)`                                                                                                             |
-| `VerifyOtpAdapter`       | `verifyOtpAdapterPg(pool)`                                                                                                            |
-| `UpsertUserAdapter`      | `upsertUserAdapterPg(pool)`                                                                                                           |
-| `StoreCredentialAdapter` | `storeCredentialAdapterPg(pool)`                                                                                                      |
-| `GetCredentialsAdapter`  | `getCredentialsAdapterPg(pool)`                                                                                                       |
-| `StoreSessionAdapter`    | `storeSessionAdapterPg(pool)`                                                                                                         |
-| `GetSessionAdapter`      | `getSessionAdapterPg(pool)`                                                                                                           |
-| `DeleteSessionAdapter`   | `deleteSessionAdapterPg(pool)`                                                                                                        |
-| `SessionTokenAdapter`    | `sessionTokenAdapterJwt({ secret, ttl })`, `sessionTokenAdapterOpaque({ secret })`                                                    |
+| Type                                                      | Adapters                                                                                                                                                        |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OtpEmailAdapter`                                         | `otpEmailAdapterMinimal()`, `otpEmailAdapterBranded({ appName, color })`                                                                                        |
+| `OtpSendAdapter`                                          | `otpSendAdapterConsole()`, `otpSendAdapterAuth({ apiKey })`, `otpSendAdapterResend({ apiKey })`, `otpSendAdapterSendgrid({ apiKey })`                           |
+| `StoreOtpAdapter`                                         | `storeOtpAdapterPg(pool)`                                                                                                                                       |
+| `VerifyOtpAdapter`                                        | `verifyOtpAdapterPg(pool)`                                                                                                                                      |
+| `UpsertUserAdapter`                                       | `upsertUserAdapterPg(pool)`                                                                                                                                     |
+| `StoreCredentialAdapter`                                  | `storeCredentialAdapterPg(pool)`                                                                                                                                |
+| `GetCredentialsAdapter`                                   | `getCredentialsAdapterPg(pool)`                                                                                                                                 |
+| `StoreSessionAdapter`                                     | `storeSessionAdapterPg(pool)`                                                                                                                                   |
+| `GetSessionAdapter`                                       | `getSessionAdapterPg(pool)`                                                                                                                                     |
+| `DeleteSessionAdapter`                                    | `deleteSessionAdapterPg(pool)`                                                                                                                                  |
+| `EncodeSessionTokenAdapter` + `DecodeSessionTokenAdapter` | `sessionTokenAdapterJwt({ secret, ttl })`, `sessionTokenAdapterOpaque({ secret })` — returns `{ encodeSessionToken, decodeSessionToken }` to spread into config |
 
 ### Client module (`@starmode/auth/client`)
 
@@ -442,9 +447,9 @@ type CreateAuthClient = (config: CreateAuthClientConfig) => AuthClient;
 
 **Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).
 
-**Fetching the viewer/current user:**
+**Fetching the viewer:**
 
-This library handles auth — proving identity and managing sessions. Fetching the "viewer" or "current user" object is your responsibility:
+This library handles auth — proving identity and managing sessions. Fetching the viewer is your responsibility:
 
 ```ts
 // Your code — same pattern as fetching any other data
@@ -454,7 +459,7 @@ const posts = await fetch("/api/posts");
 
 The session cookie is sent automatically. Your `/api/me` endpoint validates the session, looks up the user, returns whatever shape you need.
 
-**Why not `client.getCurrentUser()`?**
+**Why not `client.getViewer()`?**
 
 - Viewer shape is app-specific (roles, org, avatar, permissions, etc.)
 - It's just data fetching, not auth
@@ -463,7 +468,7 @@ The session cookie is sent automatically. Your `/api/me` endpoint validates the 
 
 **Future expansion (if needed):**
 
-We could later add a `sessionDecoder` adapter to the client, enabling `client.getCurrentUser()`:
+We could later add a `sessionDecoder` adapter to the client, enabling `client.getViewer()`:
 
 ```ts
 // JWT — decodes locally, instant (no server call)
@@ -472,7 +477,7 @@ const client = createAuthClient({
   sessionDecoder: sessionDecoderAdapterJwt(),
 });
 
-const user = client.getCurrentUser(); // → reads from cookie, instant
+const viewer = client.getViewer(); // → reads from cookie, instant
 
 // Opaque — can't decode locally, calls server
 const client = createAuthClient({
@@ -480,12 +485,12 @@ const client = createAuthClient({
   sessionDecoder: sessionDecoderAdapterOpaque(), // or omit entirely
 });
 
-const user = await client.getCurrentUser(); // → calls server
+const viewer = await client.getViewer(); // → calls server
 ```
 
 Same API, different behavior based on adapter. The `sessionDecoder` matches the server's `sessionToken` adapter:
 
-| Server                        | Client                       | `getCurrentUser()`     |
+| Server                        | Client                       | `getViewer()`          |
 | ----------------------------- | ---------------------------- | ---------------------- |
 | `sessionTokenAdapterJwt()`    | `sessionDecoderAdapterJwt()` | Instant (local decode) |
 | `sessionTokenAdapterOpaque()` | (none)                       | Server call            |
@@ -604,7 +609,7 @@ await client.signOut(); // revokes session server-side + clears cookie
 await client.requestOtp({ email });
 ```
 
-**Note:** No `useCurrentUser()` hook — that's app data, not auth. Use your own data fetching (React Query, SWR, server components, etc.).
+**Note:** No `useViewer()` hook — that's app data, not auth. Use your own data fetching (React Query, SWR, server components, etc.).
 
 ## Scope
 
