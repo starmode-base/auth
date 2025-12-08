@@ -170,14 +170,14 @@ import type {
   CreateAuthHandler,
   AuthHandler,
 
-  // Persistence adapters (you implement)
+  // Persistence adapters
   StoreOtpAdapter,
   VerifyOtpAdapter,
   UpsertUserAdapter,
   StoreCredentialAdapter,
   GetCredentialsAdapter,
 
-  // Session adapters (you implement persistence, we provide token format)
+  // Session adapters
   StoreSessionAdapter,
   GetSessionAdapter,
   DeleteSessionAdapter,
@@ -187,7 +187,7 @@ import type {
   OtpEmailAdapter,
   OtpSendAdapter,
 
-  // Return function adapters (library provides)
+  // Return adapters
   RequestOtpAdapter,
   VerifyOtpReturnAdapter,
   GenerateRegistrationOptionsAdapter,
@@ -249,7 +249,7 @@ type OtpSendAdapter = (
   content: { subject: string; body: string },
 ) => Promise<void>;
 
-// Return adapters (library provides)
+// Return adapters
 type RequestOtpAdapter = (email: string) => Promise<{ success: boolean }>;
 type VerifyOtpReturnAdapter = (
   email: string,
@@ -374,7 +374,7 @@ import type {
 **Type Definitions:**
 
 ```typescript
-// Transport (user can implement custom)
+// Transport
 type AuthTransportAdapter = (
   method: string,
   args: Record<string, unknown>,
