@@ -1,19 +1,27 @@
-import type { SessionTokenAdapter } from "../types";
+import type {
+  DecodeSessionTokenAdapter,
+  EncodeSessionTokenAdapter,
+} from "../types";
 
 type Options = {
   secret: string;
   ttl: number;
 };
 
+type SessionTokenJwtAdapters = {
+  encodeSessionToken: EncodeSessionTokenAdapter;
+  decodeSessionToken: DecodeSessionTokenAdapter;
+};
+
 export const sessionTokenAdapterJwt = (
   _options: Options,
-): SessionTokenAdapter => {
+): SessionTokenJwtAdapters => {
   // TODO: real JWT implementation
   return {
-    encode: (payload) => {
+    encodeSessionToken: (payload) => {
       return btoa(JSON.stringify(payload));
     },
-    decode: (token) => {
+    decodeSessionToken: (token) => {
       try {
         const payload = JSON.parse(atob(token));
         return {

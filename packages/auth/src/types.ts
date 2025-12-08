@@ -20,35 +20,34 @@ export type UpsertUserAdapter = (
   email: string,
 ) => Promise<{ userId: string; isNew: boolean }>;
 
-/** Store session in database */
+/** Store session */
 export type StoreSessionAdapter = (
   sessionId: string,
   userId: string,
   expiresAt: Date,
 ) => Promise<void>;
 
-/** Get session from database */
+/** Get session */
 export type GetSessionAdapter = (
   sessionId: string,
 ) => Promise<{ userId: string; expiresAt: Date } | null>;
 
-/** Delete session from database */
+/** Delete session */
 export type DeleteSessionAdapter = (sessionId: string) => Promise<void>;
 
-// ============================================================================
-// Token adapter
-// ============================================================================
+/** Encode session data into a token string */
+export type EncodeSessionTokenAdapter = (payload: {
+  sessionId: string;
+  userId: string;
+}) => string;
 
-/** Encode/decode session tokens (JWT or opaque) */
-export type SessionTokenAdapter = {
-  encode: (payload: { sessionId: string; userId: string }) => string;
-  decode: (token: string) => {
-    sessionId: string;
-    userId: string;
-    valid: boolean;
-    expired: boolean;
-  } | null;
-};
+/** Decode token string back to session data */
+export type DecodeSessionTokenAdapter = (token: string) => {
+  sessionId: string;
+  userId: string;
+  valid: boolean;
+  expired: boolean;
+} | null;
 
 // ============================================================================
 // OTP delivery adapters
@@ -78,13 +77,14 @@ export type CreateAuthConfig = {
   // User persistence
   upsertUser: UpsertUserAdapter;
 
-  // Session persistence
+  // Session (stored data)
   storeSession: StoreSessionAdapter;
   getSession: GetSessionAdapter;
   deleteSession: DeleteSessionAdapter;
 
-  // Session token format
-  sessionToken: SessionTokenAdapter;
+  // Session token (string representation)
+  encodeSessionToken: EncodeSessionTokenAdapter;
+  decodeSessionToken: DecodeSessionTokenAdapter;
 
   // OTP delivery
   email: OtpEmailAdapter;

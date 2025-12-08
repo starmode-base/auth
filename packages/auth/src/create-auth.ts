@@ -28,7 +28,8 @@ export const createAuth: CreateAuth = (
     storeSession,
     getSession,
     deleteSession,
-    sessionToken,
+    encodeSessionToken,
+    decodeSessionToken,
     email,
     send,
   } = config;
@@ -60,13 +61,13 @@ export const createAuth: CreateAuth = (
 
       await storeSession(sessionId, userId, expiresAt);
 
-      const token = sessionToken.encode({ sessionId, userId });
+      const token = encodeSessionToken({ sessionId, userId });
 
       return { valid: true, userId, token };
     },
 
     async getSession(token: string) {
-      const decoded = sessionToken.decode(token);
+      const decoded = decodeSessionToken(token);
 
       if (!decoded || !decoded.valid) {
         return null;
@@ -87,7 +88,7 @@ export const createAuth: CreateAuth = (
     },
 
     async deleteSession(token: string) {
-      const decoded = sessionToken.decode(token);
+      const decoded = decodeSessionToken(token);
 
       if (decoded) {
         await deleteSession(decoded.sessionId);

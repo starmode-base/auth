@@ -13,18 +13,23 @@ export {
 
 // Types
 export type {
-  // Persistence adapters
+  // OTP
   StoreOtpAdapter,
   VerifyOtpAdapter,
+
+  // User
   UpsertUserAdapter,
+
+  // Session (stored data)
   StoreSessionAdapter,
   GetSessionAdapter,
   DeleteSessionAdapter,
 
-  // Token adapter
-  SessionTokenAdapter,
+  // Session token (string representation)
+  EncodeSessionTokenAdapter,
+  DecodeSessionTokenAdapter,
 
-  // OTP delivery adapters
+  // OTP delivery
   OtpEmailAdapter,
   OtpSendAdapter,
 

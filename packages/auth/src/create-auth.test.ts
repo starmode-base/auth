@@ -14,7 +14,7 @@ describe("createAuth", () => {
     storeSession: async () => {},
     getSession: async () => ({ userId: "user_1", expiresAt: new Date() }),
     deleteSession: async () => {},
-    sessionToken: sessionTokenAdapterJwt({ secret: "test", ttl: 600 }),
+    ...sessionTokenAdapterJwt({ secret: "test", ttl: 600 }),
     email: otpEmailAdapterMinimal(),
     send: otpSendAdapterConsole(),
   });
