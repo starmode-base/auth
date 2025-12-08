@@ -93,7 +93,7 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 
 **Usage:**
 
-```typescript
+```ts
 import {
   createAuth,
   createAuthHandler,
@@ -159,7 +159,7 @@ We don't touch your database. You write the persistence functions using whatever
 
 **Exported Types:**
 
-```typescript
+```ts
 import type {
   // Main function
   CreateAuth,
@@ -199,7 +199,7 @@ import type {
 
 **Type Definitions:**
 
-```typescript
+```ts
 // OTP persistence adapters
 type StoreOtpAdapter = (
   email: string,
@@ -326,7 +326,7 @@ Naming pattern: `{TypeName}` → `{typeName}{Variant}` (camelCase type + variant
 
 **Usage:**
 
-```typescript
+```ts
 import { createAuthClient, httpTransport } from "@starmode/auth/client";
 
 // HTTP transport
@@ -350,7 +350,7 @@ const result = await client.verifyOtp({
 
 **Exported Types:**
 
-```typescript
+```ts
 import type {
   // Client
   AuthClient,
@@ -373,7 +373,7 @@ import type {
 
 **Type Definitions:**
 
-```typescript
+```ts
 // Transport
 type AuthTransportAdapter = (
   method: string,
@@ -446,7 +446,7 @@ type CreateAuthClient = (config: CreateAuthClientConfig) => AuthClient;
 
 This library handles auth — proving identity and managing sessions. Fetching the "viewer" or "current user" object is your responsibility:
 
-```typescript
+```ts
 // Your code — same pattern as fetching any other data
 const viewer = await fetch("/api/me"); // your endpoint, your shape
 const posts = await fetch("/api/posts");
@@ -465,7 +465,7 @@ The session cookie is sent automatically. Your `/api/me` endpoint validates the 
 
 We could later add a `sessionDecoder` adapter to the client, enabling `client.getCurrentUser()`:
 
-```typescript
+```ts
 // JWT — decodes locally, instant (no server call)
 const client = createAuthClient({
   transport: httpTransport("/api/auth"),
@@ -496,7 +496,7 @@ This would be additive (no breaking changes to existing code). For now, we keep 
 
 **Express:**
 
-```typescript
+```ts
 // Server
 app.post("/auth", async (req, res) => {
   const { method, args } = req.body;
@@ -515,7 +515,7 @@ const client = createAuthClient({
 - https://nextjs.org/docs/app/api-reference/directives/use-server
 - https://nextjs.org/docs/app/getting-started/updating-data#what-are-server-functions
 
-```typescript
+```ts
 // app/actions/auth.ts
 "use server";
 export async function authAction(
@@ -533,7 +533,7 @@ const client = createAuthClient({ transport: authAction });
 
 - https://nextjs.org/docs/app/getting-started/route-handlers
 
-```typescript
+```ts
 // app/api/auth/route.ts
 export async function POST(req: Request) {
   const { method, args } = await req.json();
@@ -550,7 +550,7 @@ const client = createAuthClient({
 
 - https://tanstack.com/start/latest/docs/framework/react/guide/server-functions
 
-```typescript
+```ts
 // Server
 export const authAction = createServerFn("POST", async ({ method, args }) => {
   return handler(method, args);
@@ -564,7 +564,7 @@ const client = createAuthClient({ transport: authAction });
 
 - https://tanstack.com/start/latest/docs/framework/react/guide/server-routes
 
-```typescript
+```ts
 // routes/api/auth.ts
 import { createFileRoute } from "@tanstack/react-router";
 import { json } from "@tanstack/react-start";
@@ -598,7 +598,7 @@ Only things that need reactive state (loading, error) or depend on other hooks n
 
 **Direct calls (no hook needed):**
 
-```typescript
+```ts
 // These are simple one-shot calls (still make server calls via transport)
 await client.signOut(); // revokes session server-side + clears cookie
 await client.requestOtp({ email });

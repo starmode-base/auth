@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-  createAuth,
+  makeAuth,
   otpEmailAdapterMinimal,
   otpSendAdapterConsole,
   sessionTokenAdapterJwt,
 } from "./index";
 
-describe("createAuth", () => {
-  const auth = createAuth({
+describe("makeAuth", () => {
+  const auth = makeAuth({
     storeOtp: async () => {},
     verifyOtp: async () => true,
     upsertUser: async () => ({ userId: "user_1", isNew: true }),

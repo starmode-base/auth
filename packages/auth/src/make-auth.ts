@@ -1,4 +1,4 @@
-import type { CreateAuth, CreateAuthConfig, CreateAuthReturn } from "./types";
+import type { MakeAuth, MakeAuthConfig, MakeAuthReturn } from "./types";
 
 /** Generate a random 6-digit OTP code */
 function generateOtpCode(): string {
@@ -18,9 +18,7 @@ function generateSessionId(): string {
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-export const createAuth: CreateAuth = (
-  config: CreateAuthConfig,
-): CreateAuthReturn => {
+export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
   const {
     storeOtp,
     verifyOtp,
@@ -73,7 +71,7 @@ export const createAuth: CreateAuth = (
         return null;
       }
 
-      // If token is expired, validate against database
+      // If token is expired, validate against storage
       if (decoded.expired) {
         const session = await getSession(decoded.sessionId);
 

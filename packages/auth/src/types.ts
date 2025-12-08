@@ -69,7 +69,7 @@ export type OtpSendAdapter = (
 // Config & Return types
 // ============================================================================
 
-export type CreateAuthConfig = {
+export type MakeAuthConfig = {
   // OTP persistence
   storeOtp: StoreOtpAdapter;
   verifyOtp: VerifyOtpAdapter;
@@ -91,7 +91,7 @@ export type CreateAuthConfig = {
   send: OtpSendAdapter;
 };
 
-export type CreateAuthReturn = {
+export type MakeAuthReturn = {
   requestOtp: (email: string) => Promise<{ success: boolean }>;
   verifyOtp: (
     email: string,
@@ -101,4 +101,4 @@ export type CreateAuthReturn = {
   deleteSession: (token: string) => Promise<void>;
 };
 
-export type CreateAuth = (config: CreateAuthConfig) => CreateAuthReturn;
+export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;

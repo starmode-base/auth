@@ -1,11 +1,11 @@
 // @starmode/auth - Server core
-export const VERSION = "0.0.1";
 
 // Core
-export { createAuth } from "./create-auth";
+export { makeAuth } from "./make-auth";
 
 // Adapters
 export {
+  memoryAdapters,
   otpEmailAdapterMinimal,
   otpSendAdapterConsole,
   sessionTokenAdapterJwt,
@@ -34,7 +34,7 @@ export type {
   OtpSendAdapter,
 
   // Config & Return
-  CreateAuthConfig,
-  CreateAuthReturn,
-  CreateAuth,
+  MakeAuthConfig,
+  MakeAuthReturn,
+  MakeAuth,
 } from "./types";
