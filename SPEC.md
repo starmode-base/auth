@@ -96,7 +96,7 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 ```ts
 import {
   makeAuth,
-  createAuthHandler,
+  makeAuthHandler,
   otpEmailAdapterMinimal,
   otpSendAdapterConsole,
   sessionTokenAdapterJwt,
@@ -147,7 +147,7 @@ const auth = makeAuth({
 });
 
 // Wrap for transport (HTTP, server actions, etc.)
-const handler = createAuthHandler(auth);
+const handler = makeAuthHandler(auth);
 // handler('requestOtp', { email }) → calls auth.requestOtp(email)
 ```
 
@@ -167,7 +167,7 @@ import type {
   MakeAuthReturn,
 
   // Handler
-  CreateAuthHandler,
+  MakeAuthHandler,
   AuthHandler,
 
   // Persistence adapters
@@ -306,7 +306,7 @@ type AuthHandler = (
   method: string,
   args: Record<string, unknown>,
 ) => Promise<unknown>;
-type CreateAuthHandler = (auth: MakeAuthReturn) => AuthHandler;
+type MakeAuthHandler = (auth: MakeAuthReturn) => AuthHandler;
 ```
 
 **Shipped Adapters:**
@@ -332,16 +332,16 @@ Naming pattern: `{TypeName}` → `{typeName}{Variant}` (camelCase type + variant
 **Usage:**
 
 ```ts
-import { createAuthClient, httpTransport } from "@starmode/auth/client";
+import { makeAuthClient, httpTransport } from "@starmode/auth/client";
 
 // HTTP transport
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: httpTransport("/api/auth"),
 });
 
 // Or pass server action directly (Next.js / TanStack Start)
 import { authAction } from "./actions";
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: authAction,
 });
 
@@ -359,8 +359,8 @@ const result = await client.verifyOtp({
 import type {
   // Client
   AuthClient,
-  CreateAuthClient,
-  CreateAuthClientConfig,
+  MakeAuthClient,
+  MakeAuthClientConfig,
 
   // Transport
   AuthTransportAdapter,
@@ -423,12 +423,12 @@ type AuthClient = {
   signOut: () => Promise<void>; // → server: revokes session in DB, clears cookie
 };
 
-type CreateAuthClientConfig = {
+type MakeAuthClientConfig = {
   transport: AuthTransportAdapter;
   // Future: sessionDecoder?: SessionDecoderAdapter
 };
 
-type CreateAuthClient = (config: CreateAuthClientConfig) => AuthClient;
+type MakeAuthClient = (config: MakeAuthClientConfig) => AuthClient;
 ```
 
 ### Session management
@@ -472,7 +472,7 @@ We could later add a `sessionDecoder` adapter to the client, enabling `client.ge
 
 ```ts
 // JWT — decodes locally, instant (no server call)
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: httpTransport("/api/auth"),
   sessionDecoder: sessionDecoderAdapterJwt(),
 });
@@ -480,7 +480,7 @@ const client = createAuthClient({
 const viewer = client.getViewer(); // → reads from cookie, instant
 
 // Opaque — can't decode locally, calls server
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: httpTransport("/api/auth"),
   sessionDecoder: sessionDecoderAdapterOpaque(), // or omit entirely
 });
@@ -510,7 +510,7 @@ app.post("/auth", async (req, res) => {
 });
 
 // Client
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: httpTransport("http://localhost:3000/auth"),
 });
 ```
@@ -531,7 +531,7 @@ export async function authAction(
 }
 
 // Client
-const client = createAuthClient({ transport: authAction });
+const client = makeAuthClient({ transport: authAction });
 ```
 
 **Next.js — API Route:**
@@ -546,7 +546,7 @@ export async function POST(req: Request) {
 }
 
 // Client
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: httpTransport("/api/auth"),
 });
 ```
@@ -562,7 +562,7 @@ export const authAction = createServerFn("POST", async ({ method, args }) => {
 });
 
 // Client
-const client = createAuthClient({ transport: authAction });
+const client = makeAuthClient({ transport: authAction });
 ```
 
 **TanStack Start — Server Routes:**
@@ -586,7 +586,7 @@ export const Route = createFileRoute("/api/auth")({
 });
 
 // Client
-const client = createAuthClient({
+const client = makeAuthClient({
   transport: httpTransport("/api/auth"),
 });
 ```

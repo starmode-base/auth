@@ -102,3 +102,16 @@ export type MakeAuthReturn = {
 };
 
 export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
+
+// ============================================================================
+// Handler types
+// ============================================================================
+
+/** Handler function that routes method calls to auth methods */
+export type AuthHandler = (
+  method: string,
+  args: Record<string, unknown>,
+) => Promise<unknown>;
+
+/** Make a handler from an auth instance */
+export type MakeAuthHandler = (auth: MakeAuthReturn) => AuthHandler;

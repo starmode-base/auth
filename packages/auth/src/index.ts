@@ -2,6 +2,7 @@
 
 // Core
 export { makeAuth } from "./make-auth";
+export { makeAuthHandler } from "./make-auth-handler";
 
 // Adapters
 export {
@@ -37,4 +38,8 @@ export type {
   MakeAuthConfig,
   MakeAuthReturn,
   MakeAuth,
+
+  // Handler
+  AuthHandler,
+  MakeAuthHandler,
 } from "./types";
