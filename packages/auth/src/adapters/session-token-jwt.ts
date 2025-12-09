@@ -13,7 +13,13 @@ type SessionTokenJwtAdapters = {
   decodeSessionToken: DecodeSessionTokenAdapter;
 };
 
-export const sessionTokenAdapterJwt = (
+/**
+ * Make session token JWT adapters
+ *
+ * @param options - The options for the session token JWT adapters
+ * @returns The session token JWT adapters (encode and decode)
+ */
+export const makeSessionTokenJwt = (
   _options: Options,
 ): SessionTokenJwtAdapters => {
   // TODO: real JWT implementation

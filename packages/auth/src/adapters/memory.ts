@@ -11,7 +11,7 @@ type OtpRecord = { code: string; expiresAt: Date };
 type SessionRecord = { userId: string; expiresAt: Date };
 type UserRecord = { userId: string; email: string };
 
-export type MemoryAdapters = {
+type MemoryAdapters = {
   storeOtp: StoreOtpAdapter;
   verifyOtp: VerifyOtpAdapter;
   upsertUser: UpsertUserAdapter;
@@ -26,7 +26,7 @@ export type MemoryAdapters = {
   };
 };
 
-export const memoryAdapters = (): MemoryAdapters => {
+export const makeMemoryAdapters = (): MemoryAdapters => {
   const otps = new Map<string, OtpRecord>();
   const sessions = new Map<string, SessionRecord>();
   const users = new Map<string, UserRecord>();

@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   makeAuth,
-  memoryAdapters,
-  otpEmailAdapterMinimal,
-  sessionTokenAdapterJwt,
+  makeMemoryAdapters,
+  otpEmailMinimal,
+  makeSessionTokenJwt,
 } from "./index";
 import type { OtpSendAdapter } from "./types";
 
 describe("auth integration", () => {
-  let memory: ReturnType<typeof memoryAdapters>;
+  let memory: ReturnType<typeof makeMemoryAdapters>;
   let sentOtps: { email: string; code: string }[];
   let auth: ReturnType<typeof makeAuth>;
 
   beforeEach(() => {
-    memory = memoryAdapters();
+    memory = makeMemoryAdapters();
     sentOtps = [];
 
     const captureSend: OtpSendAdapter = async (email, content) => {
@@ -22,8 +22,8 @@ describe("auth integration", () => {
 
     auth = makeAuth({
       ...memory,
-      ...sessionTokenAdapterJwt({ secret: "test-secret", ttl: 600 }),
-      email: otpEmailAdapterMinimal(),
+      ...makeSessionTokenJwt({ secret: "test-secret", ttl: 600 }),
+      email: otpEmailMinimal,
       send: captureSend,
     });
   });

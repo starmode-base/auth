@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   makeAuth,
   makeAuthHandler,
-  memoryAdapters,
-  otpEmailAdapterMinimal,
-  sessionTokenAdapterJwt,
+  makeMemoryAdapters,
+  otpEmailMinimal,
+  makeSessionTokenJwt,
 } from "./index";
 import type { AuthHandler, OtpSendAdapter } from "./types";
 
@@ -20,9 +20,9 @@ describe("makeAuthHandler", () => {
     };
 
     const auth = makeAuth({
-      ...memoryAdapters(),
-      ...sessionTokenAdapterJwt({ secret: "test-secret", ttl: 600 }),
-      email: otpEmailAdapterMinimal(),
+      ...makeMemoryAdapters(),
+      ...makeSessionTokenJwt({ secret: "test-secret", ttl: 600 }),
+      email: otpEmailMinimal,
       send: captureSend,
     });
 

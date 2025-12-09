@@ -97,9 +97,9 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 import {
   makeAuth,
   makeAuthHandler,
-  otpEmailAdapterMinimal,
-  otpSendAdapterConsole,
-  sessionTokenAdapterJwt,
+  otpEmailMinimal,
+  otpSendConsole,
+  makeSessionTokenJwt,
 } from "@starmode/auth";
 
 const auth = makeAuth({
@@ -136,14 +136,14 @@ const auth = makeAuth({
   },
 
   // Session token (encode/decode are separate adapters, but tightly coupled)
-  ...sessionTokenAdapterJwt({
+  ...makeSessionTokenJwt({
     secret: process.env.SESSION_SECRET,
     ttl: 600, // 10 min — after expiry, validates against DB
   }),
 
   // OTP delivery
-  email: otpEmailAdapterMinimal(), // Format
-  send: otpSendAdapterConsole(), // Sender
+  email: otpEmailMinimal, // Format
+  send: otpSendConsole, // Sender
 });
 
 // Wrap for transport (HTTP, server actions, etc.)
@@ -311,21 +311,24 @@ type MakeAuthHandler = (auth: MakeAuthReturn) => AuthHandler;
 
 **Shipped Adapters:**
 
-Naming pattern: `{TypeName}` → `{typeName}{Variant}` (camelCase type + variant suffix)
+Naming pattern:
 
-| Type                                                      | Adapters                                                                                                                                                        |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OtpEmailAdapter`                                         | `otpEmailAdapterMinimal()`, `otpEmailAdapterBranded({ appName, color })`                                                                                        |
-| `OtpSendAdapter`                                          | `otpSendAdapterConsole()`, `otpSendAdapterAuth({ apiKey })`, `otpSendAdapterResend({ apiKey })`, `otpSendAdapterSendgrid({ apiKey })`                           |
-| `StoreOtpAdapter`                                         | `storeOtpAdapterPg(pool)`                                                                                                                                       |
-| `VerifyOtpAdapter`                                        | `verifyOtpAdapterPg(pool)`                                                                                                                                      |
-| `UpsertUserAdapter`                                       | `upsertUserAdapterPg(pool)`                                                                                                                                     |
-| `StoreCredentialAdapter`                                  | `storeCredentialAdapterPg(pool)`                                                                                                                                |
-| `GetCredentialsAdapter`                                   | `getCredentialsAdapterPg(pool)`                                                                                                                                 |
-| `StoreSessionAdapter`                                     | `storeSessionAdapterPg(pool)`                                                                                                                                   |
-| `GetSessionAdapter`                                       | `getSessionAdapterPg(pool)`                                                                                                                                     |
-| `DeleteSessionAdapter`                                    | `deleteSessionAdapterPg(pool)`                                                                                                                                  |
-| `EncodeSessionTokenAdapter` + `DecodeSessionTokenAdapter` | `sessionTokenAdapterJwt({ secret, ttl })`, `sessionTokenAdapterOpaque({ secret })` — returns `{ encodeSessionToken, decodeSessionToken }` to spread into config |
+- Simple adapters (no config/state): `{variant}{Type}` — e.g., `otpEmailMinimal`, `otpSendConsole`
+- Factories (need config/state): `make{Variant}{Type}` — e.g., `makeSessionTokenJwt()`, `makeMemoryAdapters()`
+
+| Type                                                      | Adapters                                                                                                                                                  |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OtpEmailAdapter`                                         | `otpEmailMinimal`, `otpEmailBranded({ appName, color })`                                                                                                  |
+| `OtpSendAdapter`                                          | `otpSendConsole`, `otpSendResend({ apiKey })`, `otpSendSendgrid({ apiKey })`                                                                              |
+| `StoreOtpAdapter`                                         | `storeOtpPg(pool)`                                                                                                                                        |
+| `VerifyOtpAdapter`                                        | `verifyOtpPg(pool)`                                                                                                                                       |
+| `UpsertUserAdapter`                                       | `upsertUserPg(pool)`                                                                                                                                      |
+| `StoreCredentialAdapter`                                  | `storeCredentialPg(pool)`                                                                                                                                 |
+| `GetCredentialsAdapter`                                   | `getCredentialsPg(pool)`                                                                                                                                  |
+| `StoreSessionAdapter`                                     | `storeSessionPg(pool)`                                                                                                                                    |
+| `GetSessionAdapter`                                       | `getSessionPg(pool)`                                                                                                                                      |
+| `DeleteSessionAdapter`                                    | `deleteSessionPg(pool)`                                                                                                                                   |
+| `EncodeSessionTokenAdapter` + `DecodeSessionTokenAdapter` | `makeSessionTokenJwt({ secret, ttl })`, `makeSessionTokenOpaque({ secret })` — returns `{ encodeSessionToken, decodeSessionToken }` to spread into config |
 
 ### Client module (`@starmode/auth/client`)
 
@@ -442,7 +445,7 @@ type MakeAuthClient = (config: MakeAuthClientConfig) => AuthClient;
 
 **Token format via adapter:**
 
-- `sessionTokenAdapterJwt({ secret, ttl })` — JWT with HMAC signature. Cached for TTL, then validates against DB.
+- `makeSessionTokenJwt({ secret, ttl })` — JWT with HMAC signature. Cached for TTL, then validates against DB.
 - `sessionTokenAdapterOpaque({ secret })` — HMAC-signed session ID. Always validates against DB.
 
 **Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).
@@ -490,10 +493,10 @@ const viewer = await client.getViewer(); // → calls server
 
 Same API, different behavior based on adapter. The `sessionDecoder` matches the server's `sessionToken` adapter:
 
-| Server                        | Client                       | `getViewer()`          |
-| ----------------------------- | ---------------------------- | ---------------------- |
-| `sessionTokenAdapterJwt()`    | `sessionDecoderAdapterJwt()` | Instant (local decode) |
-| `sessionTokenAdapterOpaque()` | (none)                       | Server call            |
+| Server                     | Client                | `getViewer()`          |
+| -------------------------- | --------------------- | ---------------------- |
+| `makeSessionTokenJwt()`    | `sessionDecoderJwt()` | Instant (local decode) |
+| `makeSessionTokenOpaque()` | (none)                | Server call            |
 
 This would be additive (no breaking changes to existing code). For now, we keep it minimal — auth only, viewer fetching is your responsibility.
 

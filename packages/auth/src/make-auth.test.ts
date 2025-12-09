@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   makeAuth,
-  otpEmailAdapterMinimal,
-  otpSendAdapterConsole,
-  sessionTokenAdapterJwt,
+  otpEmailMinimal,
+  otpSendConsole,
+  makeSessionTokenJwt,
 } from "./index";
 
 describe("makeAuth", () => {
@@ -14,9 +14,9 @@ describe("makeAuth", () => {
     storeSession: async () => {},
     getSession: async () => ({ userId: "user_1", expiresAt: new Date() }),
     deleteSession: async () => {},
-    ...sessionTokenAdapterJwt({ secret: "test", ttl: 600 }),
-    email: otpEmailAdapterMinimal(),
-    send: otpSendAdapterConsole(),
+    ...makeSessionTokenJwt({ secret: "test", ttl: 600 }),
+    email: otpEmailMinimal,
+    send: otpSendConsole,
   });
 
   it("requestOtp returns success", async () => {

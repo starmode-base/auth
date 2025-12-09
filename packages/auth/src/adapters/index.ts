@@ -1,4 +1,4 @@
-export { memoryAdapters } from "./memory";
-export { otpEmailAdapterMinimal } from "./otp-email-minimal";
+export { makeMemoryAdapters } from "./memory";
+export { otpEmailAdapterlMinimal } from "./otp-email-minimal";
 export { otpSendAdapterConsole } from "./otp-send-console";
-export { sessionTokenAdapterJwt } from "./session-token-jwt";
+export { makeSessionTokenJwt } from "./session-token-jwt";

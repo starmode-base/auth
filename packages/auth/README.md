@@ -13,17 +13,17 @@ bun add @starmode/auth
 ```ts
 import {
   makeAuth,
-  memoryAdapters,
-  otpEmailAdapterMinimal,
-  otpSendAdapterConsole,
-  sessionTokenAdapterJwt,
+  makeMemoryAdapters,
+  otpEmailMinimal,
+  otpSendConsole,
+  makeSessionTokenJwt,
 } from "@starmode/auth";
 
 const auth = makeAuth({
-  ...memoryAdapters(),
-  ...sessionTokenAdapterJwt({ secret: process.env.SESSION_SECRET!, ttl: 600 }),
-  email: otpEmailAdapterMinimal(),
-  send: otpSendAdapterConsole(),
+  ...makeMemoryAdapters(),
+  ...makeSessionTokenJwt({ secret: process.env.SESSION_SECRET!, ttl: 600 }),
+  email: otpEmailMinimal,
+  send: otpSendConsole,
 });
 
 // Request OTP
@@ -55,7 +55,7 @@ Adapters can be provided individually or grouped into factories. Use factories w
 
 ```ts
 // Tightly coupled: encode/decode must use same secret
-const { encodeSessionToken, decodeSessionToken } = sessionTokenAdapterJwt({
+const { encodeSessionToken, decodeSessionToken } = makeSessionTokenJwt({
   secret: "my-secret",
   ttl: 600,
 });
@@ -75,9 +75,9 @@ const dbAdapters = (pool: Pool) => ({
 // Combine with spread
 const auth = makeAuth({
   ...dbAdapters(pool),
-  ...sessionTokenAdapterJwt({ secret, ttl }),
-  email: otpEmailAdapterMinimal(),
-  send: otpSendAdapterResend({ apiKey }),
+  ...makeSessionTokenJwt({ secret, ttl }),
+  email: otpEmailMinimal,
+  send: otpSendResend({ apiKey }),
 });
 ```
 

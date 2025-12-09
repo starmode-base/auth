@@ -6,10 +6,10 @@ export { makeAuthHandler } from "./make-auth-handler";
 
 // Adapters
 export {
-  memoryAdapters,
-  otpEmailAdapterMinimal,
-  otpSendAdapterConsole,
-  sessionTokenAdapterJwt,
+  makeMemoryAdapters,
+  otpEmailAdapterlMinimal as otpEmailMinimal,
+  otpSendAdapterConsole as otpSendConsole,
+  makeSessionTokenJwt,
 } from "./adapters";
 
 // Types
