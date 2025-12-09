@@ -89,6 +89,17 @@ Key difference:
 
 Everything is explicit, never implicit. No nesting, no magic. You provide adapters (typed callbacks), the library orchestrates them.
 
+### Framework-agnostic by design
+
+| Layer             | What it does        | Framework-specific? |
+| ----------------- | ------------------- | ------------------- |
+| `makeAuth`        | Pure logic          | No                  |
+| `makeAuthHandler` | Routes method calls | No                  |
+| `httpTransport`   | Wraps `fetch`       | No                  |
+| `makeAuthClient`  | Calls transport     | No                  |
+
+The only framework-specific code is the glue you write to connect the handler to your framework's request/response. For server actions, no adapter is needed—the action itself is the transport.
+
 ### Server module (`@starmode/auth`)
 
 **Usage:**
