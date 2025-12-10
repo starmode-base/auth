@@ -75,27 +75,21 @@ export function Input({
   );
 }
 
-export function Form({
-  children,
-  ...props
-}: React.FormHTMLAttributes<HTMLFormElement>) {
-  return (
-    <form {...props}>
-      <Stack>{children}</Stack>
-    </form>
-  );
-}
-
 export function Stack({
   className,
   direction = "col",
+  gap = "narrow",
   ...props
-}: React.HTMLAttributes<HTMLDivElement> & { direction?: "row" | "col" }) {
+}: React.HTMLAttributes<HTMLDivElement> & {
+  direction: "row" | "col";
+  gap?: "narrow" | "wide";
+}) {
   return (
     <div
       className={cn(
         "flex gap-2",
         direction === "row" ? "flex-row" : "flex-col",
+        gap === "narrow" ? "gap-2" : "gap-8",
         className,
       )}
       {...props}

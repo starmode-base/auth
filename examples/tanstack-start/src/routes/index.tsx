@@ -4,7 +4,6 @@ import { authAction, getSession } from "../lib/auth.server";
 import {
   Input,
   Button,
-  Form,
   Label,
   Heading,
   Text,
@@ -53,20 +52,25 @@ function EmailForm({
   loading: boolean;
 }) {
   return (
-    <Form onSubmit={onSubmit}>
-      <Label>Email address</Label>
-      <Input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@example.com"
-        required
-      />
-      <Button variant="primary" type="submit" disabled={loading}>
-        {loading ? "Sending..." : "Send code"}
-      </Button>
-      <Text>Check your server terminal for the OTP code</Text>
-    </Form>
+    <form onSubmit={onSubmit}>
+      <Stack direction="col" gap="wide">
+        <Heading>Create your account</Heading>
+        <Stack direction="col">
+          <Label>Email address</Label>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            required
+          />
+          <Button variant="primary" type="submit" disabled={loading}>
+            {loading ? "Sending..." : "Send code"}
+          </Button>
+          <Text>Check your server terminal for the OTP code</Text>
+        </Stack>
+      </Stack>
+    </form>
   );
 }
 
@@ -88,36 +92,43 @@ function CodeForm({
   error: string | null;
 }) {
   return (
-    <Form onSubmit={onSubmit}>
-      <Text>
-        Code sent to <span className="text-cyan-400">{email}</span>
-      </Text>
-      <Label>Enter the verification code</Label>
-      <Input
-        type="text"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder="123456"
-        required
-        maxLength={6}
-        className="text-2xl tracking-widest text-center"
-        data-1p-ignore
-      />
-      {error && <ErrorText>{error}</ErrorText>}
-      <Stack direction="row">
-        <Button
-          variant="primary"
-          type="submit"
-          disabled={loading}
-          className="flex-1"
-        >
-          {loading ? "Verifying..." : "Verify"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onBack}>
-          Back
-        </Button>
+    <form onSubmit={onSubmit}>
+      <Stack direction="col" gap="wide">
+        <Stack direction="col">
+          <Heading>Check your email</Heading>
+          <Text>
+            Code sent to <span className="text-cyan-400">{email}</span>
+          </Text>
+        </Stack>
+        <Stack direction="col">
+          <Label>Enter the verification code</Label>
+          <Input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="123456"
+            required
+            maxLength={6}
+            className="text-2xl tracking-widest text-center"
+            data-1p-ignore
+          />
+          {error && <ErrorText>{error}</ErrorText>}
+          <Stack direction="row">
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={loading}
+              className="flex-1"
+            >
+              {loading ? "Verifying..." : "Verify"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={onBack}>
+              Back
+            </Button>
+          </Stack>
+        </Stack>
       </Stack>
-    </Form>
+    </form>
   );
 }
 
@@ -131,14 +142,18 @@ function AuthenticatedView({
   loading: boolean;
 }) {
   return (
-    <Stack direction="col">
-      <Heading>Authenticated</Heading>
-      <Text>
-        User ID: <span className="text-cyan-400">{userId}</span>
-      </Text>
-      <Button variant="secondary" onClick={onSignOut} disabled={loading}>
-        {loading ? "Signing out..." : "Sign out"}
-      </Button>
+    <Stack direction="col" gap="wide">
+      <Stack direction="col">
+        <Heading>Authenticated</Heading>
+        <Text>
+          User ID: <span className="text-cyan-400">{userId}</span>
+        </Text>
+      </Stack>
+      <Stack direction="col">
+        <Button variant="secondary" onClick={onSignOut} disabled={loading}>
+          {loading ? "Signing out..." : "Sign out"}
+        </Button>
+      </Stack>
     </Stack>
   );
 }
