@@ -54,7 +54,7 @@ function EmailForm({
   return (
     <form onSubmit={onSubmit}>
       <Stack direction="col" gap="wide">
-        <Heading>Create your account</Heading>
+        <Heading>Create an account</Heading>
         <Stack direction="col">
           <Label>Email address</Label>
           <Input
@@ -217,7 +217,7 @@ function RouteComponent() {
           <Text>OTP authentication demo</Text>
         </div>
 
-        <div className="bg-gray-100 rounded p-8 text-center">
+        <div className="bg-white rounded p-8 text-center shadow-xl">
           {userId ? (
             <AuthenticatedView
               userId={userId}
