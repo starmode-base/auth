@@ -1,118 +1,234 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { authAction, getSession } from "../lib/auth.server";
 import {
-  Zap,
-  Server,
-  Route as RouteIcon,
-  Shield,
-  Waves,
-  Sparkles,
-} from "lucide-react";
+  Input,
+  Button,
+  Form,
+  Label,
+  Heading,
+  Text,
+  ErrorText,
+  Stack,
+} from "../lib/atoms";
 
-export const Route = createFileRoute("/")({ component: App });
+export const Route = createFileRoute("/")({
+  component: RouteComponent,
+  loader: async () => {
+    const session = await getSession();
+    return { session };
+  },
+});
 
-function App() {
-  const features = [
-    {
-      icon: <Zap className="w-12 h-12 text-cyan-400" />,
-      title: "Powerful Server Functions",
-      description:
-        "Write server-side code that seamlessly integrates with your client components. Type-safe, secure, and simple.",
-    },
-    {
-      icon: <Server className="w-12 h-12 text-cyan-400" />,
-      title: "Flexible Server Side Rendering",
-      description:
-        "Full-document SSR, streaming, and progressive enhancement out of the box. Control exactly what renders where.",
-    },
-    {
-      icon: <RouteIcon className="w-12 h-12 text-cyan-400" />,
-      title: "API Routes",
-      description:
-        "Build type-safe API endpoints alongside your application. No separate backend needed.",
-    },
-    {
-      icon: <Shield className="w-12 h-12 text-cyan-400" />,
-      title: "Strongly Typed Everything",
-      description:
-        "End-to-end type safety from server to client. Catch errors before they reach production.",
-    },
-    {
-      icon: <Waves className="w-12 h-12 text-cyan-400" />,
-      title: "Full Streaming Support",
-      description:
-        "Stream data from server to client progressively. Perfect for AI applications and real-time updates.",
-    },
-    {
-      icon: <Sparkles className="w-12 h-12 text-cyan-400" />,
-      title: "Next Generation Ready",
-      description:
-        "Built from the ground up for modern web applications. Deploy anywhere JavaScript runs.",
-    },
-  ];
+// Auth client methods using server function as transport
+const auth = {
+  async requestOtp(email: string) {
+    const result = await authAction({
+      data: { method: "requestOtp", args: { email } },
+    });
+
+    return result as { success: boolean };
+  },
+  async verifyOtp(email: string, code: string) {
+    const result = await authAction({
+      data: { method: "verifyOtp", args: { email, code } },
+    });
+
+    return result as { valid: boolean; userId?: string };
+  },
+  async signOut() {
+    await authAction({ data: { method: "deleteSession", args: {} } });
+  },
+};
+
+function EmailForm({
+  email,
+  setEmail,
+  onSubmit,
+  loading,
+}: {
+  email: string;
+  setEmail: (email: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  loading: boolean;
+}) {
+  return (
+    <Form onSubmit={onSubmit}>
+      <Label>Email address</Label>
+      <Input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        required
+      />
+      <Button variant="primary" type="submit" disabled={loading}>
+        {loading ? "Sending..." : "Send code"}
+      </Button>
+      <Text>Check your server terminal for the OTP code</Text>
+    </Form>
+  );
+}
+
+function CodeForm({
+  email,
+  code,
+  setCode,
+  onSubmit,
+  onBack,
+  loading,
+  error,
+}: {
+  email: string;
+  code: string;
+  setCode: (code: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onBack: () => void;
+  loading: boolean;
+  error: string | null;
+}) {
+  return (
+    <Form onSubmit={onSubmit}>
+      <Text>
+        Code sent to <span className="text-cyan-400">{email}</span>
+      </Text>
+      <Label>Enter the verification code</Label>
+      <Input
+        type="text"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        placeholder="123456"
+        required
+        maxLength={6}
+        className="text-2xl tracking-widest text-center"
+        data-1p-ignore
+      />
+      {error && <ErrorText>{error}</ErrorText>}
+      <Stack direction="row">
+        <Button
+          variant="primary"
+          type="submit"
+          disabled={loading}
+          className="flex-1"
+        >
+          {loading ? "Verifying..." : "Verify"}
+        </Button>
+        <Button type="button" variant="secondary" onClick={onBack}>
+          Back
+        </Button>
+      </Stack>
+    </Form>
+  );
+}
+
+function AuthenticatedView({
+  userId,
+  onSignOut,
+  loading,
+}: {
+  userId: string;
+  onSignOut: () => void;
+  loading: boolean;
+}) {
+  return (
+    <Stack direction="col">
+      <Heading>Authenticated</Heading>
+      <Text>
+        User ID: <span className="text-cyan-400">{userId}</span>
+      </Text>
+      <Button variant="secondary" onClick={onSignOut} disabled={loading}>
+        {loading ? "Signing out..." : "Sign out"}
+      </Button>
+    </Stack>
+  );
+}
+
+function RouteComponent() {
+  const { session } = Route.useLoaderData();
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"email" | "code">("email");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(session?.userId ?? null);
+
+  const handleRequestOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const result = await auth.requestOtp(email);
+    if (result.success) setStep("code");
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    const result = await auth.verifyOtp(email, code);
+    if (result.valid && result.userId) {
+      setUserId(result.userId);
+    } else {
+      setError("Invalid code");
+    }
+    setLoading(false);
+  };
+
+  const handleSignOut = async () => {
+    setLoading(true);
+    await auth.signOut();
+    setUserId(null);
+    setEmail("");
+    setCode("");
+    setStep("email");
+    setLoading(false);
+  };
+
+  const handleBack = () => {
+    setStep("email");
+    setCode("");
+    setError(null);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      <section className="relative py-20 px-6 text-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-purple-500/10"></div>
-        <div className="relative max-w-5xl mx-auto">
-          <div className="flex items-center justify-center gap-6 mb-6">
-            <img
-              src="/tanstack-circle-logo.png"
-              alt="TanStack Logo"
-              className="w-24 h-24 md:w-32 md:h-32"
-            />
-            <h1 className="text-6xl md:text-7xl font-black text-white [letter-spacing:-0.08em]">
-              <span className="text-gray-300">TANSTACK</span>{" "}
-              <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                START
-              </span>
-            </h1>
-          </div>
-          <p className="text-2xl md:text-3xl text-gray-300 mb-4 font-light">
-            The framework for next generation AI applications
-          </p>
-          <p className="text-lg text-gray-400 max-w-3xl mx-auto mb-8">
-            Full-stack framework powered by TanStack Router for React and Solid.
-            Build modern applications with server functions, streaming, and type
-            safety.
-          </p>
-          <div className="flex flex-col items-center gap-4">
-            <a
-              href="https://tanstack.com/start"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-8 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-cyan-500/50"
-            >
-              Documentation
-            </a>
-            <p className="text-gray-400 text-sm mt-2">
-              Begin your TanStack Start journey by editing{" "}
-              <code className="px-2 py-1 bg-slate-700 rounded text-cyan-400">
-                /src/routes/index.tsx
-              </code>
-            </p>
-          </div>
+    <div className="min-h-dvh flex items-center justify-center p-8">
+      <div className="w-full max-w-md flex flex-col gap-8">
+        <div className="flex flex-col gap-2 text-center">
+          <h1 className="text-4xl font-bold">
+            <span className="text-gray-300">STΛR MODΞ</span>{" "}
+            <span className="bg-linear-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+              AUTH
+            </span>
+          </h1>
+          <Text>OTP authentication demo</Text>
         </div>
-      </section>
 
-      <section className="py-16 px-6 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all duration-300 hover:shadow-lg hover:shadow-cyan-500/10"
-            >
-              <div className="mb-4">{feature.icon}</div>
-              <h3 className="text-xl font-semibold text-white mb-3">
-                {feature.title}
-              </h3>
-              <p className="text-gray-400 leading-relaxed">
-                {feature.description}
-              </p>
-            </div>
-          ))}
+        <div className="bg-gray-100 rounded p-8 text-center">
+          {userId ? (
+            <AuthenticatedView
+              userId={userId}
+              onSignOut={handleSignOut}
+              loading={loading}
+            />
+          ) : step === "email" ? (
+            <EmailForm
+              email={email}
+              setEmail={setEmail}
+              onSubmit={handleRequestOtp}
+              loading={loading}
+            />
+          ) : (
+            <CodeForm
+              email={email}
+              code={code}
+              setCode={setCode}
+              onSubmit={handleVerifyOtp}
+              onBack={handleBack}
+              loading={loading}
+              error={error}
+            />
+          )}
         </div>
-      </section>
+      </div>
     </div>
   );
 }
