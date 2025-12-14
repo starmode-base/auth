@@ -3,6 +3,12 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bun run --watch index.ts"
+  },
+  "dependencies": {
+    "@starmode/auth": "workspace:*"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

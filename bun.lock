@@ -11,6 +11,9 @@
     },
     "examples/bun-memory": {
       "name": "bun-memory",
+      "dependencies": {
+        "@starmode/auth": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "latest",
       },
