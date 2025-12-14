@@ -109,7 +109,7 @@ export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
 
 /** Handler function that routes method calls to auth methods */
 export type AuthHandler = (
-  method: string,
+  method: "getSession" | "deleteSession" | "requestOtp" | "verifyOtp",
   args: Record<string, unknown>,
 ) => Promise<unknown>;
 

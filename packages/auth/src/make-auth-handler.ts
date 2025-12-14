@@ -13,7 +13,7 @@ import type { AuthHandler, MakeAuthHandler, MakeAuthReturn } from "./types";
 export const makeAuthHandler: MakeAuthHandler = (
   auth: MakeAuthReturn,
 ): AuthHandler => {
-  return async (method: string, args: Record<string, unknown>) => {
+  return async (method, args) => {
     switch (method) {
       case "requestOtp": {
         const { email } = args as { email: string };
