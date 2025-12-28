@@ -91,14 +91,15 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 
 ### Framework-agnostic by design
 
-| Layer             | What it does        | Framework-specific? |
-| ----------------- | ------------------- | ------------------- |
-| `makeAuth`        | Pure logic          | No                  |
-| `makeAuthHandler` | Routes method calls | No                  |
-| `httpTransport`   | Wraps `fetch`       | No                  |
-| `makeAuthClient`  | Calls transport     | No                  |
+| Layer             | What it does             | Framework-specific?         |
+| ----------------- | ------------------------ | --------------------------- |
+| `makeAuth`        | Pure auth logic          | No                          |
+| `makeCookieAuth`  | Wraps auth with cookies  | No (you provide cookie ops) |
+| `makeAuthHandler` | Typed request → response | No                          |
+| `httpTransport`   | Wraps `fetch`            | No                          |
+| `makeAuthClient`  | Calls transport          | No                          |
 
-The only framework-specific code is the glue you write to connect the handler to your framework's request/response. For server actions, no adapter is needed—the action itself is the transport.
+The only framework-specific code is the glue you write: (1) cookie get/set/clear functions for `makeCookieAuth`, and (2) input validation at your endpoint boundary. The handler expects a validated `AuthRequest` — you validate using your framework's tools (Zod, TanStack's `inputValidator`, etc.).
 
 ### Server module (`@starmode/auth`)
 
@@ -107,6 +108,7 @@ The only framework-specific code is the glue you write to connect the handler to
 ```ts
 import {
   makeAuth,
+  makeCookieAuth,
   makeAuthHandler,
   otpEmailMinimal,
   otpSendConsole,
@@ -157,9 +159,19 @@ const auth = makeAuth({
   send: otpSendConsole, // Sender
 });
 
-// Wrap for transport (HTTP, server actions, etc.)
-const handler = makeAuthHandler(auth);
-// handler('requestOtp', { email }) → calls auth.requestOtp(email)
+// Wrap with cookie handling (you provide cookie ops)
+const cookieAuth = makeCookieAuth({
+  auth,
+  cookie: {
+    get: () => /* read session cookie */,
+    set: (token) => /* set session cookie */,
+    clear: () => /* clear session cookie */,
+  },
+});
+
+// Create handler for transport (HTTP, server actions, etc.)
+const handler = makeAuthHandler(cookieAuth);
+// handler({ method: "requestOtp", email }) → cookieAuth.requestOtp(email)
 ```
 
 **Why No Database Drivers?**
@@ -167,47 +179,6 @@ const handler = makeAuthHandler(auth);
 Most auth libraries take a database pool and run queries internally. This means they control your schema, ID generation, and query patterns — and you fight them when it doesn't match your app.
 
 We don't touch your database. You write the persistence functions using whatever ORM/driver you already use. The library is pure orchestration.
-
-**Exported Types:**
-
-```ts
-import type {
-  // Main function
-  MakeAuth,
-  MakeAuthConfig,
-  MakeAuthReturn,
-
-  // Handler
-  MakeAuthHandler,
-  AuthHandler,
-
-  // Persistence adapters
-  StoreOtpAdapter,
-  VerifyOtpAdapter,
-  UpsertUserAdapter,
-  StoreCredentialAdapter,
-  GetCredentialsAdapter,
-
-  // Session adapters
-  StoreSessionAdapter,
-  GetSessionAdapter,
-  DeleteSessionAdapter,
-  EncodeSessionTokenAdapter,
-  DecodeSessionTokenAdapter,
-
-  // OTP adapters
-  OtpEmailAdapter,
-  OtpSendAdapter,
-
-  // Return adapters
-  RequestOtpAdapter,
-  VerifyOtpReturnAdapter,
-  GenerateRegistrationOptionsAdapter,
-  VerifyRegistrationAdapter,
-  GenerateAuthenticationOptionsAdapter,
-  VerifyAuthenticationAdapter,
-} from "@starmode/auth";
-```
 
 **Type Definitions:**
 
@@ -312,34 +283,72 @@ type MakeAuthReturn = {
 // Main function
 type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
 
-// Handler
-type AuthHandler = (
-  method: string,
-  args: Record<string, unknown>,
-) => Promise<unknown>;
-type MakeAuthHandler = (auth: MakeAuthReturn) => AuthHandler;
+// Cookie adapter — you provide these (framework-specific)
+type CookieAdapter = {
+  get: () => string | undefined;
+  set: (token: string) => void;
+  clear: () => void;
+};
+
+// Cookie auth — wraps auth with automatic cookie handling
+type CookieAuthReturn = {
+  requestOtp: (email: string) => Promise<{ success: boolean }>;
+  verifyOtp: (
+    email: string,
+    code: string,
+  ) => Promise<{ valid: boolean; userId?: string }>;
+  getSession: () => Promise<{ userId: string } | null>;
+  signOut: () => Promise<void>;
+};
+
+type MakeCookieAuth = (config: {
+  auth: MakeAuthReturn;
+  cookie: CookieAdapter;
+}) => CookieAuthReturn;
+
+// Handler — typed discriminated union, no type assertions needed
+type AuthRequest =
+  | { method: "requestOtp"; email: string }
+  | { method: "verifyOtp"; email: string; code: string }
+  | { method: "getSession" }
+  | { method: "signOut" };
+
+// Response types match CookieAuthReturn method signatures
+type RequestOtpResponse = { success: boolean };
+type VerifyOtpResponse = { valid: boolean; userId?: string };
+type GetSessionResponse = { userId: string } | null;
+type SignOutResponse = void;
+
+type AuthResponse =
+  | RequestOtpResponse
+  | VerifyOtpResponse
+  | GetSessionResponse
+  | SignOutResponse;
+
+type AuthHandler = (request: AuthRequest) => Promise<AuthResponse>;
+type MakeAuthHandler = (cookieAuth: CookieAuthReturn) => AuthHandler;
 ```
 
 **Shipped Adapters:**
 
-Naming pattern:
+Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type}()`.
 
-- Simple adapters (no config/state): `{variant}{Type}` — e.g., `otpEmailMinimal`, `otpSendConsole`
-- Factories (need config/state): `make{Variant}{Type}` — e.g., `makeSessionTokenJwt()`, `makeMemoryAdapters()`
+```
+✓ otpEmailMinimal          — minimal OTP email template
+✓ otpSendConsole           — logs OTP to console (dev)
+✓ makeSessionTokenJwt()    — JWT encode/decode for session tokens
+✓ makeCookieAuth()         — wraps auth with cookie handling
+✓ makeMemoryAdapters()     — in-memory persistence (dev/test)
+```
 
-| Type                                                      | Adapters                                                                                                                                                  |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OtpEmailAdapter`                                         | `otpEmailMinimal`, `otpEmailBranded({ appName, color })`                                                                                                  |
-| `OtpSendAdapter`                                          | `otpSendConsole`, `otpSendResend({ apiKey })`, `otpSendSendgrid({ apiKey })`                                                                              |
-| `StoreOtpAdapter`                                         | `storeOtpPg(pool)`                                                                                                                                        |
-| `VerifyOtpAdapter`                                        | `verifyOtpPg(pool)`                                                                                                                                       |
-| `UpsertUserAdapter`                                       | `upsertUserPg(pool)`                                                                                                                                      |
-| `StoreCredentialAdapter`                                  | `storeCredentialPg(pool)`                                                                                                                                 |
-| `GetCredentialsAdapter`                                   | `getCredentialsPg(pool)`                                                                                                                                  |
-| `StoreSessionAdapter`                                     | `storeSessionPg(pool)`                                                                                                                                    |
-| `GetSessionAdapter`                                       | `getSessionPg(pool)`                                                                                                                                      |
-| `DeleteSessionAdapter`                                    | `deleteSessionPg(pool)`                                                                                                                                   |
-| `EncodeSessionTokenAdapter` + `DecodeSessionTokenAdapter` | `makeSessionTokenJwt({ secret, ttl })`, `makeSessionTokenOpaque({ secret })` — returns `{ encodeSessionToken, decodeSessionToken }` to spread into config |
+**Planned:**
+
+```
+○ otpEmailBranded()        — branded OTP email template
+○ otpSendResend()          — send via Resend API
+○ otpSendSendgrid()        — send via SendGrid API
+○ *Pg(pool)                — PostgreSQL persistence adapters
+```
 
 ### Client module (`@starmode/auth/client`)
 
@@ -367,37 +376,11 @@ const result = await client.verifyOtp({
 });
 ```
 
-**Exported Types:**
-
-```ts
-import type {
-  // Client
-  AuthClient,
-  MakeAuthClient,
-  MakeAuthClientConfig,
-
-  // Transport
-  AuthTransportAdapter,
-  HttpTransport,
-
-  // Method adapters
-  ClientRequestOtpAdapter,
-  ClientVerifyOtpAdapter,
-  ClientGetRegistrationOptionsAdapter,
-  ClientVerifyRegistrationAdapter,
-  ClientGetAuthenticationOptionsAdapter,
-  ClientVerifyAuthenticationAdapter,
-} from "@starmode/auth/client";
-```
-
 **Type Definitions:**
 
 ```ts
-// Transport
-type AuthTransportAdapter = (
-  method: string,
-  args: Record<string, unknown>,
-) => Promise<unknown>;
+// Transport — matches AuthRequest/AuthResponse shape
+type AuthTransportAdapter = (request: AuthRequest) => Promise<AuthResponse>;
 type HttpTransport = (endpoint: string) => AuthTransportAdapter;
 
 // Method adapters
@@ -513,13 +496,30 @@ This would be additive (no breaking changes to existing code). For now, we keep 
 
 ### Framework examples
 
-**Express:**
+The handler expects a validated `AuthRequest`. You validate at your framework's boundary using your preferred validator (Zod, Valibot, TanStack's `inputValidator`, etc.).
+
+**Express + Zod:**
 
 ```ts
+import { z } from "zod";
+import type { AuthRequest } from "@starmode/auth";
+
+// Validate at boundary
+const authRequestSchema = z.discriminatedUnion("method", [
+  z.object({ method: z.literal("requestOtp"), email: z.string().email() }),
+  z.object({
+    method: z.literal("verifyOtp"),
+    email: z.string().email(),
+    code: z.string(),
+  }),
+  z.object({ method: z.literal("getSession") }),
+  z.object({ method: z.literal("signOut") }),
+]) satisfies z.ZodType<AuthRequest>;
+
 // Server
 app.post("/auth", async (req, res) => {
-  const { method, args } = req.body;
-  const result = await handler(method, args);
+  const request = authRequestSchema.parse(req.body);
+  const result = await handler(request);
   res.json(result);
 });
 
@@ -537,11 +537,11 @@ const client = makeAuthClient({
 ```ts
 // app/actions/auth.ts
 "use server";
-export async function authAction(
-  method: string,
-  args: Record<string, unknown>,
-) {
-  return handler(method, args);
+import type { AuthRequest } from "@starmode/auth";
+
+export async function authAction(request: AuthRequest) {
+  // Validation happens at call site or use Zod here
+  return handler(request);
 }
 
 // Client
@@ -555,8 +555,8 @@ const client = makeAuthClient({ transport: authAction });
 ```ts
 // app/api/auth/route.ts
 export async function POST(req: Request) {
-  const { method, args } = await req.json();
-  return Response.json(await handler(method, args));
+  const request = authRequestSchema.parse(await req.json());
+  return Response.json(await handler(request));
 }
 
 // Client
@@ -570,10 +570,13 @@ const client = makeAuthClient({
 - https://tanstack.com/start/latest/docs/framework/react/guide/server-functions
 
 ```ts
-// Server
-export const authAction = createServerFn("POST", async ({ method, args }) => {
-  return handler(method, args);
-});
+import { createServerFn } from "@tanstack/react-start";
+import type { AuthRequest } from "@starmode/auth";
+
+// Server — inputValidator handles validation
+export const authAction = createServerFn({ method: "POST" })
+  .inputValidator((input: AuthRequest) => input)
+  .handler(({ data }) => handler(data));
 
 // Client
 const client = makeAuthClient({ transport: authAction });
@@ -592,8 +595,8 @@ export const Route = createFileRoute("/api/auth")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { method, args } = await request.json();
-        return json(await handler(method, args));
+        const req = authRequestSchema.parse(await request.json());
+        return json(await handler(req));
       },
     },
   },
