@@ -11,8 +11,8 @@
     "@starmode/auth": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-router": "^1.144.0",
-    "@tanstack/react-start": "^1.144.0",
-    "lucide-react": "^0.561.0",
+    "@tanstack/react-start": "^1.145.0",
+    "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tailwindcss": "^4.1.18"
@@ -25,6 +25,6 @@
     "nitro": "^3.0.1-alpha.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.0",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^6.0.3"
   }
 }

@@ -37,7 +37,10 @@ export const authAction = createServerFn({ method: "POST" })
     }
 
     // Call the auth handler
-    const result = (await handler(method, args)) as AuthResult;
+    const result = (await handler(
+      method as "getSession" | "deleteSession" | "requestOtp" | "verifyOtp",
+      args,
+    )) as AuthResult;
 
     // If verifyOtp succeeded, set the session cookie
     if (
