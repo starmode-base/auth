@@ -1,5 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+import { makeAuthClient } from "@starmode/auth/client";
+import type { AuthTransport } from "@starmode/auth/client";
 import { authAction, getSession } from "../lib/auth.server";
 import {
   Input,
@@ -19,26 +21,11 @@ export const Route = createFileRoute("/")({
   },
 });
 
-// Auth client methods using server function as transport
-const auth = {
-  async requestOtp(email: string) {
-    const result = await authAction({
-      data: { method: "requestOtp", args: { email } },
-    });
+// Server function transport adapter
+const transport: AuthTransport = (request) => authAction({ data: request });
 
-    return result as { success: boolean };
-  },
-  async verifyOtp(email: string, code: string) {
-    const result = await authAction({
-      data: { method: "verifyOtp", args: { email, code } },
-    });
-
-    return result as { valid: boolean; userId?: string };
-  },
-  async signOut() {
-    await authAction({ data: { method: "deleteSession", args: {} } });
-  },
-};
+// Type-safe auth client
+const auth = makeAuthClient({ transport });
 
 function EmailForm({
   email,
@@ -159,18 +146,18 @@ function AuthenticatedView({
 }
 
 function RouteComponent() {
+  const router = useRouter();
   const { session } = Route.useLoaderData();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(session?.userId ?? null);
 
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const result = await auth.requestOtp(email);
+    const result = await auth.requestOtp({ email });
     if (result.success) setStep("code");
     setLoading(false);
   };
@@ -179,9 +166,10 @@ function RouteComponent() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result = await auth.verifyOtp(email, code);
-    if (result.valid && result.userId) {
-      setUserId(result.userId);
+    const result = await auth.verifyOtp({ email, code });
+    if (result.valid) {
+      // Session cookie is set server-side, reload to get fresh session
+      await router.invalidate();
     } else {
       setError("Invalid code");
     }
@@ -191,7 +179,8 @@ function RouteComponent() {
   const handleSignOut = async () => {
     setLoading(true);
     await auth.signOut();
-    setUserId(null);
+    // Cookie is cleared server-side, reload to reflect logged out state
+    await router.invalidate();
     setEmail("");
     setCode("");
     setStep("email");
@@ -218,9 +207,9 @@ function RouteComponent() {
         </div>
 
         <div className="bg-white rounded p-8 text-center shadow-xl">
-          {userId ? (
+          {session?.userId ? (
             <AuthenticatedView
-              userId={userId}
+              userId={session.userId}
               onSignOut={handleSignOut}
               loading={loading}
             />

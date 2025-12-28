@@ -1,30 +1,34 @@
 // @starmode/auth/client
 
+import type {
+  AuthRequest,
+  AuthResponse,
+  RequestOtpResponse,
+  VerifyOtpResponse,
+} from "../types";
+
 // ============================================================================
 // Types
 // ============================================================================
 
-/** Transport adapter — sends method calls to the server */
-export type AuthTransportAdapter = (
-  method: string,
-  args: Record<string, unknown>,
-) => Promise<unknown>;
+/** Transport adapter — sends AuthRequest to server, receives AuthResponse */
+export type AuthTransport = (request: AuthRequest) => Promise<AuthResponse>;
 
 /** HTTP transport factory */
-export type HttpTransport = (endpoint: string) => AuthTransportAdapter;
+export type HttpTransport = (endpoint: string) => AuthTransport;
 
 /** Client configuration */
 export type MakeAuthClientConfig = {
-  transport: AuthTransportAdapter;
+  transport: AuthTransport;
 };
 
 /** Auth client with typed methods */
 export type AuthClient = {
-  requestOtp: (args: { email: string }) => Promise<{ success: boolean }>;
+  requestOtp: (args: { email: string }) => Promise<RequestOtpResponse>;
   verifyOtp: (args: {
     email: string;
     code: string;
-  }) => Promise<{ valid: boolean; userId?: string }>;
+  }) => Promise<VerifyOtpResponse>;
   signOut: () => Promise<void>;
 };
 
@@ -44,11 +48,11 @@ export type MakeAuthClient = (config: MakeAuthClientConfig) => AuthClient;
  * ```
  */
 export const httpTransport: HttpTransport = (endpoint: string) => {
-  return async (method: string, args: Record<string, unknown>) => {
+  return async (request: AuthRequest): Promise<AuthResponse> => {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method, args }),
+      body: JSON.stringify(request),
     });
 
     if (!response.ok) {
@@ -63,6 +67,10 @@ export const httpTransport: HttpTransport = (endpoint: string) => {
 
 /**
  * Create an auth client with typed methods.
+ *
+ * The client wraps the transport, providing type-safe method calls.
+ * Type assertions are used internally because the transport returns
+ * a union type, but each method knows its expected response type.
  *
  * @example
  * ```ts
@@ -80,19 +88,22 @@ export const httpTransport: HttpTransport = (endpoint: string) => {
  * ```
  */
 export const makeAuthClient: MakeAuthClient = ({ transport }) => {
+  // Helper to call transport with known response type.
+  // Safe because handler returns the correct type for each method.
+  const call = <T extends AuthResponse>(request: AuthRequest): Promise<T> =>
+    transport(request) as Promise<T>;
+
   return {
     async requestOtp({ email }) {
-      const result = await transport("requestOtp", { email });
-      return result as { success: boolean };
+      return call<RequestOtpResponse>({ method: "requestOtp", email });
     },
 
     async verifyOtp({ email, code }) {
-      const result = await transport("verifyOtp", { email, code });
-      return result as { valid: boolean; userId?: string };
+      return call<VerifyOtpResponse>({ method: "verifyOtp", email, code });
     },
 
     async signOut() {
-      await transport("deleteSession", {});
+      await call<void>({ method: "signOut" });
     },
   };
 };

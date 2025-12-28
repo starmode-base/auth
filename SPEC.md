@@ -10,6 +10,8 @@ Passkeys + OTP. That's it.
 - **LLM-friendly** — no DNS config, no OAuth dashboards, no external clicks required
 - **Explicit over implicit** — no magic defaults, everything is a visible import
 - **Nano scope** — intentionally small, won't grow into Auth0
+- **Zero dependencies** — no runtime dependencies, peer dependencies only where unavoidable
+- **Strong typings** — no type assertions (`as`), full type inference from API design
 
 ### Inverted architecture
 

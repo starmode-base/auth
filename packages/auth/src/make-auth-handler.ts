@@ -1,42 +1,37 @@
-import type { AuthHandler, MakeAuthHandler, MakeAuthReturn } from "./types";
+import type {
+  AuthHandler,
+  AuthRequest,
+  AuthResponse,
+  CookieAuthReturn,
+  MakeAuthHandler,
+} from "./types";
 
 /**
- * Make a handler that routes method calls to auth methods.
+ * Make a handler that routes requests to cookie auth methods.
  * Useful for HTTP endpoints and server actions.
  *
  * @example
  * ```ts
- * const handler = makeAuthHandler(auth);
- * // handler('requestOtp', { email }) → auth.requestOtp(email)
+ * const handler = makeAuthHandler(cookieAuth);
+ * // handler({ method: "requestOtp", email }) → cookieAuth.requestOtp(email)
  * ```
  */
 export const makeAuthHandler: MakeAuthHandler = (
-  auth: MakeAuthReturn,
+  cookieAuth: CookieAuthReturn,
 ): AuthHandler => {
-  return async (method, args) => {
-    switch (method) {
-      case "requestOtp": {
-        const { email } = args as { email: string };
-        return auth.requestOtp(email);
-      }
+  return async (request: AuthRequest): Promise<AuthResponse> => {
+    switch (request.method) {
+      case "requestOtp":
+        return cookieAuth.requestOtp(request.email);
 
-      case "verifyOtp": {
-        const { email, code } = args as { email: string; code: string };
-        return auth.verifyOtp(email, code);
-      }
+      case "verifyOtp":
+        return cookieAuth.verifyOtp(request.email, request.code);
 
-      case "getSession": {
-        const { token } = args as { token: string };
-        return auth.getSession(token);
-      }
+      case "getSession":
+        return cookieAuth.getSession();
 
-      case "deleteSession": {
-        const { token } = args as { token: string };
-        return auth.deleteSession(token);
-      }
-
-      default:
-        throw new Error(`Unknown auth method: ${method}`);
+      case "signOut":
+        return cookieAuth.signOut();
     }
   };
 };

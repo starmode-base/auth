@@ -2,6 +2,7 @@
 
 // Core
 export { makeAuth } from "./make-auth";
+export { makeCookieAuth } from "./make-cookie-auth";
 export { makeAuthHandler } from "./make-auth-handler";
 
 // Adapters
@@ -39,7 +40,19 @@ export type {
   MakeAuthReturn,
   MakeAuth,
 
-  // Handler
+  // Cookie auth
+  CookieAdapter,
+  MakeCookieAuthConfig,
+  CookieAuthReturn,
+  MakeCookieAuth,
+
+  // Handler (discriminated union)
+  AuthRequest,
+  RequestOtpResponse,
+  VerifyOtpResponse,
+  GetSessionResponse,
+  SignOutResponse,
+  AuthResponse,
   AuthHandler,
   MakeAuthHandler,
 } from "./types";

@@ -7,11 +7,7 @@ import {
   vi,
   type Mock,
 } from "vitest";
-import {
-  httpTransport,
-  makeAuthClient,
-  type AuthTransportAdapter,
-} from "./index";
+import { httpTransport, makeAuthClient, type AuthTransport } from "./index";
 
 describe("httpTransport", () => {
   const originalFetch = globalThis.fetch;
@@ -20,7 +16,7 @@ describe("httpTransport", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("sends POST request to endpoint with method and args", async () => {
+  it("sends POST request with AuthRequest as body", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ success: true }),
@@ -28,15 +24,12 @@ describe("httpTransport", () => {
     globalThis.fetch = mockFetch;
 
     const transport = httpTransport("/api/auth");
-    await transport("requestOtp", { email: "user@example.com" });
+    await transport({ method: "requestOtp", email: "user@example.com" });
 
     expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        method: "requestOtp",
-        args: { email: "user@example.com" },
-      }),
+      body: JSON.stringify({ method: "requestOtp", email: "user@example.com" }),
     });
   });
 
@@ -48,7 +41,10 @@ describe("httpTransport", () => {
     globalThis.fetch = mockFetch;
 
     const transport = httpTransport("/api/auth");
-    const result = await transport("requestOtp", { email: "user@example.com" });
+    const result = await transport({
+      method: "requestOtp",
+      email: "user@example.com",
+    });
 
     expect(result).toEqual({ success: true });
   });
@@ -64,26 +60,27 @@ describe("httpTransport", () => {
     const transport = httpTransport("/api/auth");
 
     await expect(
-      transport("requestOtp", { email: "user@example.com" }),
+      transport({ method: "requestOtp", email: "user@example.com" }),
     ).rejects.toThrow("Auth request failed: 500 Internal Server Error");
   });
 });
 
 describe("makeAuthClient", () => {
-  let mockTransport: Mock<AuthTransportAdapter>;
+  let mockTransport: Mock<AuthTransport>;
 
   beforeEach(() => {
-    mockTransport = vi.fn<AuthTransportAdapter>();
+    mockTransport = vi.fn<AuthTransport>();
   });
 
   describe("requestOtp", () => {
-    it("calls transport with requestOtp method", async () => {
+    it("calls transport with AuthRequest", async () => {
       mockTransport.mockResolvedValue({ success: true });
 
       const client = makeAuthClient({ transport: mockTransport });
       await client.requestOtp({ email: "user@example.com" });
 
-      expect(mockTransport).toHaveBeenCalledWith("requestOtp", {
+      expect(mockTransport).toHaveBeenCalledWith({
+        method: "requestOtp",
         email: "user@example.com",
       });
     });
@@ -99,13 +96,14 @@ describe("makeAuthClient", () => {
   });
 
   describe("verifyOtp", () => {
-    it("calls transport with verifyOtp method", async () => {
+    it("calls transport with AuthRequest", async () => {
       mockTransport.mockResolvedValue({ valid: true, userId: "user_1" });
 
       const client = makeAuthClient({ transport: mockTransport });
       await client.verifyOtp({ email: "user@example.com", code: "123456" });
 
-      expect(mockTransport).toHaveBeenCalledWith("verifyOtp", {
+      expect(mockTransport).toHaveBeenCalledWith({
+        method: "verifyOtp",
         email: "user@example.com",
         code: "123456",
       });
@@ -137,13 +135,13 @@ describe("makeAuthClient", () => {
   });
 
   describe("signOut", () => {
-    it("calls transport with deleteSession method", async () => {
+    it("calls transport with signOut AuthRequest", async () => {
       mockTransport.mockResolvedValue(undefined);
 
       const client = makeAuthClient({ transport: mockTransport });
       await client.signOut();
 
-      expect(mockTransport).toHaveBeenCalledWith("deleteSession", {});
+      expect(mockTransport).toHaveBeenCalledWith({ method: "signOut" });
     });
   });
 });

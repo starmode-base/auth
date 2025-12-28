@@ -104,14 +104,60 @@ export type MakeAuthReturn = {
 export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
 
 // ============================================================================
-// Handler types
+// Cookie auth types
 // ============================================================================
 
-/** Handler function that routes method calls to auth methods */
-export type AuthHandler = (
-  method: "getSession" | "deleteSession" | "requestOtp" | "verifyOtp",
-  args: Record<string, unknown>,
-) => Promise<unknown>;
+/** Cookie adapter — you provide these (framework-specific) */
+export type CookieAdapter = {
+  get: () => string | undefined;
+  set: (token: string) => void;
+  clear: () => void;
+};
 
-/** Make a handler from an auth instance */
-export type MakeAuthHandler = (auth: MakeAuthReturn) => AuthHandler;
+/** Cookie auth config */
+export type MakeCookieAuthConfig = {
+  auth: MakeAuthReturn;
+  cookie: CookieAdapter;
+};
+
+/** Cookie auth — wraps auth with automatic cookie handling */
+export type CookieAuthReturn = {
+  requestOtp: (email: string) => Promise<{ success: boolean }>;
+  verifyOtp: (
+    email: string,
+    code: string,
+  ) => Promise<{ valid: boolean; userId?: string }>;
+  getSession: () => Promise<{ userId: string } | null>;
+  signOut: () => Promise<void>;
+};
+
+export type MakeCookieAuth = (config: MakeCookieAuthConfig) => CookieAuthReturn;
+
+// ============================================================================
+// Handler types (discriminated union for type safety)
+// ============================================================================
+
+/** Auth request — discriminated union, validated at framework boundary */
+export type AuthRequest =
+  | { method: "requestOtp"; email: string }
+  | { method: "verifyOtp"; email: string; code: string }
+  | { method: "getSession" }
+  | { method: "signOut" };
+
+/** Response types match CookieAuthReturn method signatures */
+export type RequestOtpResponse = { success: boolean };
+export type VerifyOtpResponse = { valid: boolean; userId?: string };
+export type GetSessionResponse = { userId: string } | null;
+export type SignOutResponse = void;
+
+export type AuthResponse =
+  | RequestOtpResponse
+  | VerifyOtpResponse
+  | GetSessionResponse
+  | SignOutResponse;
+
+/** Handler function — typed request/response, no assertions needed */
+export type AuthHandler = (request: AuthRequest) => Promise<AuthResponse>;
+
+/** Make a handler from a cookie auth instance */
+export type MakeAuthHandler = (cookieAuth: CookieAuthReturn) => AuthHandler;

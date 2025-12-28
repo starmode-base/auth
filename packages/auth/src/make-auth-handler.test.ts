@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   makeAuth,
+  makeCookieAuth,
   makeAuthHandler,
   makeMemoryAdapters,
   otpEmailMinimal,
@@ -11,9 +12,11 @@ import type { AuthHandler, OtpSendAdapter } from "./types";
 describe("makeAuthHandler", () => {
   let handler: AuthHandler;
   let sentOtps: { email: string; code: string }[];
+  let sessionCookie: string | undefined;
 
   beforeEach(() => {
     sentOtps = [];
+    sessionCookie = undefined;
 
     const captureSend: OtpSendAdapter = async (email, content) => {
       sentOtps.push({ email, code: content.body });
@@ -26,21 +29,38 @@ describe("makeAuthHandler", () => {
       send: captureSend,
     });
 
-    handler = makeAuthHandler(auth);
+    const cookieAuth = makeCookieAuth({
+      auth,
+      cookie: {
+        get: () => sessionCookie,
+        set: (token) => {
+          sessionCookie = token;
+        },
+        clear: () => {
+          sessionCookie = undefined;
+        },
+      },
+    });
+
+    handler = makeAuthHandler(cookieAuth);
   });
 
   it("routes requestOtp", async () => {
-    const result = await handler("requestOtp", { email: "user@example.com" });
+    const result = await handler({
+      method: "requestOtp",
+      email: "user@example.com",
+    });
     expect(result).toEqual({ success: true });
     expect(sentOtps).toHaveLength(1);
     expect(sentOtps[0]?.email).toBe("user@example.com");
   });
 
-  it("routes verifyOtp", async () => {
-    await handler("requestOtp", { email: "user@example.com" });
+  it("routes verifyOtp and sets cookie", async () => {
+    await handler({ method: "requestOtp", email: "user@example.com" });
     const code = sentOtps[0]!.code;
 
-    const result = await handler("verifyOtp", {
+    const result = await handler({
+      method: "verifyOtp",
       email: "user@example.com",
       code,
     });
@@ -48,40 +68,34 @@ describe("makeAuthHandler", () => {
     expect(result).toEqual({
       valid: true,
       userId: expect.any(String),
-      token: expect.any(String),
     });
+    // Cookie should be set by makeCookieAuth
+    expect(sessionCookie).toBeDefined();
   });
 
-  it("routes getSession", async () => {
-    await handler("requestOtp", { email: "user@example.com" });
+  it("routes getSession using cookie", async () => {
+    await handler({ method: "requestOtp", email: "user@example.com" });
     const code = sentOtps[0]!.code;
-    const { token } = (await handler("verifyOtp", {
-      email: "user@example.com",
-      code,
-    })) as { token: string };
+    await handler({ method: "verifyOtp", email: "user@example.com", code });
 
-    const result = await handler("getSession", { token });
+    const result = await handler({ method: "getSession" });
     expect(result).toEqual({ userId: expect.any(String) });
   });
 
-  it("routes deleteSession", async () => {
-    await handler("requestOtp", { email: "user@example.com" });
-    const code = sentOtps[0]!.code;
-
-    const { token } = (await handler("verifyOtp", {
-      email: "user@example.com",
-      code,
-    })) as { token: string };
-
-    await handler("deleteSession", { token });
-
-    // Session should be deleted (getSession still returns from JWT cache though)
-    // This is expected behavior - JWT tokens remain valid until expiry
+  it("returns null for getSession when no cookie", async () => {
+    const result = await handler({ method: "getSession" });
+    expect(result).toBeNull();
   });
 
-  it("throws on unknown method", async () => {
-    await expect(handler("unknownMethod", {})).rejects.toThrow(
-      "Unknown auth method: unknownMethod",
-    );
+  it("routes signOut and clears cookie", async () => {
+    await handler({ method: "requestOtp", email: "user@example.com" });
+    const code = sentOtps[0]!.code;
+    await handler({ method: "verifyOtp", email: "user@example.com", code });
+
+    expect(sessionCookie).toBeDefined();
+
+    await handler({ method: "signOut" });
+
+    expect(sessionCookie).toBeUndefined();
   });
 });

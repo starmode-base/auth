@@ -1,74 +1,42 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
-import { handler } from "./auth";
+import { makeCookieAuth, makeAuthHandler } from "@starmode/auth";
+import type { AuthRequest } from "@starmode/auth";
+import { auth } from "./auth";
 
 const SESSION_COOKIE = "session";
 
-type AuthActionInput = {
-  method: string;
-  args: Record<string, unknown>;
-};
-
-type AuthResult =
-  | { success: boolean }
-  | { valid: boolean; userId?: string; token?: string }
-  | { userId: string }
-  | null;
-
-export const authAction = createServerFn({ method: "POST" })
-  .inputValidator((input: AuthActionInput) => input)
-  .handler(async ({ data }): Promise<AuthResult> => {
-    const { method, args } = data;
-
-    // For deleteSession, get the token from the cookie
-    if (method === "deleteSession") {
-      const token = getCookie(SESSION_COOKIE);
-      if (token) {
-        await handler("deleteSession", { token });
-        setCookie(SESSION_COOKIE, "", {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 0,
-        });
-      }
-      return { success: true };
-    }
-
-    // Call the auth handler
-    const result = (await handler(
-      method as "getSession" | "deleteSession" | "requestOtp" | "verifyOtp",
-      args,
-    )) as AuthResult;
-
-    // If verifyOtp succeeded, set the session cookie
-    if (
-      method === "verifyOtp" &&
-      result &&
-      typeof result === "object" &&
-      "token" in result &&
-      result.token
-    ) {
-      setCookie(SESSION_COOKIE, result.token, {
+const cookieAuth = makeCookieAuth({
+  auth,
+  cookie: {
+    get: () => getCookie(SESSION_COOKIE),
+    set: (token) =>
+      setCookie(SESSION_COOKIE, token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
         maxAge: 30 * 24 * 60 * 60, // 30 days
-      });
-    }
-
-    return result;
-  });
-
-export const getSession = createServerFn({ method: "GET" }).handler(
-  async (): Promise<{ userId: string } | null> => {
-    const token = getCookie(SESSION_COOKIE);
-    if (!token) {
-      return null;
-    }
-    const result = await handler("getSession", { token });
-    return result as { userId: string } | null;
+      }),
+    clear: () =>
+      setCookie(SESSION_COOKIE, "", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 0,
+      }),
   },
+});
+
+const handler = makeAuthHandler(cookieAuth);
+
+// Server function for auth actions
+export const authAction = createServerFn({ method: "POST" })
+  .inputValidator((input: AuthRequest) => input)
+  .handler(({ data }) => handler(data));
+
+// Convenience function for loaders
+export const getSession = createServerFn({ method: "GET" }).handler(async () =>
+  cookieAuth.getSession(),
 );

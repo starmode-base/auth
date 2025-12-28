@@ -1,5 +1,6 @@
 import {
   makeAuth,
+  makeCookieAuth,
   makeAuthHandler,
   makeMemoryAdapters,
   makeSessionTokenJwt,
@@ -13,8 +14,6 @@ const auth = makeAuth({
   email: otpEmailMinimal,
   send: otpSendConsole,
 });
-
-const handler = makeAuthHandler(auth);
 
 // Cookie helpers
 const SESSION_COOKIE = "session";
@@ -36,7 +35,7 @@ function getCookie(req: Request, name: string): string | null {
   return match?.[1] ?? null;
 }
 
-function setCookie(name: string, value: string, maxAge: number): string {
+function setCookieHeader(name: string, value: string, maxAge: number): string {
   const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   return `${name}=${value}; HttpOnly; SameSite=Lax; Path=/${secure}; Max-Age=${maxAge}`;
 }
@@ -95,20 +94,52 @@ function otpPage(email: string) {
 </html>`;
 }
 
+// Per-request cookie state (stored during request, applied via headers)
+let pendingCookie: { value: string; maxAge: number } | null = null;
+
 // Server
 const server = Bun.serve({
   port: 3000,
   async fetch(req) {
     const url = new URL(req.url);
+    pendingCookie = null;
+
+    // Create cookie auth with request-scoped cookie operations
+    const cookieAuth = makeCookieAuth({
+      auth,
+      cookie: {
+        get: () => getCookie(req, SESSION_COOKIE) ?? undefined,
+        set: (token) => {
+          pendingCookie = { value: token, maxAge: 30 * 24 * 60 * 60 };
+        },
+        clear: () => {
+          pendingCookie = { value: "", maxAge: 0 };
+        },
+      },
+    });
+
+    const handler = makeAuthHandler(cookieAuth);
+
+    // Helper to add pending cookie to response
+    const addCookieHeader = (
+      headers: Record<string, string>,
+    ): Record<string, string> => {
+      if (pendingCookie) {
+        return {
+          ...headers,
+          "Set-Cookie": setCookieHeader(
+            SESSION_COOKIE,
+            pendingCookie.value,
+            pendingCookie.maxAge,
+          ),
+        };
+      }
+      return headers;
+    };
 
     // Home page
     if (url.pathname === "/" && req.method === "GET") {
-      const token = getCookie(req, SESSION_COOKIE);
-      const session = token
-        ? ((await handler("getSession", { token })) as {
-            userId: string;
-          } | null)
-        : null;
+      const session = await cookieAuth.getSession();
       return new Response(homePage(session), {
         headers: securityHeaders(),
       });
@@ -123,7 +154,7 @@ const server = Bun.serve({
         return new Response("Invalid email", { status: 400 });
       }
 
-      await handler("requestOtp", { email });
+      await handler({ method: "requestOtp", email });
       return new Response(otpPage(email), {
         headers: securityHeaders(),
       });
@@ -143,22 +174,17 @@ const server = Bun.serve({
         return new Response("Invalid code", { status: 400 });
       }
 
-      const result = (await handler("verifyOtp", { email, code })) as {
-        valid: boolean;
-        token?: string;
-      };
+      const result = await handler({ method: "verifyOtp", email, code });
 
-      if (result.valid && result.token) {
+      if (
+        result &&
+        typeof result === "object" &&
+        "valid" in result &&
+        result.valid
+      ) {
         return new Response(null, {
           status: 302,
-          headers: {
-            Location: "/",
-            "Set-Cookie": setCookie(
-              SESSION_COOKIE,
-              result.token,
-              30 * 24 * 60 * 60,
-            ),
-          },
+          headers: addCookieHeader({ Location: "/" }),
         });
       }
 
@@ -167,17 +193,11 @@ const server = Bun.serve({
 
     // Sign out
     if (url.pathname === "/auth/signout" && req.method === "POST") {
-      const token = getCookie(req, SESSION_COOKIE);
-      if (token) {
-        await handler("deleteSession", { token });
-      }
+      await handler({ method: "signOut" });
 
       return new Response(null, {
         status: 302,
-        headers: {
-          Location: "/",
-          "Set-Cookie": setCookie(SESSION_COOKIE, "", 0),
-        },
+        headers: addCookieHeader({ Location: "/" }),
       });
     }
 

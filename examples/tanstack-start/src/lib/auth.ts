@@ -1,6 +1,5 @@
 import {
   makeAuth,
-  makeAuthHandler,
   makeMemoryAdapters,
   makeSessionTokenJwt,
   otpEmailMinimal,
@@ -9,7 +8,7 @@ import {
 
 const memoryAdapters = makeMemoryAdapters();
 
-const auth = makeAuth({
+export const auth = makeAuth({
   ...memoryAdapters,
   ...makeSessionTokenJwt({
     secret: "dev-secret-do-not-use-in-production",
@@ -18,5 +17,3 @@ const auth = makeAuth({
   email: otpEmailMinimal,
   send: otpSendConsole,
 });
-
-export const handler = makeAuthHandler(auth);
