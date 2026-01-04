@@ -6,10 +6,8 @@ import {
   otpSendConsole,
 } from "@starmode/auth";
 
-const memoryAdapters = makeMemoryAdapters();
-
 export const auth = makeAuth({
-  ...memoryAdapters,
+  ...makeMemoryAdapters(),
   ...makeSessionTokenJwt({
     secret: "dev-secret-do-not-use-in-production",
     ttl: 600,
