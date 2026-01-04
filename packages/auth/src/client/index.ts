@@ -1,58 +1,34 @@
 // @starmode/auth/client
 
-import type {
-  AuthRequest,
-  AuthResponse,
-  RequestOtpResponse,
-  VerifyOtpResponse,
-} from "../types";
+import type { AuthClient } from "../types";
+
+// Re-export the type for convenience
+export type { AuthClient };
 
 // ============================================================================
-// Types
-// ============================================================================
-
-/** Transport adapter — sends AuthRequest to server, receives AuthResponse */
-export type AuthTransport = (request: AuthRequest) => Promise<AuthResponse>;
-
-/** HTTP transport factory */
-export type HttpTransport = (endpoint: string) => AuthTransport;
-
-/** Client configuration */
-export type MakeAuthClientConfig = {
-  transport: AuthTransport;
-};
-
-/** Auth client with typed methods */
-export type AuthClient = {
-  requestOtp: (args: { email: string }) => Promise<RequestOtpResponse>;
-  verifyOtp: (args: {
-    email: string;
-    code: string;
-  }) => Promise<VerifyOtpResponse>;
-  signOut: () => Promise<void>;
-};
-
-/** Client factory */
-export type MakeAuthClient = (config: MakeAuthClientConfig) => AuthClient;
-
-// ============================================================================
-// Implementation
+// HTTP client
 // ============================================================================
 
 /**
- * HTTP transport adapter — sends auth requests via fetch.
+ * HTTP client factory — creates a method-based auth client that calls a server endpoint.
+ *
+ * Internally uses a discriminated union for dispatch, but the public API is method-based.
  *
  * @example
  * ```ts
- * const transport = httpTransport("/api/auth");
+ * const auth = httpClient("/api/auth");
+ *
+ * await auth.requestOtp("user@example.com");
+ * const result = await auth.verifyOtp("user@example.com", "123456");
+ * await auth.signOut();
  * ```
  */
-export const httpTransport: HttpTransport = (endpoint: string) => {
-  return async (request: AuthRequest): Promise<AuthResponse> => {
+export const httpClient = (endpoint: string): AuthClient => {
+  const call = async (method: string, params: Record<string, unknown> = {}) => {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
+      body: JSON.stringify({ method, ...params }),
     });
 
     if (!response.ok) {
@@ -61,49 +37,14 @@ export const httpTransport: HttpTransport = (endpoint: string) => {
       );
     }
 
-    return response.json();
+    // Handle void responses (signOut returns 204 or empty body)
+    const text = await response.text();
+    return text ? JSON.parse(text) : undefined;
   };
-};
-
-/**
- * Create an auth client with typed methods.
- *
- * The client wraps the transport, providing type-safe method calls.
- * Type assertions are used internally because the transport returns
- * a union type, but each method knows its expected response type.
- *
- * @example
- * ```ts
- * // HTTP transport
- * const client = makeAuthClient({
- *   transport: httpTransport("/api/auth"),
- * });
- *
- * // Or server action directly
- * const client = makeAuthClient({
- *   transport: authAction,
- * });
- *
- * await client.requestOtp({ email: "user@example.com" });
- * ```
- */
-export const makeAuthClient: MakeAuthClient = ({ transport }) => {
-  // Helper to call transport with known response type.
-  // Safe because handler returns the correct type for each method.
-  const call = <T extends AuthResponse>(request: AuthRequest): Promise<T> =>
-    transport(request) as Promise<T>;
 
   return {
-    async requestOtp({ email }) {
-      return call<RequestOtpResponse>({ method: "requestOtp", email });
-    },
-
-    async verifyOtp({ email, code }) {
-      return call<VerifyOtpResponse>({ method: "verifyOtp", email, code });
-    },
-
-    async signOut() {
-      await call<void>({ method: "signOut" });
-    },
+    requestOtp: (email) => call("requestOtp", { email }),
+    verifyOtp: (email, code) => call("verifyOtp", { email, code }),
+    signOut: () => call("signOut"),
   };
 };

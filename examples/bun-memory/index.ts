@@ -1,7 +1,6 @@
 import {
   makeAuth,
   makeCookieAuth,
-  makeAuthHandler,
   makeMemoryAdapters,
   makeSessionTokenJwt,
   otpEmailMinimal,
@@ -118,8 +117,6 @@ const server = Bun.serve({
       },
     });
 
-    const handler = makeAuthHandler(cookieAuth);
-
     // Helper to add pending cookie to response
     const addCookieHeader = (
       headers: Record<string, string>,
@@ -154,7 +151,7 @@ const server = Bun.serve({
         return new Response("Invalid email", { status: 400 });
       }
 
-      await handler({ method: "requestOtp", email });
+      await cookieAuth.requestOtp(email);
       return new Response(otpPage(email), {
         headers: securityHeaders(),
       });
@@ -174,14 +171,9 @@ const server = Bun.serve({
         return new Response("Invalid code", { status: 400 });
       }
 
-      const result = await handler({ method: "verifyOtp", email, code });
+      const result = await cookieAuth.verifyOtp(email, code);
 
-      if (
-        result &&
-        typeof result === "object" &&
-        "valid" in result &&
-        result.valid
-      ) {
+      if (result.valid) {
         return new Response(null, {
           status: 302,
           headers: addCookieHeader({ Location: "/" }),
@@ -193,7 +185,7 @@ const server = Bun.serve({
 
     // Sign out
     if (url.pathname === "/auth/signout" && req.method === "POST") {
-      await handler({ method: "signOut" });
+      await cookieAuth.signOut();
 
       return new Response(null, {
         status: 302,

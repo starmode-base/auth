@@ -6,7 +6,7 @@ import type { OtpEmailAdapter } from "../types";
  * @param code - The OTP code to send
  * @returns The OTP email content (subject and body)
  */
-export const otpEmailAdapterlMinimal: OtpEmailAdapter = (code) => ({
+export const otpEmailMinimal: OtpEmailAdapter = (code) => ({
   subject: "Your code",
   body: code,
 });

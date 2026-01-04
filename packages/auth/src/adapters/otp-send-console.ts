@@ -7,6 +7,6 @@ import type { OtpSendAdapter } from "../types";
  * @param content - The content of the OTP email.
  * @returns void
  */
-export const otpSendAdapterConsole: OtpSendAdapter = async (email, content) => {
+export const otpSendConsole: OtpSendAdapter = async (email, content) => {
   console.log(`[OTP] To: ${email} | ${content.subject}: ${content.body}`);
 };

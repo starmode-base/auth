@@ -134,30 +134,15 @@ export type CookieAuthReturn = {
 export type MakeCookieAuth = (config: MakeCookieAuthConfig) => CookieAuthReturn;
 
 // ============================================================================
-// Handler types (discriminated union for type safety)
+// Client types
 // ============================================================================
 
-/** Auth request — discriminated union, validated at framework boundary */
-export type AuthRequest =
-  | { method: "requestOtp"; email: string }
-  | { method: "verifyOtp"; email: string; code: string }
-  | { method: "getSession" }
-  | { method: "signOut" };
-
-/** Response types match CookieAuthReturn method signatures */
-export type RequestOtpResponse = { success: boolean };
-export type VerifyOtpResponse = { valid: boolean; userId?: string };
-export type GetSessionResponse = { userId: string } | null;
-export type SignOutResponse = void;
-
-export type AuthResponse =
-  | RequestOtpResponse
-  | VerifyOtpResponse
-  | GetSessionResponse
-  | SignOutResponse;
-
-/** Handler function — typed request/response, no assertions needed */
-export type AuthHandler = (request: AuthRequest) => Promise<AuthResponse>;
-
-/** Make a handler from a cookie auth instance */
-export type MakeAuthHandler = (cookieAuth: CookieAuthReturn) => AuthHandler;
+/** Auth client interface — subset of CookieAuthReturn for client use */
+export type AuthClient = {
+  requestOtp: (email: string) => Promise<{ success: boolean }>;
+  verifyOtp: (
+    email: string,
+    code: string,
+  ) => Promise<{ valid: boolean; userId?: string }>;
+  signOut: () => Promise<void>;
+};

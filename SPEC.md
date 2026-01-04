@@ -93,15 +93,13 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 
 ### Framework-agnostic by design
 
-| Layer             | What it does             | Framework-specific?         |
-| ----------------- | ------------------------ | --------------------------- |
-| `makeAuth`        | Pure auth logic          | No                          |
-| `makeCookieAuth`  | Wraps auth with cookies  | No (you provide cookie ops) |
-| `makeAuthHandler` | Typed request → response | No                          |
-| `httpTransport`   | Wraps `fetch`            | No                          |
-| `makeAuthClient`  | Calls transport          | No                          |
+| Layer            | What it does            | Framework-specific?         |
+| ---------------- | ----------------------- | --------------------------- |
+| `makeAuth`       | Pure auth logic         | No                          |
+| `makeCookieAuth` | Wraps auth with cookies | No (you provide cookie ops) |
+| `httpClient`     | HTTP client (fetch)     | No                          |
 
-The only framework-specific code is the glue you write: (1) cookie get/set/clear functions for `makeCookieAuth`, and (2) input validation at your endpoint boundary. The handler expects a validated `AuthRequest` — you validate using your framework's tools (Zod, TanStack's `inputValidator`, etc.).
+The only framework-specific code is the glue you write: cookie get/set/clear functions for `makeCookieAuth`. For server actions, you export the `cookieAuth` methods directly. For HTTP, you use `httpClient`.
 
 ### Server module (`@starmode/auth`)
 
@@ -111,7 +109,6 @@ The only framework-specific code is the glue you write: (1) cookie get/set/clear
 import {
   makeAuth,
   makeCookieAuth,
-  makeAuthHandler,
   otpEmailMinimal,
   otpSendConsole,
   makeSessionTokenJwt,
@@ -171,9 +168,11 @@ const cookieAuth = makeCookieAuth({
   },
 });
 
-// Create handler for transport (HTTP, server actions, etc.)
-const handler = makeAuthHandler(cookieAuth);
-// handler({ method: "requestOtp", email }) → cookieAuth.requestOtp(email)
+// cookieAuth methods are ready to use:
+// - cookieAuth.requestOtp(email)
+// - cookieAuth.verifyOtp(email, code)
+// - cookieAuth.getSession()
+// - cookieAuth.signOut()
 ```
 
 **Why No Database Drivers?**
@@ -307,40 +306,18 @@ type MakeCookieAuth = (config: {
   auth: MakeAuthReturn;
   cookie: CookieAdapter;
 }) => CookieAuthReturn;
-
-// Handler — typed discriminated union, no type assertions needed
-type AuthRequest =
-  | { method: "requestOtp"; email: string }
-  | { method: "verifyOtp"; email: string; code: string }
-  | { method: "getSession" }
-  | { method: "signOut" };
-
-// Response types match CookieAuthReturn method signatures
-type RequestOtpResponse = { success: boolean };
-type VerifyOtpResponse = { valid: boolean; userId?: string };
-type GetSessionResponse = { userId: string } | null;
-type SignOutResponse = void;
-
-type AuthResponse =
-  | RequestOtpResponse
-  | VerifyOtpResponse
-  | GetSessionResponse
-  | SignOutResponse;
-
-type AuthHandler = (request: AuthRequest) => Promise<AuthResponse>;
-type MakeAuthHandler = (cookieAuth: CookieAuthReturn) => AuthHandler;
 ```
 
-**Shipped Adapters:**
+**Shipped adapters:**
 
 Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type}()`.
 
 ```
-✓ otpEmailMinimal          — minimal OTP email template
-✓ otpSendConsole           — logs OTP to console (dev)
-✓ makeSessionTokenJwt()    — JWT encode/decode for session tokens
-✓ makeCookieAuth()         — wraps auth with cookie handling
-✓ makeMemoryAdapters()     — in-memory persistence (dev/test)
+✓ otpEmailMinimal        — minimal OTP email template
+✓ otpSendConsole         — logs OTP to console (dev)
+✓ makeSessionTokenJwt()  — JWT encode/decode for session tokens
+✓ makeCookieAuth()       — wraps auth with cookie handling
+✓ makeMemoryAdapters()   — in-memory persistence (dev/test)
 ```
 
 **Planned:**
@@ -357,78 +334,44 @@ Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type
 **Usage:**
 
 ```ts
-import { makeAuthClient, httpTransport } from "@starmode/auth/client";
+import { httpClient } from "@starmode/auth/client";
 
-// HTTP transport
-const client = makeAuthClient({
-  transport: httpTransport("/api/auth"),
-});
+// HTTP client — method-based interface
+const auth = httpClient("/api/auth");
 
-// Or pass server action directly (Next.js / TanStack Start)
-import { authAction } from "./actions";
-const client = makeAuthClient({
-  transport: authAction,
-});
-
-// Typed methods
-await client.requestOtp({ email: "user@example.com" });
-const result = await client.verifyOtp({
-  email: "user@example.com",
-  code: "123456",
-});
+await auth.requestOtp("user@example.com");
+const result = await auth.verifyOtp("user@example.com", "123456");
+await auth.signOut();
 ```
 
-**Type Definitions:**
+For server actions, you don't need a client wrapper — just call the methods directly:
 
 ```ts
-// Transport — matches AuthRequest/AuthResponse shape
-type AuthTransportAdapter = (request: AuthRequest) => Promise<AuthResponse>;
-type HttpTransport = (endpoint: string) => AuthTransportAdapter;
+// Server actions (Next.js / TanStack Start)
+import { requestOtp, verifyOtp, signOut } from "./auth.server";
 
-// Method adapters
-type ClientRequestOtpAdapter = (args: {
-  email: string;
-}) => Promise<{ success: boolean }>;
-type ClientVerifyOtpAdapter = (args: {
-  email: string;
-  code: string;
-}) => Promise<{ valid: boolean; userId?: string }>;
-type ClientGetRegistrationOptionsAdapter = (args: {
-  userId: string;
-}) => Promise<PublicKeyCredentialCreationOptions>;
-type ClientVerifyRegistrationAdapter = (args: {
-  userId: string;
-  credential: RegistrationCredential;
-}) => Promise<{ success: boolean }>;
-type ClientGetAuthenticationOptionsAdapter =
-  () => Promise<PublicKeyCredentialRequestOptions>;
-type ClientVerifyAuthenticationAdapter = (args: {
-  credential: AuthenticationCredential;
-}) => Promise<{ valid: boolean; userId: string }>;
-
-// Client — all methods make server calls via transport
-type AuthClient = {
-  // OTP
-  requestOtp: ClientRequestOtpAdapter; // → server: sends OTP email
-  verifyOtp: ClientVerifyOtpAdapter; // → server: validates code, sets session cookie
-
-  // Passkeys
-  getRegistrationOptions: ClientGetRegistrationOptionsAdapter; // → server: generates WebAuthn challenge
-  verifyRegistration: ClientVerifyRegistrationAdapter; // → server: stores credential
-  getAuthenticationOptions: ClientGetAuthenticationOptionsAdapter; // → server: generates WebAuthn challenge
-  verifyAuthentication: ClientVerifyAuthenticationAdapter; // → server: validates credential, sets session cookie
-
-  // Session
-  signOut: () => Promise<void>; // → server: revokes session in DB, clears cookie
-};
-
-type MakeAuthClientConfig = {
-  transport: AuthTransportAdapter;
-  // Future: sessionDecoder?: SessionDecoderAdapter
-};
-
-type MakeAuthClient = (config: MakeAuthClientConfig) => AuthClient;
+await requestOtp("user@example.com");
+const result = await verifyOtp("user@example.com", "123456");
 ```
+
+**Type definitions:**
+
+```ts
+// Client interface — matches CookieAuthReturn (minus getSession)
+type AuthClient = {
+  requestOtp: (email: string) => Promise<{ success: boolean }>;
+  verifyOtp: (
+    email: string,
+    code: string,
+  ) => Promise<{ valid: boolean; userId?: string }>;
+  signOut: () => Promise<void>;
+};
+
+// HTTP client factory
+type HttpClient = (endpoint: string) => AuthClient;
+```
+
+The `AuthClient` type matches the shape of `cookieAuth` methods, making server actions directly usable as the client interface.
 
 ### Session management
 
@@ -467,152 +410,112 @@ The session cookie is sent automatically. Your `/api/me` endpoint validates the 
 
 **Future expansion (if needed):**
 
-We could later add a `sessionDecoder` adapter to the client, enabling `client.getViewer()`:
-
-```ts
-// JWT — decodes locally, instant (no server call)
-const client = makeAuthClient({
-  transport: httpTransport("/api/auth"),
-  sessionDecoder: sessionDecoderAdapterJwt(),
-});
-
-const viewer = client.getViewer(); // → reads from cookie, instant
-
-// Opaque — can't decode locally, calls server
-const client = makeAuthClient({
-  transport: httpTransport("/api/auth"),
-  sessionDecoder: sessionDecoderAdapterOpaque(), // or omit entirely
-});
-
-const viewer = await client.getViewer(); // → calls server
-```
-
-Same API, different behavior based on adapter. The `sessionDecoder` matches the server's `sessionToken` adapter:
+We could add a `getViewer()` utility with optional client-side session decoding:
 
 | Server                     | Client                | `getViewer()`          |
 | -------------------------- | --------------------- | ---------------------- |
 | `makeSessionTokenJwt()`    | `sessionDecoderJwt()` | Instant (local decode) |
 | `makeSessionTokenOpaque()` | (none)                | Server call            |
 
-This would be additive (no breaking changes to existing code). For now, we keep it minimal — auth only, viewer fetching is your responsibility.
+For now, we keep it minimal — auth only, viewer fetching is your responsibility.
 
 ### Framework examples
 
-The handler expects a validated `AuthRequest`. You validate at your framework's boundary using your preferred validator (Zod, Valibot, TanStack's `inputValidator`, etc.).
+**Next.js — Server actions:**
 
-**Express + Zod:**
+Export the `cookieAuth` methods directly. No wrapper needed.
 
 ```ts
-import { z } from "zod";
-import type { AuthRequest } from "@starmode/auth";
+// app/actions/auth.ts
+"use server";
 
-// Validate at boundary
-const authRequestSchema = z.discriminatedUnion("method", [
+export const requestOtp = cookieAuth.requestOtp;
+export const verifyOtp = cookieAuth.verifyOtp;
+export const signOut = cookieAuth.signOut;
+```
+
+```tsx
+// app/page.tsx
+import { requestOtp, verifyOtp } from "./actions/auth";
+
+// Just call them directly — fully typed!
+await requestOtp("user@example.com");
+const result = await verifyOtp("user@example.com", "123456");
+```
+
+**Next.js — API route:**
+
+For HTTP clients, expose a single endpoint with method dispatch.
+
+```ts
+// app/api/auth/route.ts
+import { z } from "zod";
+
+const schema = z.discriminatedUnion("method", [
   z.object({ method: z.literal("requestOtp"), email: z.string().email() }),
   z.object({
     method: z.literal("verifyOtp"),
     email: z.string().email(),
     code: z.string(),
   }),
-  z.object({ method: z.literal("getSession") }),
   z.object({ method: z.literal("signOut") }),
-]) satisfies z.ZodType<AuthRequest>;
+]);
 
-// Server
-app.post("/auth", async (req, res) => {
-  const request = authRequestSchema.parse(req.body);
-  const result = await handler(request);
-  res.json(result);
-});
-
-// Client
-const client = makeAuthClient({
-  transport: httpTransport("http://localhost:3000/auth"),
-});
-```
-
-**Next.js — Server Actions:**
-
-- https://nextjs.org/docs/app/api-reference/directives/use-server
-- https://nextjs.org/docs/app/getting-started/updating-data#what-are-server-functions
-
-```ts
-// app/actions/auth.ts
-"use server";
-import type { AuthRequest } from "@starmode/auth";
-
-export async function authAction(request: AuthRequest) {
-  // Validation happens at call site or use Zod here
-  return handler(request);
-}
-
-// Client
-const client = makeAuthClient({ transport: authAction });
-```
-
-**Next.js — API Route:**
-
-- https://nextjs.org/docs/app/getting-started/route-handlers
-
-```ts
-// app/api/auth/route.ts
 export async function POST(req: Request) {
-  const request = authRequestSchema.parse(await req.json());
-  return Response.json(await handler(request));
+  const { method, ...params } = schema.parse(await req.json());
+  switch (method) {
+    case "requestOtp":
+      return Response.json(await cookieAuth.requestOtp(params.email));
+    case "verifyOtp":
+      return Response.json(
+        await cookieAuth.verifyOtp(params.email, params.code),
+      );
+    case "signOut":
+      await cookieAuth.signOut();
+      return new Response(null, { status: 204 });
+  }
 }
-
-// Client
-const client = makeAuthClient({
-  transport: httpTransport("/api/auth"),
-});
 ```
 
-**TanStack Start — Server Functions:**
+```ts
+// Client
+import { httpClient } from "@starmode/auth/client";
+const auth = httpClient("/api/auth");
+```
 
-- https://tanstack.com/start/latest/docs/framework/react/guide/server-functions
+**TanStack Start — Server functions:**
+
+Export server functions that wrap `cookieAuth` methods.
 
 ```ts
+// lib/auth.server.ts
 import { createServerFn } from "@tanstack/react-start";
-import type { AuthRequest } from "@starmode/auth";
 
-// Server — inputValidator handles validation
-export const authAction = createServerFn({ method: "POST" })
-  .inputValidator((input: AuthRequest) => input)
-  .handler(({ data }) => handler(data));
+export const requestOtp = createServerFn({ method: "POST" })
+  .inputValidator((email: string) => email)
+  .handler(({ data: email }) => cookieAuth.requestOtp(email));
 
-// Client
-const client = makeAuthClient({ transport: authAction });
+export const verifyOtp = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string; code: string }) => input)
+  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.code));
+
+export const signOut = createServerFn({ method: "POST" }).handler(() =>
+  cookieAuth.signOut(),
+);
 ```
 
-**TanStack Start — Server Routes:**
+```tsx
+// routes/index.tsx
+import { requestOtp, verifyOtp, signOut } from "../lib/auth.server";
 
-- https://tanstack.com/start/latest/docs/framework/react/guide/server-routes
-
-```ts
-// routes/api/auth.ts
-import { createFileRoute } from "@tanstack/react-router";
-import { json } from "@tanstack/react-start";
-
-export const Route = createFileRoute("/api/auth")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
-        const req = authRequestSchema.parse(await request.json());
-        return json(await handler(req));
-      },
-    },
-  },
-});
-
-// Client
-const client = makeAuthClient({
-  transport: httpTransport("/api/auth"),
-});
+// Just call them directly — fully typed!
+await requestOtp("user@example.com");
+const result = await verifyOtp({ email: "user@example.com", code: "123456" });
 ```
 
 ### React hooks
 
-Only things that need reactive state (loading, error) or depend on other hooks need a React hook. Everything else can call the client directly.
+Only things that need reactive state (loading, error) or depend on other hooks need a React hook. Everything else can call the auth methods directly.
 
 **Hooks (manage async state):**
 
@@ -623,9 +526,9 @@ Only things that need reactive state (loading, error) or depend on other hooks n
 **Direct calls (no hook needed):**
 
 ```ts
-// These are simple one-shot calls (still make server calls via transport)
-await client.signOut(); // revokes session server-side + clears cookie
-await client.requestOtp({ email });
+// Simple one-shot calls — just call the methods
+await signOut();
+await requestOtp(email);
 ```
 
 **Note:** No `useViewer()` hook — that's app data, not auth. Use your own data fetching (React Query, SWR, server components, etc.).

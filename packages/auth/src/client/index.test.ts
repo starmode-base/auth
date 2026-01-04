@@ -1,147 +1,145 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-  type Mock,
-} from "vitest";
-import { httpTransport, makeAuthClient, type AuthTransport } from "./index";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { httpClient, type AuthClient } from "./index";
 
-describe("httpTransport", () => {
+describe("httpClient", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
 
-  it("sends POST request with AuthRequest as body", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true }),
-    });
-    globalThis.fetch = mockFetch;
-
-    const transport = httpTransport("/api/auth");
-    await transport({ method: "requestOtp", email: "user@example.com" });
-
-    expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method: "requestOtp", email: "user@example.com" }),
-    });
-  });
-
-  it("returns parsed JSON response", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true }),
-    });
-    globalThis.fetch = mockFetch;
-
-    const transport = httpTransport("/api/auth");
-    const result = await transport({
-      method: "requestOtp",
-      email: "user@example.com",
-    });
-
-    expect(result).toEqual({ success: true });
-  });
-
-  it("throws on non-ok response", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-    });
-    globalThis.fetch = mockFetch;
-
-    const transport = httpTransport("/api/auth");
-
-    await expect(
-      transport({ method: "requestOtp", email: "user@example.com" }),
-    ).rejects.toThrow("Auth request failed: 500 Internal Server Error");
-  });
-});
-
-describe("makeAuthClient", () => {
-  let mockTransport: Mock<AuthTransport>;
-
-  beforeEach(() => {
-    mockTransport = vi.fn<AuthTransport>();
-  });
-
   describe("requestOtp", () => {
-    it("calls transport with AuthRequest", async () => {
-      mockTransport.mockResolvedValue({ success: true });
+    it("sends POST with method dispatch", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ success: true })),
+      });
+      globalThis.fetch = mockFetch;
 
-      const client = makeAuthClient({ transport: mockTransport });
-      await client.requestOtp({ email: "user@example.com" });
+      const auth = httpClient("/api/auth");
+      await auth.requestOtp("user@example.com");
 
-      expect(mockTransport).toHaveBeenCalledWith({
-        method: "requestOtp",
-        email: "user@example.com",
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "requestOtp",
+          email: "user@example.com",
+        }),
       });
     });
 
     it("returns success response", async () => {
-      mockTransport.mockResolvedValue({ success: true });
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ success: true })),
+      });
+      globalThis.fetch = mockFetch;
 
-      const client = makeAuthClient({ transport: mockTransport });
-      const result = await client.requestOtp({ email: "user@example.com" });
+      const auth = httpClient("/api/auth");
+      const result = await auth.requestOtp("user@example.com");
 
       expect(result).toEqual({ success: true });
     });
   });
 
   describe("verifyOtp", () => {
-    it("calls transport with AuthRequest", async () => {
-      mockTransport.mockResolvedValue({ valid: true, userId: "user_1" });
+    it("sends POST with method dispatch", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(JSON.stringify({ valid: true, userId: "user_1" })),
+      });
+      globalThis.fetch = mockFetch;
 
-      const client = makeAuthClient({ transport: mockTransport });
-      await client.verifyOtp({ email: "user@example.com", code: "123456" });
+      const auth = httpClient("/api/auth");
+      await auth.verifyOtp("user@example.com", "123456");
 
-      expect(mockTransport).toHaveBeenCalledWith({
-        method: "verifyOtp",
-        email: "user@example.com",
-        code: "123456",
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "verifyOtp",
+          email: "user@example.com",
+          code: "123456",
+        }),
       });
     });
 
     it("returns validation response", async () => {
-      mockTransport.mockResolvedValue({ valid: true, userId: "user_1" });
-
-      const client = makeAuthClient({ transport: mockTransport });
-      const result = await client.verifyOtp({
-        email: "user@example.com",
-        code: "123456",
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () =>
+          Promise.resolve(JSON.stringify({ valid: true, userId: "user_1" })),
       });
+      globalThis.fetch = mockFetch;
+
+      const auth = httpClient("/api/auth");
+      const result = await auth.verifyOtp("user@example.com", "123456");
 
       expect(result).toEqual({ valid: true, userId: "user_1" });
     });
 
     it("returns invalid response for wrong code", async () => {
-      mockTransport.mockResolvedValue({ valid: false });
-
-      const client = makeAuthClient({ transport: mockTransport });
-      const result = await client.verifyOtp({
-        email: "user@example.com",
-        code: "000000",
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(JSON.stringify({ valid: false })),
       });
+      globalThis.fetch = mockFetch;
+
+      const auth = httpClient("/api/auth");
+      const result = await auth.verifyOtp("user@example.com", "000000");
 
       expect(result).toEqual({ valid: false });
     });
   });
 
   describe("signOut", () => {
-    it("calls transport with signOut AuthRequest", async () => {
-      mockTransport.mockResolvedValue(undefined);
+    it("sends POST with method dispatch", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(""),
+      });
+      globalThis.fetch = mockFetch;
 
-      const client = makeAuthClient({ transport: mockTransport });
-      await client.signOut();
+      const auth = httpClient("/api/auth");
+      await auth.signOut();
 
-      expect(mockTransport).toHaveBeenCalledWith({ method: "signOut" });
+      expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "signOut" }),
+      });
+    });
+
+    it("handles empty response body", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        text: () => Promise.resolve(""),
+      });
+      globalThis.fetch = mockFetch;
+
+      const auth = httpClient("/api/auth");
+      const result = await auth.signOut();
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("error handling", () => {
+    it("throws on non-ok response", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+      });
+      globalThis.fetch = mockFetch;
+
+      const auth = httpClient("/api/auth");
+
+      await expect(auth.requestOtp("user@example.com")).rejects.toThrow(
+        "Auth request failed: 500 Internal Server Error",
+      );
     });
   });
 });
@@ -150,18 +148,27 @@ describe("client types", () => {
   it("exports AuthClient type", async () => {
     // Type-level test: if this compiles, the types are exported correctly
     const _typeCheck = async () => {
-      const { makeAuthClient, httpTransport } = await import("./index");
-      const client = makeAuthClient({ transport: httpTransport("/api/auth") });
+      const { httpClient } = await import("./index");
+      const auth = httpClient("/api/auth");
 
       // These should all type-check
-      const _r1: { success: boolean } = await client.requestOtp({
-        email: "test@example.com",
-      });
-      const _r2: { valid: boolean; userId?: string } = await client.verifyOtp({
-        email: "test@example.com",
-        code: "123456",
-      });
-      const _r3: void = await client.signOut();
+      const _r1: { success: boolean } =
+        await auth.requestOtp("test@example.com");
+      const _r2: { valid: boolean; userId?: string } = await auth.verifyOtp(
+        "test@example.com",
+        "123456",
+      );
+      const _r3: void = await auth.signOut();
+    };
+
+    expect(true).toBe(true);
+  });
+
+  it("AuthClient matches httpClient return type", () => {
+    // Type-level test: AuthClient can be assigned from httpClient
+    const _typeCheck = () => {
+      const auth: AuthClient = httpClient("/api/auth");
+      return auth;
     };
 
     expect(true).toBe(true);

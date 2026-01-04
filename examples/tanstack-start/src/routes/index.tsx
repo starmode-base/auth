@@ -1,8 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import { makeAuthClient } from "@starmode/auth/client";
-import type { AuthTransport } from "@starmode/auth/client";
-import { authAction, getSession } from "../lib/auth.server";
+import { requestOtp, verifyOtp, signOut, getSession } from "../lib/auth.server";
 import {
   Input,
   Button,
@@ -20,12 +18,6 @@ export const Route = createFileRoute("/")({
     return { session };
   },
 });
-
-// Server function transport adapter
-const transport: AuthTransport = (request) => authAction({ data: request });
-
-// Type-safe auth client
-const auth = makeAuthClient({ transport });
 
 function EmailForm({
   email,
@@ -157,7 +149,7 @@ function RouteComponent() {
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const result = await auth.requestOtp({ email });
+    const result = await requestOtp({ data: email });
     if (result.success) setStep("code");
     setLoading(false);
   };
@@ -166,7 +158,7 @@ function RouteComponent() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result = await auth.verifyOtp({ email, code });
+    const result = await verifyOtp({ data: { email, code } });
     if (result.valid) {
       // Session cookie is set server-side, reload to get fresh session
       await router.invalidate();
@@ -178,7 +170,7 @@ function RouteComponent() {
 
   const handleSignOut = async () => {
     setLoading(true);
-    await auth.signOut();
+    await signOut();
     // Cookie is cleared server-side, reload to reflect logged out state
     await router.invalidate();
     setEmail("");

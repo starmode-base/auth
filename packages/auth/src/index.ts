@@ -3,13 +3,12 @@
 // Core
 export { makeAuth } from "./make-auth";
 export { makeCookieAuth } from "./make-cookie-auth";
-export { makeAuthHandler } from "./make-auth-handler";
 
 // Adapters
 export {
   makeMemoryAdapters,
-  otpEmailAdapterlMinimal as otpEmailMinimal,
-  otpSendAdapterConsole as otpSendConsole,
+  otpEmailMinimal,
+  otpSendConsole,
   makeSessionTokenJwt,
 } from "./adapters";
 
@@ -46,13 +45,6 @@ export type {
   CookieAuthReturn,
   MakeCookieAuth,
 
-  // Handler (discriminated union)
-  AuthRequest,
-  RequestOtpResponse,
-  VerifyOtpResponse,
-  GetSessionResponse,
-  SignOutResponse,
-  AuthResponse,
-  AuthHandler,
-  MakeAuthHandler,
+  // Client
+  AuthClient,
 } from "./types";

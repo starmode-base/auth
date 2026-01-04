@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie, setCookie } from "@tanstack/react-start/server";
-import { makeCookieAuth, makeAuthHandler } from "@starmode/auth";
-import type { AuthRequest } from "@starmode/auth";
+import { makeCookieAuth } from "@starmode/auth";
 import { auth } from "./auth";
 
 const SESSION_COOKIE = "session";
@@ -29,14 +28,20 @@ const cookieAuth = makeCookieAuth({
   },
 });
 
-const handler = makeAuthHandler(cookieAuth);
+// Server functions — export methods directly
+export const requestOtp = createServerFn({ method: "POST" })
+  .inputValidator((email: string) => email)
+  .handler(({ data: email }) => cookieAuth.requestOtp(email));
 
-// Server function for auth actions
-export const authAction = createServerFn({ method: "POST" })
-  .inputValidator((input: AuthRequest) => input)
-  .handler(({ data }) => handler(data));
+export const verifyOtp = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string; code: string }) => input)
+  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.code));
+
+export const signOut = createServerFn({ method: "POST" }).handler(() =>
+  cookieAuth.signOut(),
+);
 
 // Convenience function for loaders
-export const getSession = createServerFn({ method: "GET" }).handler(async () =>
+export const getSession = createServerFn({ method: "GET" }).handler(() =>
   cookieAuth.getSession(),
 );
