@@ -2,7 +2,7 @@
 
 The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
-Passkeys + OTP. That's it.
+Passkeys first. OTP for bootstrap. That's it.
 
 ## Core philosophy
 
@@ -29,22 +29,48 @@ This means:
 
 ## Auth model
 
-Two primitives, each doing one job:
+**Passkey-first.** Two primitives, each doing one job:
 
-- **OTP** = email verification (sign up, recovery)
-- **Passkey** = sign in (day-to-day authentication)
+- **OTP** = email verification (bootstrap + recovery) → returns registration token
+- **Passkey** = authentication (sign in) → returns session
+
+Key design: **OTP never creates a session.** Only passkeys create sessions. This keeps the model simple and consistent for both regular apps and E2EE apps.
 
 ### Flows
 
 ```
-Sign up:  email → OTP → verify → [authenticated] → register passkey → done
-Sign in:  passkey → done
-Recovery: email → OTP → verify → [authenticated] → register new passkey → done
+Sign up:  email → OTP → registration token → register passkey → session
+Sign in:  passkey → session
+Recovery: email → OTP → registration token → register new passkey → session
 ```
 
-Recovery is just sign-up again. Same flow.
+Recovery is just sign-up again. Same flow, same code path.
 
-**Server-side flows (implementation detail):**
+**OTP recovery is optional.** Apps choose whether to expose it:
+
+- Regular apps: expose it — user recovers account and data
+- E2EE apps: don't expose it — OTP can't recover encrypted data anyway
+
+### Registration token
+
+OTP verification returns a short-lived, single-purpose **registration token** (not a session):
+
+```ts
+const { registrationToken } = await auth.verifyOtp(email, code);
+// registrationToken: short-lived (5 min), can only register a passkey
+
+const { session } = await auth.registerPasskey(registrationToken, credential);
+// NOW you have a session
+```
+
+Why not a session?
+
+- Session implies "you're authenticated, do whatever"
+- After OTP, you can ONLY register a passkey
+- No accidental OTP-only auth paths
+- Consistent for E2EE and regular apps
+
+### Server-side flows (implementation detail)
 
 ```
 OTP verification (sign up / recovery):
@@ -53,17 +79,20 @@ OTP verification (sign up / recovery):
 3. User submits OTP
 4. Server verifies OTP (checks OTP table)
 5. Server upserts user (atomic) → userId
-6. Server inserts session
-7. Server returns session cookie
-   ← user is now authenticated →
+6. Server creates registration token (short-lived, signed)
+7. Server returns registration token
+   ← user can now register a passkey →
 
-Passkey registration (after OTP, user is authenticated):
-1. Client prompts "Set up passkey"
-2. Client calls generateRegistrationOptions(userId)
-3. Server generates WebAuthn challenge
+Passkey registration (requires registration token):
+1. Client has registration token from OTP verification
+2. Client calls generateRegistrationOptions(registrationToken)
+3. Server validates token, generates WebAuthn challenge
 4. Client triggers browser WebAuthn (create credential)
-5. Client calls verifyRegistration(userId, credential)
-6. Server stores credential (linked to userId)
+5. Client calls verifyRegistration(registrationToken, credential)
+6. Server stores credential (linked to userId from token)
+7. Server inserts session
+8. Server returns session cookie
+   ← user is now authenticated →
 
 Passkey sign in:
 1. Client requests authentication options
@@ -78,14 +107,26 @@ Passkey sign in:
 
 Key difference:
 
-- OTP: email → verify → upsert user → session (user might be new)
-- Passkey registration: requires authenticated session (userId known)
-- Passkey sign in: credential → verify → user already exists → session
+- OTP: email → verify → registration token (NOT a session)
+- Passkey registration: requires registration token → creates session
+- Passkey sign in: credential → verify → session
 
 **Implementation notes:**
 
 - User upsert must be atomic (single query with `ON CONFLICT` or equivalent) — no separate get + create
-- May need `getCredentialById(credentialId)` adapter to look up userId during passkey auth
+- Registration token is signed (JWT or HMAC) containing userId, short TTL (5 min)
+- `getCredentialById(credentialId)` adapter needed to look up userId during passkey auth
+
+### E2EE compatibility
+
+For apps using WebAuthn PRF for key derivation (E2EE):
+
+- Library exposes PRF extension results from passkey operations
+- App derives KEK from PRF, manages DEK encryption
+- OTP recovery = fresh start (new passkey, new KEK, old data unrecoverable)
+- This is the E2EE security contract, not a library limitation
+
+Users should register multiple passkeys for redundancy. Each passkey can independently decrypt data (app encrypts DEK with each passkey's PRF-derived KEK).
 
 ## Architecture
 
@@ -112,10 +153,11 @@ import {
   otpEmailMinimal,
   otpSendConsole,
   makeSessionTokenJwt,
+  makeRegistrationTokenJwt,
 } from "@starmode/auth";
 
 const auth = makeAuth({
-  // OTP persistence
+  // OTP persistence (ephemeral — deleted after use)
   storeOtp: async (email, code, expiresAt) => {
     /* your ORM */
   },
@@ -135,6 +177,9 @@ const auth = makeAuth({
   getCredentials: async (userId) => {
     /* your ORM */
   },
+  getCredentialById: async (credentialId) => {
+    /* your ORM — returns { userId, credential } or null */
+  },
 
   // Session persistence
   storeSession: async (sessionId, userId, expiresAt) => {
@@ -147,15 +192,25 @@ const auth = makeAuth({
     /* your ORM */
   },
 
-  // Session token (encode/decode are separate adapters, but tightly coupled)
+  // Token encoding
   ...makeSessionTokenJwt({
     secret: process.env.SESSION_SECRET,
     ttl: 600, // 10 min — after expiry, validates against DB
+  }),
+  ...makeRegistrationTokenJwt({
+    secret: process.env.REGISTRATION_SECRET,
+    ttl: 300, // 5 min — short-lived, single-purpose
   }),
 
   // OTP delivery
   email: otpEmailMinimal, // Format
   send: otpSendConsole, // Sender
+
+  // Passkey config
+  passkeys: {
+    rpId: "example.com",
+    rpName: "My App",
+  },
 });
 
 // Wrap with cookie handling (you provide cookie ops)
@@ -169,8 +224,16 @@ const cookieAuth = makeCookieAuth({
 });
 
 // cookieAuth methods are ready to use:
+// OTP (bootstrap + recovery)
 // - cookieAuth.requestOtp(email)
-// - cookieAuth.verifyOtp(email, code)
+// - cookieAuth.verifyOtp(email, code) → { registrationToken }
+// Passkey registration
+// - cookieAuth.generateRegistrationOptions(registrationToken)
+// - cookieAuth.verifyRegistration(registrationToken, credential) → sets cookie
+// Passkey sign-in
+// - cookieAuth.generateAuthenticationOptions()
+// - cookieAuth.verifyAuthentication(credential) → sets cookie
+// Session
 // - cookieAuth.getSession()
 // - cookieAuth.signOut()
 ```
@@ -203,6 +266,9 @@ type StoreCredentialAdapter = (
   credential: Credential,
 ) => Promise<void>;
 type GetCredentialsAdapter = (userId: string) => Promise<Credential[]>;
+type GetCredentialByIdAdapter = (
+  credentialId: string,
+) => Promise<{ userId: string; credential: Credential } | null>;
 
 // Session persistence adapters
 type StoreSessionAdapter = (
@@ -234,51 +300,102 @@ type OtpSendAdapter = (
   content: { subject: string; body: string },
 ) => Promise<void>;
 
-// Return adapters
-type RequestOtpAdapter = (email: string) => Promise<{ success: boolean }>;
-type VerifyOtpReturnAdapter = (
-  email: string,
-  code: string,
-) => Promise<{ valid: boolean; userId?: string; token?: string }>;
-type GenerateRegistrationOptionsAdapter = (
-  userId: string,
-) => Promise<PublicKeyCredentialCreationOptions>;
-type VerifyRegistrationAdapter = (
-  userId: string,
-  credential: RegistrationCredential,
-) => Promise<{ success: boolean }>;
-type GenerateAuthenticationOptionsAdapter =
-  () => Promise<PublicKeyCredentialRequestOptions>;
-type VerifyAuthenticationAdapter = (
-  credential: AuthenticationCredential,
-) => Promise<{ valid: boolean; userId: string }>;
+// Registration token adapters
+type EncodeRegistrationTokenAdapter = (payload: {
+  userId: string;
+  email: string;
+}) => string;
+type DecodeRegistrationTokenAdapter = (token: string) => {
+  userId: string;
+  email: string;
+  valid: boolean;
+  expired: boolean;
+} | null;
+
+// Return types
+type RequestOtpReturn = { success: boolean };
+type VerifyOtpReturn = { valid: boolean; registrationToken?: string };
+type GenerateRegistrationOptionsReturn = {
+  options: PublicKeyCredentialCreationOptions;
+  // PRF extension included if requested
+};
+type VerifyRegistrationReturn = {
+  success: boolean;
+  session?: { token: string; userId: string };
+  // PRF result included if extension was used
+  prf?: Uint8Array;
+};
+type GenerateAuthenticationOptionsReturn = {
+  options: PublicKeyCredentialRequestOptions;
+};
+type VerifyAuthenticationReturn = {
+  valid: boolean;
+  session?: { token: string; userId: string };
+  // PRF result included if extension was used
+  prf?: Uint8Array;
+};
 
 // Config
 type MakeAuthConfig = {
+  // OTP persistence (ephemeral — deleted after use)
   storeOtp: StoreOtpAdapter;
   verifyOtp: VerifyOtpAdapter;
+
+  // User persistence (atomic upsert)
   upsertUser: UpsertUserAdapter;
+
+  // Passkey persistence
   storeCredential: StoreCredentialAdapter;
   getCredentials: GetCredentialsAdapter;
+  getCredentialById: GetCredentialByIdAdapter; // for passkey sign-in lookup
+
+  // Session persistence
   storeSession: StoreSessionAdapter;
   getSession: GetSessionAdapter;
   deleteSession: DeleteSessionAdapter;
+
+  // Token encoding (session + registration)
   encodeSessionToken: EncodeSessionTokenAdapter;
   decodeSessionToken: DecodeSessionTokenAdapter;
+  encodeRegistrationToken: EncodeRegistrationTokenAdapter;
+  decodeRegistrationToken: DecodeRegistrationTokenAdapter;
+
+  // OTP delivery
   email: OtpEmailAdapter;
   send: OtpSendAdapter;
+
+  // Passkey config
+  passkeys: {
+    rpId: string; // e.g. "example.com"
+    rpName: string; // e.g. "My App"
+    // origin inferred from rpId, or explicit if needed
+  };
 };
 
 // Return
 type MakeAuthReturn = {
-  requestOtp: RequestOtpAdapter;
-  verifyOtp: VerifyOtpReturnAdapter;
+  // OTP (bootstrap + recovery)
+  requestOtp: (email: string) => Promise<RequestOtpReturn>;
+  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+
+  // Passkey registration (requires registration token)
+  generateRegistrationOptions: (
+    registrationToken: string,
+  ) => Promise<GenerateRegistrationOptionsReturn>;
+  verifyRegistration: (
+    registrationToken: string,
+    credential: RegistrationCredential,
+  ) => Promise<VerifyRegistrationReturn>;
+
+  // Passkey authentication (sign in)
+  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
+  verifyAuthentication: (
+    credential: AuthenticationCredential,
+  ) => Promise<VerifyAuthenticationReturn>;
+
+  // Session management
   getSession: (token: string) => Promise<{ userId: string } | null>;
   deleteSession: (token: string) => Promise<void>;
-  generateRegistrationOptions: GenerateRegistrationOptionsAdapter;
-  verifyRegistration: VerifyRegistrationAdapter;
-  generateAuthenticationOptions: GenerateAuthenticationOptionsAdapter;
-  verifyAuthentication: VerifyAuthenticationAdapter;
 };
 
 // Main function
@@ -293,11 +410,26 @@ type CookieAdapter = {
 
 // Cookie auth — wraps auth with automatic cookie handling
 type CookieAuthReturn = {
+  // OTP (bootstrap + recovery)
   requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (
-    email: string,
-    code: string,
-  ) => Promise<{ valid: boolean; userId?: string }>;
+  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+
+  // Passkey registration (requires registration token from verifyOtp)
+  generateRegistrationOptions: (
+    registrationToken: string,
+  ) => Promise<GenerateRegistrationOptionsReturn>;
+  verifyRegistration: (
+    registrationToken: string,
+    credential: RegistrationCredential,
+  ) => Promise<VerifyRegistrationReturn>; // sets session cookie
+
+  // Passkey authentication (sign in)
+  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
+  verifyAuthentication: (
+    credential: AuthenticationCredential,
+  ) => Promise<VerifyAuthenticationReturn>; // sets session cookie
+
+  // Session
   getSession: () => Promise<{ userId: string } | null>;
   signOut: () => Promise<void>;
 };
@@ -313,11 +445,12 @@ type MakeCookieAuth = (config: {
 Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type}()`.
 
 ```
-✓ otpEmailMinimal        — minimal OTP email template
-✓ otpSendConsole         — logs OTP to console (dev)
-✓ makeSessionTokenJwt()  — JWT encode/decode for session tokens
-✓ makeCookieAuth()       — wraps auth with cookie handling
-✓ makeMemoryAdapters()   — in-memory persistence (dev/test)
+✓ otpEmailMinimal            — minimal OTP email template
+✓ otpSendConsole             — logs OTP to console (dev)
+✓ makeSessionTokenJwt()      — JWT encode/decode for session tokens
+✓ makeRegistrationTokenJwt() — JWT encode/decode for registration tokens
+✓ makeCookieAuth()           — wraps auth with cookie handling
+✓ makeMemoryAdapters()       — in-memory persistence (dev/test)
 ```
 
 **Planned:**
@@ -339,8 +472,24 @@ import { httpClient } from "@starmode/auth/client";
 // HTTP client — method-based interface
 const auth = httpClient("/api/auth");
 
+// Sign up flow: OTP → passkey registration
 await auth.requestOtp("user@example.com");
-const result = await auth.verifyOtp("user@example.com", "123456");
+const { registrationToken } = await auth.verifyOtp(
+  "user@example.com",
+  "123456",
+);
+
+const { options } = await auth.generateRegistrationOptions(registrationToken);
+const credential = await navigator.credentials.create({ publicKey: options });
+await auth.verifyRegistration(registrationToken, credential);
+// Now user has a session
+
+// Sign in flow: passkey only
+const { options } = await auth.generateAuthenticationOptions();
+const credential = await navigator.credentials.get({ publicKey: options });
+await auth.verifyAuthentication(credential);
+// Now user has a session
+
 await auth.signOut();
 ```
 
@@ -348,10 +497,19 @@ For server actions, you don't need a client wrapper — just call the methods di
 
 ```ts
 // Server actions (Next.js / TanStack Start)
-import { requestOtp, verifyOtp, signOut } from "./auth.server";
+import {
+  requestOtp,
+  verifyOtp,
+  generateRegistrationOptions,
+  verifyRegistration,
+  generateAuthenticationOptions,
+  verifyAuthentication,
+} from "./auth.server";
 
+// Sign up: OTP → passkey
 await requestOtp("user@example.com");
-const result = await verifyOtp("user@example.com", "123456");
+const { registrationToken } = await verifyOtp("user@example.com", "123456");
+// ... WebAuthn flow with registrationToken
 ```
 
 **Type definitions:**
@@ -359,11 +517,25 @@ const result = await verifyOtp("user@example.com", "123456");
 ```ts
 // Client interface — matches CookieAuthReturn (minus getSession)
 type AuthClient = {
+  // OTP (bootstrap + recovery)
   requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (
-    email: string,
-    code: string,
-  ) => Promise<{ valid: boolean; userId?: string }>;
+  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+
+  // Passkey registration
+  generateRegistrationOptions: (
+    registrationToken: string,
+  ) => Promise<GenerateRegistrationOptionsReturn>;
+  verifyRegistration: (
+    registrationToken: string,
+    credential: RegistrationCredential,
+  ) => Promise<VerifyRegistrationReturn>;
+
+  // Passkey authentication (sign in)
+  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
+  verifyAuthentication: (
+    credential: AuthenticationCredential,
+  ) => Promise<VerifyAuthenticationReturn>;
+
   signOut: () => Promise<void>;
 };
 
@@ -377,7 +549,7 @@ The `AuthClient` type matches the shape of `cookieAuth` methods, making server a
 
 **How it works:**
 
-1. User authenticates (OTP verify or passkey)
+1. User authenticates via passkey (OTP only gives a registration token, not a session)
 2. Server creates session → encodes token → sets HttpOnly cookie
 3. Browser automatically sends cookie with every request
 4. Server decodes token → if expired, validates against DB → returns userId
@@ -429,18 +601,33 @@ Export the `cookieAuth` methods directly. No wrapper needed.
 // app/actions/auth.ts
 "use server";
 
+// OTP (bootstrap + recovery)
 export const requestOtp = cookieAuth.requestOtp;
 export const verifyOtp = cookieAuth.verifyOtp;
+
+// Passkey registration
+export const generateRegistrationOptions =
+  cookieAuth.generateRegistrationOptions;
+export const verifyRegistration = cookieAuth.verifyRegistration;
+
+// Passkey sign-in
+export const generateAuthenticationOptions =
+  cookieAuth.generateAuthenticationOptions;
+export const verifyAuthentication = cookieAuth.verifyAuthentication;
+
 export const signOut = cookieAuth.signOut;
 ```
 
 ```tsx
 // app/page.tsx
-import { requestOtp, verifyOtp } from "./actions/auth";
+import { requestOtp, verifyOtp, verifyRegistration } from "./actions/auth";
 
-// Just call them directly — fully typed!
+// Sign up: OTP → passkey registration
 await requestOtp("user@example.com");
-const result = await verifyOtp("user@example.com", "123456");
+const { registrationToken } = await verifyOtp("user@example.com", "123456");
+// ... WebAuthn flow, then:
+await verifyRegistration(registrationToken, credential);
+// User now has a session
 ```
 
 **Next.js — API route:**
@@ -452,23 +639,53 @@ For HTTP clients, expose a single endpoint with method dispatch.
 import { z } from "zod";
 
 const schema = z.discriminatedUnion("method", [
+  // OTP
   z.object({ method: z.literal("requestOtp"), email: z.string().email() }),
   z.object({
     method: z.literal("verifyOtp"),
     email: z.string().email(),
     code: z.string(),
   }),
+  // Passkey registration
+  z.object({
+    method: z.literal("generateRegistrationOptions"),
+    registrationToken: z.string(),
+  }),
+  z.object({
+    method: z.literal("verifyRegistration"),
+    registrationToken: z.string(),
+    credential: z.any(),
+  }),
+  // Passkey sign-in
+  z.object({ method: z.literal("generateAuthenticationOptions") }),
+  z.object({ method: z.literal("verifyAuthentication"), credential: z.any() }),
+  // Session
   z.object({ method: z.literal("signOut") }),
 ]);
 
 export async function POST(req: Request) {
-  const { method, ...params } = schema.parse(await req.json());
-  switch (method) {
+  const body = schema.parse(await req.json());
+  switch (body.method) {
     case "requestOtp":
-      return Response.json(await cookieAuth.requestOtp(params.email));
+      return Response.json(await cookieAuth.requestOtp(body.email));
     case "verifyOtp":
+      return Response.json(await cookieAuth.verifyOtp(body.email, body.code));
+    case "generateRegistrationOptions":
       return Response.json(
-        await cookieAuth.verifyOtp(params.email, params.code),
+        await cookieAuth.generateRegistrationOptions(body.registrationToken),
+      );
+    case "verifyRegistration":
+      return Response.json(
+        await cookieAuth.verifyRegistration(
+          body.registrationToken,
+          body.credential,
+        ),
+      );
+    case "generateAuthenticationOptions":
+      return Response.json(await cookieAuth.generateAuthenticationOptions());
+    case "verifyAuthentication":
+      return Response.json(
+        await cookieAuth.verifyAuthentication(body.credential),
       );
     case "signOut":
       await cookieAuth.signOut();
@@ -491,6 +708,7 @@ Export server functions that wrap `cookieAuth` methods.
 // lib/auth.server.ts
 import { createServerFn } from "@tanstack/react-start";
 
+// OTP (bootstrap + recovery)
 export const requestOtp = createServerFn({ method: "POST" })
   .inputValidator((email: string) => email)
   .handler(({ data: email }) => cookieAuth.requestOtp(email));
@@ -499,6 +717,28 @@ export const verifyOtp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; code: string }) => input)
   .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.code));
 
+// Passkey registration
+export const generateRegistrationOptions = createServerFn({ method: "POST" })
+  .inputValidator((token: string) => token)
+  .handler(({ data: token }) => cookieAuth.generateRegistrationOptions(token));
+
+export const verifyRegistration = createServerFn({ method: "POST" })
+  .inputValidator(
+    (input: { token: string; credential: RegistrationCredential }) => input,
+  )
+  .handler(({ data }) =>
+    cookieAuth.verifyRegistration(data.token, data.credential),
+  );
+
+// Passkey sign-in
+export const generateAuthenticationOptions = createServerFn({
+  method: "POST",
+}).handler(() => cookieAuth.generateAuthenticationOptions());
+
+export const verifyAuthentication = createServerFn({ method: "POST" })
+  .inputValidator((credential: AuthenticationCredential) => credential)
+  .handler(({ data }) => cookieAuth.verifyAuthentication(data));
+
 export const signOut = createServerFn({ method: "POST" }).handler(() =>
   cookieAuth.signOut(),
 );
@@ -506,11 +746,17 @@ export const signOut = createServerFn({ method: "POST" }).handler(() =>
 
 ```tsx
 // routes/index.tsx
-import { requestOtp, verifyOtp, signOut } from "../lib/auth.server";
+import { requestOtp, verifyOtp, verifyRegistration } from "../lib/auth.server";
 
-// Just call them directly — fully typed!
+// Sign up: OTP → passkey registration
 await requestOtp("user@example.com");
-const result = await verifyOtp({ email: "user@example.com", code: "123456" });
+const { registrationToken } = await verifyOtp({
+  email: "user@example.com",
+  code: "123456",
+});
+// ... WebAuthn flow, then:
+await verifyRegistration({ token: registrationToken, credential });
+// User now has a session
 ```
 
 ### React hooks
@@ -535,13 +781,14 @@ await requestOtp(email);
 
 ## Scope
 
-- Email OTP (request, verify)
-- Passkeys (WebAuthn registration + authentication)
+- Passkeys (WebAuthn registration + authentication) — primary sign-in method
+- Email OTP (request, verify) — bootstrap only, returns registration token
+- Registration token — short-lived, single-purpose (register passkey)
 - Server: Framework-agnostic functions
 - Client: Vanilla JS core + React hooks
 - Tested with: Next.js (App Router), TanStack Start
 
-**Development order:** OTP first, passkeys second. Types for both are defined upfront so the architecture accounts for passkeys from day one.
+**Development order:** OTP + registration token first, passkeys second. Types for both are defined upfront so the architecture accounts for passkeys from day one.
 
 **Future:**
 
@@ -571,8 +818,23 @@ await requestOtp(email);
 
 ## Positioning
 
-**@starmode/auth**: Passkeys + OTP. That's it.
+**@starmode/auth**: Passkeys first. OTP for bootstrap. That's it.
+
+Do you want passkeys? Yes → use this. No → this isn't for you.
 
 If you need OAuth, SAML, legacy browser support, or enterprise SSO—use Auth0, Clerk or Okta.
 
-If you're building a new project and want auth that an LLM can set up in one prompt, this is it.
+If you're building a new project and want passkey auth that an LLM can set up in one prompt, this is it.
+
+**Security model:**
+
+- Passkeys are the only sign-in method (phishing-resistant)
+- OTP verifies email ownership (for signup and optional recovery)
+- No OTP sign-in — eliminates entire class of attacks
+- E2EE compatible — PRF extension passthrough for key derivation
+
+**Recovery:**
+
+- Encourage users to register multiple passkeys
+- OTP recovery is optional — apps choose whether to expose it
+- For E2EE apps: losing all passkeys = losing data (that's the security contract)
