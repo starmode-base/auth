@@ -6,6 +6,7 @@ Passkeys first. OTP for bootstrap. That's it.
 
 ## Core philosophy
 
+- **Primitives-first** — core API is low-level primitives, flows are composed on top
 - **Library-first** — your database is the source of truth, with an optional hosted service
 - **LLM-friendly** — no DNS config, no OAuth dashboards, no external clicks required
 - **Explicit over implicit** — no magic defaults, everything is a visible import
@@ -29,62 +30,100 @@ This means:
 
 ## Auth model
 
-**Passkey-first.** Two primitives, each doing one job:
+**Passkey-first.** The library provides primitives. Apps compose flows.
 
-- **OTP** = email verification (bootstrap + recovery) → returns registration token
-- **Passkey** = authentication (sign in) → returns session
+### Primitives
 
-Key design: **OTP never creates a session.** Only passkeys create sessions. This keeps the model simple and consistent for both regular apps and E2EE apps.
+| Primitive                                | What it does                   |
+| ---------------------------------------- | ------------------------------ |
+| `requestOtp(email)`                      | Send OTP to email              |
+| `verifyOtp(email, code)`                 | Verify OTP → `{ valid }`       |
+| `createRegistrationToken(userId, email)` | Create registration token      |
+| `validateRegistrationToken(token)`       | Validate → `{ userId, email }` |
+| `generateRegistrationOptions(token)`     | WebAuthn registration options  |
+| `verifyRegistration(token, credential)`  | Verify + store + session       |
+| `generateAuthenticationOptions()`        | WebAuthn sign-in options       |
+| `verifyAuthentication(credential)`       | Verify + session               |
+| `getSession(token)`                      | Get session data               |
+| `deleteSession(token)`                   | Delete session                 |
 
-### Flows
+Key design: **OTP never creates a session.** Only passkeys create sessions. `verifyOtp` just verifies the code — it doesn't upsert users or create tokens. Apps compose the flow they need.
+
+### Flows (composed from primitives)
 
 ```
-Sign up:  email → OTP → registration token → register passkey → session
-Sign in:  passkey → session
-Recovery: email → OTP → registration token → register new passkey → session
+Sign up:    verifyOtp → upsertUser (app) → createRegistrationToken → passkey → session
+Sign in:    passkey → session
+Recovery:   verifyOtp → upsertUser (app) → createRegistrationToken → passkey → session
+Change email: verifyOtp → app updates user record
+Add email:    verifyOtp → app adds email to user
 ```
 
-Recovery is just sign-up again. Same flow, same code path.
+The library provides primitives. The app orchestrates:
+
+```ts
+// Sign up — app composes the flow
+await auth.requestOtp(email);
+const { valid } = await auth.verifyOtp(email, code);
+if (valid) {
+  const { userId } = await db.users.upsert({ email }); // App's DB
+  const { registrationToken } = await auth.createRegistrationToken(
+    userId,
+    email,
+  );
+  // Continue with passkey registration...
+}
+
+// Change email — different flow, same primitives
+await auth.requestOtp(newEmail);
+const { valid } = await auth.verifyOtp(newEmail, code);
+if (valid) {
+  await db.users.update(userId, { email: newEmail }); // App's DB
+}
+```
 
 **OTP recovery is optional.** Apps choose whether to expose it:
 
 - Regular apps: expose it — user recovers account and data
 - E2EE apps: don't expose it — OTP can't recover encrypted data anyway
 
-### Registration token
+### Flow adapters (optional convenience)
 
-OTP verification returns a short-lived, single-purpose **registration token** (not a session):
+For common patterns, we ship flow adapters that compose primitives:
 
 ```ts
-const { registrationToken } = await auth.verifyOtp(email, code);
-// registrationToken: short-lived (5 min), can only register a passkey
+import { makeSignUpFlow } from "@starmode/auth/flows";
 
-const { session } = await auth.registerPasskey(registrationToken, credential);
-// NOW you have a session
+const signUp = makeSignUpFlow({
+  auth,
+  upsertUser: async (email) => db.users.upsert({ email }),
+});
+
+// Usage — one call instead of multiple
+const { registrationToken } = await signUp(email, code);
 ```
 
-Why not a session?
-
-- Session implies "you're authenticated, do whatever"
-- After OTP, you can ONLY register a passkey
-- No accidental OTP-only auth paths
-- Consistent for E2EE and regular apps
+Flow adapters are optional. You can always use primitives directly.
 
 ### Server-side flows (implementation detail)
 
 ```
-OTP verification (sign up / recovery):
+OTP verification:
 1. User submits email
-2. Server stores OTP, sends email
+2. Server stores OTP, sends via configured channel
 3. User submits OTP
 4. Server verifies OTP (checks OTP table)
-5. Server upserts user (atomic) → userId
-6. Server creates registration token (short-lived, signed)
-7. Server returns registration token
-   ← user can now register a passkey →
+5. Server returns { valid: true }
+   ← app decides what to do next →
 
-Passkey registration (requires registration token):
-1. Client has registration token from OTP verification
+Sign up (app orchestrates):
+1. App calls verifyOtp → { valid }
+2. App upserts user → userId
+3. App calls createRegistrationToken(userId, email)
+4. Continue with passkey registration...
+
+Passkey registration:
+1. Client has registration token
 2. Client calls generateRegistrationOptions(registrationToken)
 3. Server validates token, generates WebAuthn challenge
 4. Client triggers browser WebAuthn (create credential)
@@ -105,17 +144,11 @@ Passkey sign in:
 8. Server returns session cookie
 ```
 
-Key difference:
-
-- OTP: email → verify → registration token (NOT a session)
-- Passkey registration: requires registration token → creates session
-- Passkey sign in: credential → verify → session
-
 **Implementation notes:**
 
-- User upsert must be atomic (single query with `ON CONFLICT` or equivalent) — no separate get + create
-- Registration token is signed (JWT or HMAC) containing userId, short TTL (5 min)
+- Registration token is signed (JWT or HMAC) containing userId + email, short TTL (5 min)
 - `getCredentialById(credentialId)` adapter needed to look up userId during passkey auth
+- User management is app responsibility — library doesn't touch users table
 
 ### E2EE compatibility
 
@@ -150,61 +183,32 @@ The only framework-specific code is the glue you write: cookie get/set/clear fun
 import {
   makeAuth,
   makeCookieAuth,
-  otpEmailMinimal,
-  otpSendConsole,
+  makeMemoryAdapters,
   makeSessionTokenJwt,
   makeRegistrationTokenJwt,
+  otpEmailMinimal,
+  otpSendConsole,
 } from "@starmode/auth";
 
 const auth = makeAuth({
-  // OTP persistence (ephemeral — deleted after use)
-  storeOtp: async (email, code, expiresAt) => {
-    /* your ORM */
-  },
-  verifyOtp: async (email, code) => {
-    /* your ORM */
-  },
+  // All persistence adapters
+  storage: makeMemoryAdapters(), // or your own adapters
 
-  // User persistence (atomic upsert — no race conditions)
-  upsertUser: async (email) => {
-    /* your ORM */
-  },
-
-  // Passkey persistence
-  storeCredential: async (userId, credential) => {
-    /* your ORM */
-  },
-  getCredentials: async (userId) => {
-    /* your ORM */
-  },
-  getCredentialById: async (credentialId) => {
-    /* your ORM — returns { userId, credential } or null */
-  },
-
-  // Session persistence
-  storeSession: async (sessionId, userId, expiresAt) => {
-    /* your ORM */
-  },
-  getSession: async (sessionId) => {
-    /* your ORM */
-  },
-  deleteSession: async (sessionId) => {
-    /* your ORM */
-  },
-
-  // Token encoding
-  ...makeSessionTokenJwt({
+  // Token encoding (separate adapters)
+  sessionToken: makeSessionTokenJwt({
     secret: process.env.SESSION_SECRET,
-    ttl: 600, // 10 min — after expiry, validates against DB
+    ttl: 600, // 10 min
   }),
-  ...makeRegistrationTokenJwt({
+  registrationToken: makeRegistrationTokenJwt({
     secret: process.env.REGISTRATION_SECRET,
-    ttl: 300, // 5 min — short-lived, single-purpose
+    ttl: 300, // 5 min
   }),
 
-  // OTP delivery
-  email: otpEmailMinimal, // Format
-  send: otpSendConsole, // Sender
+  // OTP delivery (format + send)
+  otp: {
+    format: otpEmailMinimal,
+    send: otpSendConsole,
+  },
 
   // Passkey config
   passkeys: {
@@ -223,19 +227,64 @@ const cookieAuth = makeCookieAuth({
   },
 });
 
-// cookieAuth methods are ready to use:
-// OTP (bootstrap + recovery)
-// - cookieAuth.requestOtp(email)
-// - cookieAuth.verifyOtp(email, code) → { registrationToken }
-// Passkey registration
-// - cookieAuth.generateRegistrationOptions(registrationToken)
-// - cookieAuth.verifyRegistration(registrationToken, credential) → sets cookie
-// Passkey sign-in
-// - cookieAuth.generateAuthenticationOptions()
-// - cookieAuth.verifyAuthentication(credential) → sets cookie
+// Primitives available:
+// OTP
+// - auth.requestOtp(email) → { success }
+// - auth.verifyOtp(email, code) → { valid }
+// Registration token
+// - auth.createRegistrationToken(userId, email) → { registrationToken }
+// - auth.validateRegistrationToken(token) → { userId, email, valid }
+// Passkey
+// - auth.generateRegistrationOptions(token) → { options }
+// - auth.verifyRegistration(token, credential) → { success, session, prf? }
+// - auth.generateAuthenticationOptions() → { options }
+// - auth.verifyAuthentication(credential) → { valid, session, prf? }
 // Session
-// - cookieAuth.getSession()
-// - cookieAuth.signOut()
+// - auth.getSession(token) → { userId } | null
+// - auth.deleteSession(token) → void
+```
+
+**Custom storage adapters:**
+
+```ts
+const auth = makeAuth({
+  storage: {
+    otp: {
+      store: async (email, code, expiresAt) => {
+        /* your ORM */
+      },
+      verify: async (email, code) => {
+        /* your ORM */
+      },
+    },
+    session: {
+      store: async (sessionId, userId, expiresAt) => {
+        /* your ORM */
+      },
+      get: async (sessionId) => {
+        /* your ORM */
+      },
+      delete: async (sessionId) => {
+        /* your ORM */
+      },
+    },
+    credential: {
+      store: async (userId, credential) => {
+        /* your ORM */
+      },
+      get: async (userId) => {
+        /* your ORM */
+      },
+      getById: async (credentialId) => {
+        /* your ORM */
+      },
+    },
+  },
+  sessionToken: makeSessionTokenJwt({ secret, ttl: 600 }),
+  registrationToken: makeRegistrationTokenJwt({ secret, ttl: 300 }),
+  otp: { format: otpEmailMinimal, send: otpSendConsole },
+  passkeys: { rpId: "example.com", rpName: "My App" },
+});
 ```
 
 **Why No Database Drivers?**
@@ -247,83 +296,79 @@ We don't touch your database. You write the persistence functions using whatever
 **Type Definitions:**
 
 ```ts
-// OTP persistence adapters
-type StoreOtpAdapter = (
-  email: string,
-  code: string,
-  expiresAt: Date,
-) => Promise<void>;
-type VerifyOtpAdapter = (email: string, code: string) => Promise<boolean>;
+// Storage adapters (grouped by concern)
+type StorageAdapters = {
+  otp: {
+    store: (email: string, code: string, expiresAt: Date) => Promise<void>;
+    verify: (email: string, code: string) => Promise<boolean>;
+  };
+  session: {
+    store: (
+      sessionId: string,
+      userId: string,
+      expiresAt: Date,
+    ) => Promise<void>;
+    get: (
+      sessionId: string,
+    ) => Promise<{ userId: string; expiresAt: Date } | null>;
+    delete: (sessionId: string) => Promise<void>;
+  };
+  credential: {
+    store: (userId: string, credential: Credential) => Promise<void>;
+    get: (userId: string) => Promise<Credential[]>;
+    getById: (
+      credentialId: string,
+    ) => Promise<{ userId: string; credential: Credential } | null>;
+  };
+};
 
-// User persistence adapters (atomic upsert — no race conditions)
-type UpsertUserAdapter = (
-  email: string,
-) => Promise<{ userId: string; isNew: boolean }>;
+// Session token adapter
+type SessionTokenAdapter = {
+  encode: (payload: { sessionId: string; userId: string }) => string;
+  decode: (token: string) => {
+    sessionId: string;
+    userId: string;
+    valid: boolean;
+    expired: boolean;
+  } | null;
+};
 
-// Passkey persistence adapters
-type StoreCredentialAdapter = (
-  userId: string,
-  credential: Credential,
-) => Promise<void>;
-type GetCredentialsAdapter = (userId: string) => Promise<Credential[]>;
-type GetCredentialByIdAdapter = (
-  credentialId: string,
-) => Promise<{ userId: string; credential: Credential } | null>;
-
-// Session persistence adapters
-type StoreSessionAdapter = (
-  sessionId: string,
-  userId: string,
-  expiresAt: Date,
-) => Promise<void>;
-type GetSessionAdapter = (
-  sessionId: string,
-) => Promise<{ userId: string; expiresAt: Date } | null>;
-type DeleteSessionAdapter = (sessionId: string) => Promise<void>;
-
-// Session token adapters (separate encode/decode, but tightly coupled)
-type EncodeSessionTokenAdapter = (payload: {
-  sessionId: string;
-  userId: string;
-}) => string;
-type DecodeSessionTokenAdapter = (token: string) => {
-  sessionId: string;
-  userId: string;
-  valid: boolean;
-  expired: boolean;
-} | null;
+// Registration token adapter
+type RegistrationTokenAdapter = {
+  encode: (payload: { userId: string; email: string }) => string;
+  decode: (token: string) => {
+    userId: string;
+    email: string;
+    valid: boolean;
+    expired: boolean;
+  } | null;
+};
 
 // OTP delivery adapters
-type OtpEmailAdapter = (code: string) => { subject: string; body: string };
-type OtpSendAdapter = (
-  email: string,
-  content: { subject: string; body: string },
-) => Promise<void>;
-
-// Registration token adapters
-type EncodeRegistrationTokenAdapter = (payload: {
-  userId: string;
-  email: string;
-}) => string;
-type DecodeRegistrationTokenAdapter = (token: string) => {
-  userId: string;
-  email: string;
-  valid: boolean;
-  expired: boolean;
-} | null;
+type OtpAdapters = {
+  format: (code: string) => { subject: string; body: string };
+  send: (
+    email: string,
+    content: { subject: string; body: string },
+  ) => Promise<void>;
+};
 
 // Return types
 type RequestOtpReturn = { success: boolean };
-type VerifyOtpReturn = { valid: boolean; registrationToken?: string };
+type VerifyOtpReturn = { valid: boolean };
+type CreateRegistrationTokenReturn = { registrationToken: string };
+type ValidateRegistrationTokenReturn = {
+  userId: string;
+  email: string;
+  valid: boolean;
+};
 type GenerateRegistrationOptionsReturn = {
   options: PublicKeyCredentialCreationOptions;
-  // PRF extension included if requested
 };
 type VerifyRegistrationReturn = {
   success: boolean;
   session?: { token: string; userId: string };
-  // PRF result included if extension was used
-  prf?: Uint8Array;
+  prf?: Uint8Array; // PRF result if extension was used
 };
 type GenerateAuthenticationOptionsReturn = {
   options: PublicKeyCredentialRequestOptions;
@@ -331,54 +376,37 @@ type GenerateAuthenticationOptionsReturn = {
 type VerifyAuthenticationReturn = {
   valid: boolean;
   session?: { token: string; userId: string };
-  // PRF result included if extension was used
-  prf?: Uint8Array;
+  prf?: Uint8Array; // PRF result if extension was used
 };
 
 // Config
 type MakeAuthConfig = {
-  // OTP persistence (ephemeral — deleted after use)
-  storeOtp: StoreOtpAdapter;
-  verifyOtp: VerifyOtpAdapter;
-
-  // User persistence (atomic upsert)
-  upsertUser: UpsertUserAdapter;
-
-  // Passkey persistence
-  storeCredential: StoreCredentialAdapter;
-  getCredentials: GetCredentialsAdapter;
-  getCredentialById: GetCredentialByIdAdapter; // for passkey sign-in lookup
-
-  // Session persistence
-  storeSession: StoreSessionAdapter;
-  getSession: GetSessionAdapter;
-  deleteSession: DeleteSessionAdapter;
-
-  // Token encoding (session + registration)
-  encodeSessionToken: EncodeSessionTokenAdapter;
-  decodeSessionToken: DecodeSessionTokenAdapter;
-  encodeRegistrationToken: EncodeRegistrationTokenAdapter;
-  decodeRegistrationToken: DecodeRegistrationTokenAdapter;
-
-  // OTP delivery
-  email: OtpEmailAdapter;
-  send: OtpSendAdapter;
-
-  // Passkey config
+  storage: StorageAdapters;
+  sessionToken: SessionTokenAdapter;
+  registrationToken: RegistrationTokenAdapter;
+  otp: OtpAdapters;
   passkeys: {
-    rpId: string; // e.g. "example.com"
-    rpName: string; // e.g. "My App"
-    // origin inferred from rpId, or explicit if needed
+    rpId: string;
+    rpName: string;
   };
 };
 
-// Return
+// Return — all primitives
 type MakeAuthReturn = {
-  // OTP (bootstrap + recovery)
+  // OTP primitives
   requestOtp: (email: string) => Promise<RequestOtpReturn>;
   verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
 
-  // Passkey registration (requires registration token)
+  // Registration token primitives
+  createRegistrationToken: (
+    userId: string,
+    email: string,
+  ) => Promise<CreateRegistrationTokenReturn>;
+  validateRegistrationToken: (
+    token: string,
+  ) => Promise<ValidateRegistrationTokenReturn>;
+
+  // Passkey primitives
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsReturn>;
@@ -386,14 +414,12 @@ type MakeAuthReturn = {
     registrationToken: string,
     credential: RegistrationCredential,
   ) => Promise<VerifyRegistrationReturn>;
-
-  // Passkey authentication (sign in)
   generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
   verifyAuthentication: (
     credential: AuthenticationCredential,
   ) => Promise<VerifyAuthenticationReturn>;
 
-  // Session management
+  // Session primitives
   getSession: (token: string) => Promise<{ userId: string } | null>;
   deleteSession: (token: string) => Promise<void>;
 };
@@ -408,26 +434,30 @@ type CookieAdapter = {
   clear: () => void;
 };
 
-// Cookie auth — wraps auth with automatic cookie handling
+// Cookie auth — wraps primitives with automatic cookie handling
 type CookieAuthReturn = {
-  // OTP (bootstrap + recovery)
+  // OTP
   requestOtp: (email: string) => Promise<{ success: boolean }>;
   verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
 
-  // Passkey registration (requires registration token from verifyOtp)
+  // Registration token
+  createRegistrationToken: (
+    userId: string,
+    email: string,
+  ) => Promise<CreateRegistrationTokenReturn>;
+
+  // Passkey (sets session cookie automatically)
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsReturn>;
   verifyRegistration: (
     registrationToken: string,
     credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>; // sets session cookie
-
-  // Passkey authentication (sign in)
+  ) => Promise<VerifyRegistrationReturn>;
   generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
   verifyAuthentication: (
     credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>; // sets session cookie
+  ) => Promise<VerifyAuthenticationReturn>;
 
   // Session
   getSession: () => Promise<{ userId: string } | null>;
@@ -445,21 +475,38 @@ type MakeCookieAuth = (config: {
 Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type}()`.
 
 ```
-✓ otpEmailMinimal            — minimal OTP email template
-✓ otpSendConsole             — logs OTP to console (dev)
-✓ makeSessionTokenJwt()      — JWT encode/decode for session tokens
-✓ makeRegistrationTokenJwt() — JWT encode/decode for registration tokens
-✓ makeCookieAuth()           — wraps auth with cookie handling
-✓ makeMemoryAdapters()       — in-memory persistence (dev/test)
+Storage:
+✓ makeMemoryAdapters()         — in-memory persistence (dev/test)
+
+Tokens:
+✓ makeSessionTokenJwt()        — JWT encode/decode for session tokens
+✓ makeRegistrationTokenJwt()   — JWT encode/decode for registration tokens
+
+OTP delivery:
+✓ otpEmailMinimal              — minimal OTP email template
+✓ otpSendConsole               — logs OTP to console (dev)
+
+Wrappers:
+✓ makeCookieAuth()             — wraps auth with cookie handling
+```
+
+**Flow adapters (`@starmode/auth/flows`):**
+
+Optional convenience adapters that compose primitives for common patterns:
+
+```
+✓ makeSignUpFlow()           — verifyOtp + upsertUser + createRegistrationToken
+○ makeEmailChangeFlow()      — verifyOtp + update user email callback
+○ makeAddEmailFlow()         — verifyOtp + add email callback
 ```
 
 **Planned:**
 
 ```
-○ otpEmailBranded()        — branded OTP email template
-○ otpSendResend()          — send via Resend API
-○ otpSendSendgrid()        — send via SendGrid API
-○ *Pg(pool)                — PostgreSQL persistence adapters
+○ otpEmailBranded()          — branded OTP email template
+○ otpSendResend()            — send via Resend API
+○ otpSendSendgrid()          — send via SendGrid API
+○ makePostgresAdapters(pool) — PostgreSQL persistence adapters
 ```
 
 ### Client module (`@starmode/auth/client`)
@@ -472,17 +519,21 @@ import { httpClient } from "@starmode/auth/client";
 // HTTP client — method-based interface
 const auth = httpClient("/api/auth");
 
-// Sign up flow: OTP → passkey registration
+// Sign up flow (app composes primitives)
 await auth.requestOtp("user@example.com");
-const { registrationToken } = await auth.verifyOtp(
-  "user@example.com",
-  "123456",
-);
+const { valid } = await auth.verifyOtp("user@example.com", "123456");
+if (valid) {
+  // App creates registration token (server-side, after upserting user)
+  const { registrationToken } = await auth.createRegistrationToken(
+    userId,
+    email,
+  );
 
-const { options } = await auth.generateRegistrationOptions(registrationToken);
-const credential = await navigator.credentials.create({ publicKey: options });
-await auth.verifyRegistration(registrationToken, credential);
-// Now user has a session
+  const { options } = await auth.generateRegistrationOptions(registrationToken);
+  const credential = await navigator.credentials.create({ publicKey: options });
+  await auth.verifyRegistration(registrationToken, credential);
+  // Now user has a session
+}
 
 // Sign in flow: passkey only
 const { options } = await auth.generateAuthenticationOptions();
@@ -493,35 +544,41 @@ await auth.verifyAuthentication(credential);
 await auth.signOut();
 ```
 
-For server actions, you don't need a client wrapper — just call the methods directly:
+**Using flow adapters (optional convenience):**
 
 ```ts
-// Server actions (Next.js / TanStack Start)
-import {
-  requestOtp,
-  verifyOtp,
-  generateRegistrationOptions,
-  verifyRegistration,
-  generateAuthenticationOptions,
-  verifyAuthentication,
-} from "./auth.server";
+import { httpClient } from "@starmode/auth/client";
+import { makeSignUpFlow } from "@starmode/auth/flows";
 
-// Sign up: OTP → passkey
-await requestOtp("user@example.com");
-const { registrationToken } = await verifyOtp("user@example.com", "123456");
-// ... WebAuthn flow with registrationToken
+const auth = httpClient("/api/auth");
+const signUp = makeSignUpFlow({
+  auth,
+  upsertUser: (email) =>
+    fetch("/api/users", { method: "POST", body: JSON.stringify({ email }) }),
+});
+
+// One call instead of multiple
+await auth.requestOtp("user@example.com");
+const { registrationToken } = await signUp("user@example.com", "123456");
+// Continue with passkey...
 ```
 
 **Type definitions:**
 
 ```ts
-// Client interface — matches CookieAuthReturn (minus getSession)
+// Client interface — matches primitives
 type AuthClient = {
-  // OTP (bootstrap + recovery)
+  // OTP
   requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+  verifyOtp: (email: string, code: string) => Promise<{ valid: boolean }>;
 
-  // Passkey registration
+  // Registration token
+  createRegistrationToken: (
+    userId: string,
+    email: string,
+  ) => Promise<{ registrationToken: string }>;
+
+  // Passkey
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsReturn>;
@@ -529,8 +586,6 @@ type AuthClient = {
     registrationToken: string,
     credential: RegistrationCredential,
   ) => Promise<VerifyRegistrationReturn>;
-
-  // Passkey authentication (sign in)
   generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
   verifyAuthentication: (
     credential: AuthenticationCredential,
@@ -543,7 +598,7 @@ type AuthClient = {
 type HttpClient = (endpoint: string) => AuthClient;
 ```
 
-The `AuthClient` type matches the shape of `cookieAuth` methods, making server actions directly usable as the client interface.
+The `AuthClient` type matches the primitives, making it easy to compose flows on the client or server.
 
 ### Session management
 
@@ -593,38 +648,44 @@ For now, we keep it minimal — auth only, viewer fetching is your responsibilit
 
 ### Framework examples
 
-**Next.js — Server actions:**
+**Next.js — Server actions (primitives):**
 
-Export the `cookieAuth` methods directly. No wrapper needed.
+Export the `cookieAuth` primitives directly.
 
 ```ts
 // app/actions/auth.ts
 "use server";
+import { db } from "@/lib/db";
 
-// OTP (bootstrap + recovery)
+// Primitives (direct export)
 export const requestOtp = cookieAuth.requestOtp;
 export const verifyOtp = cookieAuth.verifyOtp;
-
-// Passkey registration
+export const createRegistrationToken = cookieAuth.createRegistrationToken;
 export const generateRegistrationOptions =
   cookieAuth.generateRegistrationOptions;
 export const verifyRegistration = cookieAuth.verifyRegistration;
-
-// Passkey sign-in
 export const generateAuthenticationOptions =
   cookieAuth.generateAuthenticationOptions;
 export const verifyAuthentication = cookieAuth.verifyAuthentication;
-
 export const signOut = cookieAuth.signOut;
+
+// Composed flow (optional convenience)
+export async function signUp(email: string, code: string) {
+  const { valid } = await cookieAuth.verifyOtp(email, code);
+  if (!valid) return { valid: false };
+
+  const { userId } = await db.users.upsert({ email });
+  return cookieAuth.createRegistrationToken(userId, email);
+}
 ```
 
 ```tsx
 // app/page.tsx
-import { requestOtp, verifyOtp, verifyRegistration } from "./actions/auth";
+import { requestOtp, signUp, verifyRegistration } from "./actions/auth";
 
-// Sign up: OTP → passkey registration
+// Sign up using composed flow
 await requestOtp("user@example.com");
-const { registrationToken } = await verifyOtp("user@example.com", "123456");
+const { registrationToken } = await signUp("user@example.com", "123456");
 // ... WebAuthn flow, then:
 await verifyRegistration(registrationToken, credential);
 // User now has a session
@@ -632,7 +693,7 @@ await verifyRegistration(registrationToken, credential);
 
 **Next.js — API route:**
 
-For HTTP clients, expose a single endpoint with method dispatch.
+For HTTP clients, expose primitives with method dispatch.
 
 ```ts
 // app/api/auth/route.ts
@@ -646,7 +707,13 @@ const schema = z.discriminatedUnion("method", [
     email: z.string().email(),
     code: z.string(),
   }),
-  // Passkey registration
+  // Registration token
+  z.object({
+    method: z.literal("createRegistrationToken"),
+    userId: z.string(),
+    email: z.string(),
+  }),
+  // Passkey
   z.object({
     method: z.literal("generateRegistrationOptions"),
     registrationToken: z.string(),
@@ -656,7 +723,6 @@ const schema = z.discriminatedUnion("method", [
     registrationToken: z.string(),
     credential: z.any(),
   }),
-  // Passkey sign-in
   z.object({ method: z.literal("generateAuthenticationOptions") }),
   z.object({ method: z.literal("verifyAuthentication"), credential: z.any() }),
   // Session
@@ -670,6 +736,10 @@ export async function POST(req: Request) {
       return Response.json(await cookieAuth.requestOtp(body.email));
     case "verifyOtp":
       return Response.json(await cookieAuth.verifyOtp(body.email, body.code));
+    case "createRegistrationToken":
+      return Response.json(
+        await cookieAuth.createRegistrationToken(body.userId, body.email),
+      );
     case "generateRegistrationOptions":
       return Response.json(
         await cookieAuth.generateRegistrationOptions(body.registrationToken),
@@ -694,21 +764,16 @@ export async function POST(req: Request) {
 }
 ```
 
-```ts
-// Client
-import { httpClient } from "@starmode/auth/client";
-const auth = httpClient("/api/auth");
-```
-
 **TanStack Start — Server functions:**
 
-Export server functions that wrap `cookieAuth` methods.
+Export server functions that wrap primitives.
 
 ```ts
 // lib/auth.server.ts
 import { createServerFn } from "@tanstack/react-start";
+import { db } from "./db";
 
-// OTP (bootstrap + recovery)
+// Primitives
 export const requestOtp = createServerFn({ method: "POST" })
   .inputValidator((email: string) => email)
   .handler(({ data: email }) => cookieAuth.requestOtp(email));
@@ -717,46 +782,32 @@ export const verifyOtp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; code: string }) => input)
   .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.code));
 
-// Passkey registration
-export const generateRegistrationOptions = createServerFn({ method: "POST" })
-  .inputValidator((token: string) => token)
-  .handler(({ data: token }) => cookieAuth.generateRegistrationOptions(token));
+// Composed flow
+export const signUp = createServerFn({ method: "POST" })
+  .inputValidator((input: { email: string; code: string }) => input)
+  .handler(async ({ data }) => {
+    const { valid } = await cookieAuth.verifyOtp(data.email, data.code);
+    if (!valid) return { valid: false };
 
-export const verifyRegistration = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { token: string; credential: RegistrationCredential }) => input,
-  )
-  .handler(({ data }) =>
-    cookieAuth.verifyRegistration(data.token, data.credential),
-  );
+    const { userId } = await db.users.upsert({ email: data.email });
+    return cookieAuth.createRegistrationToken(userId, data.email);
+  });
 
-// Passkey sign-in
-export const generateAuthenticationOptions = createServerFn({
-  method: "POST",
-}).handler(() => cookieAuth.generateAuthenticationOptions());
-
-export const verifyAuthentication = createServerFn({ method: "POST" })
-  .inputValidator((credential: AuthenticationCredential) => credential)
-  .handler(({ data }) => cookieAuth.verifyAuthentication(data));
-
-export const signOut = createServerFn({ method: "POST" }).handler(() =>
-  cookieAuth.signOut(),
-);
+// ... other primitives
 ```
 
 ```tsx
 // routes/index.tsx
-import { requestOtp, verifyOtp, verifyRegistration } from "../lib/auth.server";
+import { requestOtp, signUp, verifyRegistration } from "../lib/auth.server";
 
-// Sign up: OTP → passkey registration
+// Sign up using composed flow
 await requestOtp("user@example.com");
-const { registrationToken } = await verifyOtp({
+const { registrationToken } = await signUp({
   email: "user@example.com",
   code: "123456",
 });
 // ... WebAuthn flow, then:
 await verifyRegistration({ token: registrationToken, credential });
-// User now has a session
 ```
 
 ### React hooks
@@ -781,14 +832,27 @@ await requestOtp(email);
 
 ## Scope
 
-- Passkeys (WebAuthn registration + authentication) — primary sign-in method
-- Email OTP (request, verify) — bootstrap only, returns registration token
-- Registration token — short-lived, single-purpose (register passkey)
+**Primitives:**
+
+- OTP: `requestOtp`, `verifyOtp`
+- Registration token: `createRegistrationToken`, `validateRegistrationToken`
+- Passkeys: `generateRegistrationOptions`, `verifyRegistration`, `generateAuthenticationOptions`, `verifyAuthentication`
+- Session: `getSession`, `deleteSession`
+
+**Adapters:**
+
+- Storage: memory (dev), PostgreSQL (planned)
+- Tokens: JWT (session + registration)
+- OTP delivery: console (dev), Resend (planned), SendGrid (planned)
+- Flows: `makeSignUpFlow` (optional convenience)
+
+**Frameworks:**
+
 - Server: Framework-agnostic functions
 - Client: Vanilla JS core + React hooks
 - Tested with: Next.js (App Router), TanStack Start
 
-**Development order:** OTP + registration token first, passkeys second. Types for both are defined upfront so the architecture accounts for passkeys from day one.
+**Development order:** OTP + registration token primitives first, passkeys second. Types for both are defined upfront so the architecture accounts for passkeys from day one.
 
 **Future:**
 
@@ -818,7 +882,7 @@ await requestOtp(email);
 
 ## Positioning
 
-**@starmode/auth**: Passkeys first. OTP for bootstrap. That's it.
+**@starmode/auth**: Passkeys first. OTP for bootstrap. Primitives you compose.
 
 Do you want passkeys? Yes → use this. No → this isn't for you.
 
@@ -826,10 +890,17 @@ If you need OAuth, SAML, legacy browser support, or enterprise SSO—use Auth0, 
 
 If you're building a new project and want passkey auth that an LLM can set up in one prompt, this is it.
 
+**Primitives-first design:**
+
+- Core API is low-level primitives (verify OTP, create token, etc.)
+- Apps compose primitives into flows (signup, change email, add email, etc.)
+- Optional flow adapters for common patterns
+- Easy to contribute new adapters
+
 **Security model:**
 
 - Passkeys are the only sign-in method (phishing-resistant)
-- OTP verifies email ownership (for signup and optional recovery)
+- OTP verifies email ownership (for signup, email change, recovery)
 - No OTP sign-in — eliminates entire class of attacks
 - E2EE compatible — PRF extension passthrough for key derivation
 
