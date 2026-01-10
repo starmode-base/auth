@@ -4,35 +4,50 @@
 export { makeAuth } from "./make-auth";
 export { makeCookieAuth } from "./make-cookie-auth";
 
-// Adapters
+// Adapters & Codecs
 export {
   makeMemoryAdapters,
-  otpEmailMinimal,
   otpSendConsole,
-  makeSessionTokenJwt,
+  makeSessionOpaque,
+  makeSessionHmac,
+  makeRegistrationHmac,
 } from "./adapters";
 
 // Types
 export type {
-  // OTP
-  StoreOtpAdapter,
-  VerifyOtpAdapter,
+  // Storage adapters
+  StorageAdapter,
+  StoredCredential,
 
-  // User
-  UpsertUserAdapter,
+  // Codecs
+  SessionCodec,
+  SessionPayload,
+  SessionDecoded,
+  RegistrationCodec,
+  RegistrationPayload,
+  RegistrationDecoded,
 
-  // Session (stored data)
-  StoreSessionAdapter,
-  GetSessionAdapter,
-  DeleteSessionAdapter,
+  // OTP delivery adapters
+  OtpAdapter,
 
-  // Session token (string representation)
-  EncodeSessionTokenAdapter,
-  DecodeSessionTokenAdapter,
+  // WebAuthn config
+  WebAuthnConfig,
 
-  // OTP delivery
-  OtpEmailAdapter,
-  OtpSendAdapter,
+  // Return types
+  RequestOtpReturn,
+  VerifyOtpReturn,
+  CreateRegistrationTokenReturn,
+  ValidateRegistrationTokenReturn,
+  GenerateRegistrationOptionsReturn,
+  VerifyRegistrationReturn,
+  GenerateAuthenticationOptionsReturn,
+  VerifyAuthenticationReturn,
+
+  // WebAuthn types
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationCredential,
+  AuthenticationCredential,
 
   // Config & Return
   MakeAuthConfig,

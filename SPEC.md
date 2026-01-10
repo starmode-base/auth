@@ -34,20 +34,22 @@ This means:
 
 ### Primitives
 
-| Primitive                                | What it does                   |
-| ---------------------------------------- | ------------------------------ |
-| `requestOtp(email)`                      | Send OTP to email              |
-| `verifyOtp(email, code)`                 | Verify OTP → `{ valid }`       |
-| `createRegistrationToken(userId, email)` | Create registration token      |
-| `validateRegistrationToken(token)`       | Validate → `{ userId, email }` |
-| `generateRegistrationOptions(token)`     | WebAuthn registration options  |
-| `verifyRegistration(token, credential)`  | Verify + store + session       |
-| `generateAuthenticationOptions()`        | WebAuthn sign-in options       |
-| `verifyAuthentication(credential)`       | Verify + session               |
-| `getSession(token)`                      | Get session data               |
-| `deleteSession(token)`                   | Delete session                 |
+| Primitive                                | What it does                   | Client |
+| ---------------------------------------- | ------------------------------ | ------ |
+| `requestOtp(email)`                      | Send OTP to email              | ✅     |
+| `verifyOtp(email, code)`                 | Verify OTP → `{ valid }`       | ✅     |
+| `createRegistrationToken(userId, email)` | Create registration token      | ❌     |
+| `validateRegistrationToken(token)`       | Validate → `{ userId, email }` | ❌     |
+| `generateRegistrationOptions(token)`     | WebAuthn registration options  | ✅     |
+| `verifyRegistration(token, credential)`  | Verify + store + session       | ✅     |
+| `generateAuthenticationOptions()`        | WebAuthn sign-in options       | ✅     |
+| `verifyAuthentication(credential)`       | Verify + session               | ✅     |
+| `getSession(token)`                      | Get session data               | ❌     |
+| `deleteSession(token)`                   | Delete session                 | ❌     |
 
-Key design: **OTP never creates a session.** Only passkeys create sessions. `verifyOtp` just verifies the code — it doesn't upsert users or create tokens. Apps compose the flow they need.
+**Client column:** ✅ = exposed via `httpClient` / callable from browser. ❌ = server-side only.
+
+Key design: **OTP never creates a session.** Only webauthn create sessions. `verifyOtp` just verifies the code — it doesn't upsert users or create tokens. Apps compose the flow they need.
 
 ### Flows (composed from primitives)
 
@@ -146,7 +148,7 @@ Passkey sign in:
 
 **Implementation notes:**
 
-- Registration token is signed (JWT or HMAC) containing userId + email, short TTL (5 min)
+- Registration token is HMAC-signed containing userId + email, short TTL (5 min)
 - `getCredentialById(credentialId)` adapter needed to look up userId during passkey auth
 - User management is app responsibility — library doesn't touch users table
 
@@ -184,9 +186,8 @@ import {
   makeAuth,
   makeCookieAuth,
   makeMemoryAdapters,
-  makeSessionTokenJwt,
-  makeRegistrationTokenJwt,
-  otpEmailMinimal,
+  makeSessionHmac,
+  makeRegistrationHmac,
   otpSendConsole,
 } from "@starmode/auth";
 
@@ -194,24 +195,21 @@ const auth = makeAuth({
   // All persistence adapters
   storage: makeMemoryAdapters(), // or your own adapters
 
-  // Token encoding (separate adapters)
-  sessionToken: makeSessionTokenJwt({
+  // Codecs (token encoding)
+  session: makeSessionHmac({
     secret: process.env.SESSION_SECRET,
     ttl: 600, // 10 min
   }),
-  registrationToken: makeRegistrationTokenJwt({
+  registration: makeRegistrationHmac({
     secret: process.env.REGISTRATION_SECRET,
     ttl: 300, // 5 min
   }),
 
-  // OTP delivery (format + send)
-  otp: {
-    format: otpEmailMinimal,
-    send: otpSendConsole,
-  },
+  // OTP delivery
+  otp: otpSendConsole,
 
   // Passkey config
-  passkeys: {
+  webauthn: {
     rpId: "example.com",
     rpName: "My App",
   },
@@ -280,10 +278,10 @@ const auth = makeAuth({
       },
     },
   },
-  sessionToken: makeSessionTokenJwt({ secret, ttl: 600 }),
-  registrationToken: makeRegistrationTokenJwt({ secret, ttl: 300 }),
-  otp: { format: otpEmailMinimal, send: otpSendConsole },
-  passkeys: { rpId: "example.com", rpName: "My App" },
+  session: makeSessionHmac({ secret, ttl: 600 }),
+  registration: makeRegistrationHmac({ secret, ttl: 300 }),
+  otp: otpSendConsole,
+  webauthn: { rpId: "example.com", rpName: "My App" },
 });
 ```
 
@@ -296,8 +294,8 @@ We don't touch your database. You write the persistence functions using whatever
 **Type Definitions:**
 
 ```ts
-// Storage adapters (grouped by concern)
-type StorageAdapters = {
+// Storage adapter (persistence)
+type StorageAdapter = {
   otp: {
     store: (email: string, code: string, expiresAt: Date) => Promise<void>;
     verify: (email: string, code: string) => Promise<boolean>;
@@ -319,39 +317,34 @@ type StorageAdapters = {
     getById: (
       credentialId: string,
     ) => Promise<{ userId: string; credential: Credential } | null>;
+    updateCounter: (credentialId: string, counter: number) => Promise<void>;
   };
 };
 
-// Session token adapter
-type SessionTokenAdapter = {
-  encode: (payload: { sessionId: string; userId: string }) => string;
-  decode: (token: string) => {
+// Session codec (async for Web Crypto API)
+type SessionCodec = {
+  encode: (payload: { sessionId: string; userId: string }) => Promise<string>;
+  decode: (token: string) => Promise<{
     sessionId: string;
     userId: string;
     valid: boolean;
     expired: boolean;
-  } | null;
+  } | null>;
 };
 
-// Registration token adapter
-type RegistrationTokenAdapter = {
-  encode: (payload: { userId: string; email: string }) => string;
-  decode: (token: string) => {
+// Registration codec (async for Web Crypto API)
+type RegistrationCodec = {
+  encode: (payload: { userId: string; email: string }) => Promise<string>;
+  decode: (token: string) => Promise<{
     userId: string;
     email: string;
     valid: boolean;
     expired: boolean;
-  } | null;
+  } | null>;
 };
 
-// OTP delivery adapters
-type OtpAdapters = {
-  format: (code: string) => { subject: string; body: string };
-  send: (
-    email: string,
-    content: { subject: string; body: string },
-  ) => Promise<void>;
-};
+// OTP delivery adapter
+type OtpAdapter = (email: string, code: string) => Promise<void>;
 
 // Return types
 type RequestOtpReturn = { success: boolean };
@@ -381,11 +374,11 @@ type VerifyAuthenticationReturn = {
 
 // Config
 type MakeAuthConfig = {
-  storage: StorageAdapters;
-  sessionToken: SessionTokenAdapter;
-  registrationToken: RegistrationTokenAdapter;
-  otp: OtpAdapters;
-  passkeys: {
+  storage: StorageAdapter;
+  session: SessionCodec;
+  registration: RegistrationCodec;
+  otp: OtpAdapter;
+  webauthn: {
     rpId: string;
     rpName: string;
   };
@@ -440,7 +433,7 @@ type CookieAuthReturn = {
   requestOtp: (email: string) => Promise<{ success: boolean }>;
   verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
 
-  // Registration token
+  // Registration token (server-side only — use in composed flows like signUp)
   createRegistrationToken: (
     userId: string,
     email: string,
@@ -478,12 +471,12 @@ Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type
 Storage:
 ✓ makeMemoryAdapters()         — in-memory persistence (dev/test)
 
-Tokens:
-✓ makeSessionTokenJwt()        — JWT encode/decode for session tokens
-✓ makeRegistrationTokenJwt()   — JWT encode/decode for registration tokens
+Codecs:
+✓ makeSessionHmac()            — HMAC-signed session tokens (stateless)
+✓ makeSessionOpaque()          — opaque session tokens (requires DB lookup)
+✓ makeRegistrationHmac()       — HMAC-signed registration tokens
 
 OTP delivery:
-✓ otpEmailMinimal              — minimal OTP email template
 ✓ otpSendConsole               — logs OTP to console (dev)
 
 Wrappers:
@@ -503,7 +496,7 @@ Optional convenience adapters that compose primitives for common patterns:
 **Planned:**
 
 ```
-○ otpEmailBranded()          — branded OTP email template
+○ otpFormatBranded()         — branded OTP message format
 ○ otpSendResend()            — send via Resend API
 ○ otpSendSendgrid()          — send via SendGrid API
 ○ makePostgresAdapters(pool) — PostgreSQL persistence adapters
@@ -516,69 +509,62 @@ Optional convenience adapters that compose primitives for common patterns:
 ```ts
 import { httpClient } from "@starmode/auth/client";
 
-// HTTP client — method-based interface
 const auth = httpClient("/api/auth");
 
-// Sign up flow (app composes primitives)
+// Sign up flow: client calls server-side composed flow
 await auth.requestOtp("user@example.com");
-const { valid } = await auth.verifyOtp("user@example.com", "123456");
-if (valid) {
-  // App creates registration token (server-side, after upserting user)
-  const { registrationToken } = await auth.createRegistrationToken(
-    userId,
-    email,
-  );
+// signUp is a server action that does: verifyOtp + upsertUser + createRegistrationToken
+const { registrationToken } = await signUp("user@example.com", "123456");
 
-  const { options } = await auth.generateRegistrationOptions(registrationToken);
-  const credential = await navigator.credentials.create({ publicKey: options });
-  await auth.verifyRegistration(registrationToken, credential);
-  // Now user has a session
-}
+// Continue with passkey registration
+const { options } = await auth.generateRegistrationOptions(registrationToken);
+const credential = await navigator.credentials.create({ publicKey: options });
+await auth.verifyRegistration(registrationToken, credential);
+// Now user has a session
 
 // Sign in flow: passkey only
-const { options } = await auth.generateAuthenticationOptions();
-const credential = await navigator.credentials.get({ publicKey: options });
-await auth.verifyAuthentication(credential);
+const { options: authOptions } = await auth.generateAuthenticationOptions();
+const authCredential = await navigator.credentials.get({
+  publicKey: authOptions,
+});
+await auth.verifyAuthentication(authCredential);
 // Now user has a session
 
 await auth.signOut();
 ```
 
-**Using flow adapters (optional convenience):**
+**Server-side flow (required for signup):**
+
+The `signUp` flow must run server-side because it needs to:
+
+1. Verify OTP
+2. Upsert user in your database → get userId
+3. Create registration token with userId
 
 ```ts
-import { httpClient } from "@starmode/auth/client";
+// Server-side (Next.js server action, TanStack server function, etc.)
 import { makeSignUpFlow } from "@starmode/auth/flows";
 
-const auth = httpClient("/api/auth");
-const signUp = makeSignUpFlow({
+export const signUp = makeSignUpFlow({
   auth,
-  upsertUser: (email) =>
-    fetch("/api/users", { method: "POST", body: JSON.stringify({ email }) }),
+  upsertUser: async (email) => db.users.upsert({ email }),
 });
 
-// One call instead of multiple
-await auth.requestOtp("user@example.com");
+// Client calls this server action
 const { registrationToken } = await signUp("user@example.com", "123456");
-// Continue with passkey...
 ```
 
 **Type definitions:**
 
 ```ts
-// Client interface — matches primitives
+// Client interface — OTP + passkey primitives only
+// Note: createRegistrationToken is server-side only (needs userId from DB)
 type AuthClient = {
   // OTP
   requestOtp: (email: string) => Promise<{ success: boolean }>;
   verifyOtp: (email: string, code: string) => Promise<{ valid: boolean }>;
 
-  // Registration token
-  createRegistrationToken: (
-    userId: string,
-    email: string,
-  ) => Promise<{ registrationToken: string }>;
-
-  // Passkey
+  // Passkey (registrationToken comes from server-side signUp flow)
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsReturn>;
@@ -598,7 +584,7 @@ type AuthClient = {
 type HttpClient = (endpoint: string) => AuthClient;
 ```
 
-The `AuthClient` type matches the primitives, making it easy to compose flows on the client or server.
+The `AuthClient` exposes OTP and passkey primitives. Registration token creation happens server-side via composed flows like `signUp`.
 
 ### Session management
 
@@ -609,10 +595,10 @@ The `AuthClient` type matches the primitives, making it easy to compose flows on
 3. Browser automatically sends cookie with every request
 4. Server decodes token → if expired, validates against DB → returns userId
 
-**Token format via adapter:**
+**Token format via codec:**
 
-- `makeSessionTokenJwt({ secret, ttl })` — JWT with HMAC signature. Cached for TTL, then validates against DB.
-- `sessionTokenAdapterOpaque({ secret })` — HMAC-signed session ID. Always validates against DB.
+- `makeSessionHmac({ secret, ttl })` — HMAC-signed JSON. Stateless validation for non-expired tokens, validates against DB when expired.
+- `makeSessionOpaque()` — Opaque (random string). Always validates against DB.
 
 **Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).
 
@@ -639,10 +625,10 @@ The session cookie is sent automatically. Your `/api/me` endpoint validates the 
 
 We could add a `getViewer()` utility with optional client-side session decoding:
 
-| Server                     | Client                | `getViewer()`          |
-| -------------------------- | --------------------- | ---------------------- |
-| `makeSessionTokenJwt()`    | `sessionDecoderJwt()` | Instant (local decode) |
-| `makeSessionTokenOpaque()` | (none)                | Server call            |
+| Server                | Client                 | `getViewer()`          |
+| --------------------- | ---------------------- | ---------------------- |
+| `makeSessionHmac()`   | `sessionDecoderHmac()` | Instant (local decode) |
+| `makeSessionOpaque()` | (none)                 | Server call            |
 
 For now, we keep it minimal — auth only, viewer fetching is your responsibility.
 
@@ -657,10 +643,9 @@ Export the `cookieAuth` primitives directly.
 "use server";
 import { db } from "@/lib/db";
 
-// Primitives (direct export)
+// Client-callable primitives
 export const requestOtp = cookieAuth.requestOtp;
 export const verifyOtp = cookieAuth.verifyOtp;
-export const createRegistrationToken = cookieAuth.createRegistrationToken;
 export const generateRegistrationOptions =
   cookieAuth.generateRegistrationOptions;
 export const verifyRegistration = cookieAuth.verifyRegistration;
@@ -669,7 +654,8 @@ export const generateAuthenticationOptions =
 export const verifyAuthentication = cookieAuth.verifyAuthentication;
 export const signOut = cookieAuth.signOut;
 
-// Composed flow (optional convenience)
+// Composed flow — this is what clients call for signup
+// (createRegistrationToken is used internally, not exposed directly)
 export async function signUp(email: string, code: string) {
   const { valid } = await cookieAuth.verifyOtp(email, code);
   if (!valid) return { valid: false };
@@ -707,13 +693,7 @@ const schema = z.discriminatedUnion("method", [
     email: z.string().email(),
     code: z.string(),
   }),
-  // Registration token
-  z.object({
-    method: z.literal("createRegistrationToken"),
-    userId: z.string(),
-    email: z.string(),
-  }),
-  // Passkey
+  // Passkey (createRegistrationToken is NOT exposed — use signUp server action)
   z.object({
     method: z.literal("generateRegistrationOptions"),
     registrationToken: z.string(),
@@ -736,10 +716,6 @@ export async function POST(req: Request) {
       return Response.json(await cookieAuth.requestOtp(body.email));
     case "verifyOtp":
       return Response.json(await cookieAuth.verifyOtp(body.email, body.code));
-    case "createRegistrationToken":
-      return Response.json(
-        await cookieAuth.createRegistrationToken(body.userId, body.email),
-      );
     case "generateRegistrationOptions":
       return Response.json(
         await cookieAuth.generateRegistrationOptions(body.registrationToken),
@@ -807,7 +783,7 @@ const { registrationToken } = await signUp({
   code: "123456",
 });
 // ... WebAuthn flow, then:
-await verifyRegistration({ token: registrationToken, credential });
+await verifyRegistration({ registrationToken, credential });
 ```
 
 ### React hooks
@@ -842,7 +818,7 @@ await requestOtp(email);
 **Adapters:**
 
 - Storage: memory (dev), PostgreSQL (planned)
-- Tokens: JWT (session + registration)
+- Tokens: HMAC (session + registration), opaque (session)
 - OTP delivery: console (dev), Resend (planned), SendGrid (planned)
 - Flows: `makeSignUpFlow` (optional convenience)
 
@@ -851,8 +827,6 @@ await requestOtp(email);
 - Server: Framework-agnostic functions
 - Client: Vanilla JS core + React hooks
 - Tested with: Next.js (App Router), TanStack Start
-
-**Development order:** OTP + registration token primitives first, passkeys second. Types for both are defined upfront so the architecture accounts for passkeys from day one.
 
 **Future:**
 
@@ -864,7 +838,7 @@ await requestOtp(email);
 - Passkey management utilities — `getPasskeys()`, `deletePasskey()` (users can query DB directly for now)
 - Multi-email support — add/remove emails per user (not prevented now, users own their schema)
 - LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
-- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (separate project, `otpSendAdapterAuth` adapter ready)
+- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (separate project, `OtpAdapter` adapter ready)
 
 **Exclusions:**
 
@@ -899,7 +873,7 @@ If you're building a new project and want passkey auth that an LLM can set up in
 
 **Security model:**
 
-- Passkeys are the only sign-in method (phishing-resistant)
+- Webauthn is the only sign-in method (phishing-resistant)
 - OTP verifies email ownership (for signup, email change, recovery)
 - No OTP sign-in — eliminates entire class of attacks
 - E2EE compatible — PRF extension passthrough for key derivation

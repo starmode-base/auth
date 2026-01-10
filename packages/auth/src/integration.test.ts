@@ -1,30 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   makeAuth,
   makeMemoryAdapters,
-  otpEmailMinimal,
-  makeSessionTokenJwt,
+  makeSessionHmac,
+  makeRegistrationHmac,
 } from "./index";
-import type { OtpSendAdapter } from "./types";
+import type { OtpAdapter } from "./types";
 
 describe("auth integration", () => {
-  let memory: ReturnType<typeof makeMemoryAdapters>;
+  let storage: ReturnType<typeof makeMemoryAdapters>;
   let sentOtps: { email: string; code: string }[];
   let auth: ReturnType<typeof makeAuth>;
 
   beforeEach(() => {
-    memory = makeMemoryAdapters();
+    storage = makeMemoryAdapters();
     sentOtps = [];
 
-    const captureSend: OtpSendAdapter = async (email, content) => {
-      sentOtps.push({ email, code: content.body });
+    const captureSend: OtpAdapter = async (email, code) => {
+      sentOtps.push({ email, code });
     };
 
     auth = makeAuth({
-      ...memory,
-      ...makeSessionTokenJwt({ secret: "test-secret", ttl: 600 }),
-      email: otpEmailMinimal,
-      send: captureSend,
+      storage,
+      session: makeSessionHmac({ secret: "test-secret", ttl: 600 }),
+      registration: makeRegistrationHmac({
+        secret: "test-secret",
+        ttl: 300,
+      }),
+      otp: captureSend,
+      webauthn: {
+        rpId: "localhost",
+        rpName: "Test App",
+      },
     });
   });
 
@@ -42,8 +49,6 @@ describe("auth integration", () => {
 
       const result = await auth.verifyOtp("user@example.com", code);
       expect(result.valid).toBe(true);
-      expect(result.userId).toBeDefined();
-      expect(result.token).toBeDefined();
     });
 
     it("rejects wrong OTP", async () => {
@@ -51,8 +56,6 @@ describe("auth integration", () => {
 
       const result = await auth.verifyOtp("user@example.com", "000000");
       expect(result.valid).toBe(false);
-      expect(result.userId).toBeUndefined();
-      expect(result.token).toBeUndefined();
     });
 
     it("rejects OTP for wrong email", async () => {
@@ -75,46 +78,53 @@ describe("auth integration", () => {
     });
   });
 
-  describe("user creation", () => {
-    it("creates new user on first OTP verify", async () => {
-      await auth.requestOtp("new@example.com");
+  describe("registration token flow", () => {
+    it("creates registration token after OTP verify", async () => {
+      await auth.requestOtp("user@example.com");
       const code = sentOtps[0]!.code;
 
-      await auth.verifyOtp("new@example.com", code);
+      const { valid } = await auth.verifyOtp("user@example.com", code);
+      expect(valid).toBe(true);
 
-      const user = memory._stores.users.get("new@example.com");
-      expect(user).toBeDefined();
-      expect(user?.userId).toBe("user_1");
+      // App would upsert user here, then:
+      const { registrationToken } = await auth.createRegistrationToken(
+        "user_1",
+        "user@example.com",
+      );
+      expect(registrationToken).toBeDefined();
     });
 
-    it("returns same userId for existing user", async () => {
-      await auth.requestOtp("user@example.com");
-      const code1 = sentOtps[0]!.code;
-      const result1 = await auth.verifyOtp("user@example.com", code1);
+    it("validates registration token", async () => {
+      const { registrationToken } = await auth.createRegistrationToken(
+        "user_1",
+        "user@example.com",
+      );
+      const result = await auth.validateRegistrationToken(registrationToken);
 
-      await auth.requestOtp("user@example.com");
-      const code2 = sentOtps[1]!.code;
-      const result2 = await auth.verifyOtp("user@example.com", code2);
-
-      expect(result1.userId).toBe(result2.userId);
+      expect(result.valid).toBe(true);
+      expect(result.userId).toBe("user_1");
+      expect(result.email).toBe("user@example.com");
     });
   });
 
   describe("session management", () => {
-    it("creates session on OTP verify", async () => {
-      await auth.requestOtp("user@example.com");
-      const code = sentOtps[0]!.code;
-      await auth.verifyOtp("user@example.com", code);
-
-      expect(memory._stores.sessions.size).toBe(1);
-    });
-
     it("getSession returns userId from valid token", async () => {
-      await auth.requestOtp("user@example.com");
-      const code = sentOtps[0]!.code;
-      const { token } = await auth.verifyOtp("user@example.com", code);
+      // Directly create a session for testing
+      await storage.session.store(
+        "session_1",
+        "user_1",
+        new Date(Date.now() + 60000),
+      );
+      const sessionCodec = makeSessionHmac({
+        secret: "test-secret",
+        ttl: 600,
+      });
+      const token = await sessionCodec.encode({
+        sessionId: "session_1",
+        userId: "user_1",
+      });
 
-      const session = await auth.getSession(token!);
+      const session = await auth.getSession(token);
       expect(session).toEqual({ userId: "user_1" });
     });
 
@@ -124,33 +134,51 @@ describe("auth integration", () => {
     });
 
     it("deleteSession removes session", async () => {
-      await auth.requestOtp("user@example.com");
-      const code = sentOtps[0]!.code;
-      const { token } = await auth.verifyOtp("user@example.com", code);
+      await storage.session.store(
+        "session_1",
+        "user_1",
+        new Date(Date.now() + 60000),
+      );
+      const sessionCodec = makeSessionHmac({
+        secret: "test-secret",
+        ttl: 600,
+      });
+      const token = await sessionCodec.encode({
+        sessionId: "session_1",
+        userId: "user_1",
+      });
 
-      await auth.deleteSession(token!);
+      await auth.deleteSession(token);
 
-      expect(memory._stores.sessions.size).toBe(0);
+      expect(storage._stores.sessions.size).toBe(0);
     });
   });
 
-  describe("full flow", () => {
-    it("sign up → get session → sign out", async () => {
-      // Sign up
+  describe("full OTP + registration token flow", () => {
+    it("request OTP → verify → create registration token", async () => {
+      // Request OTP
       await auth.requestOtp("user@example.com");
       const code = sentOtps[0]!.code;
-      const { valid, token } = await auth.verifyOtp("user@example.com", code);
+
+      // Verify OTP
+      const { valid } = await auth.verifyOtp("user@example.com", code);
       expect(valid).toBe(true);
 
-      // Authenticated - can get session
-      const session = await auth.getSession(token!);
-      expect(session?.userId).toBe("user_1");
+      // App upserts user (simulated)
+      const userId = "user_1";
 
-      // Sign out
-      await auth.deleteSession(token!);
+      // Create registration token
+      const { registrationToken } = await auth.createRegistrationToken(
+        userId,
+        "user@example.com",
+      );
+      expect(registrationToken).toBeDefined();
 
-      // Session deleted from store
-      expect(memory._stores.sessions.size).toBe(0);
+      // Validate it
+      const validation =
+        await auth.validateRegistrationToken(registrationToken);
+      expect(validation.valid).toBe(true);
+      expect(validation.userId).toBe(userId);
     });
   });
 });

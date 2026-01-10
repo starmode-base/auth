@@ -2,17 +2,38 @@ import {
   makeAuth,
   makeCookieAuth,
   makeMemoryAdapters,
-  makeSessionTokenJwt,
-  otpEmailMinimal,
+  makeSessionHmac,
+  makeRegistrationHmac,
   otpSendConsole,
 } from "@starmode/auth";
 
 const auth = makeAuth({
-  ...makeMemoryAdapters(),
-  ...makeSessionTokenJwt({ secret: "dev-secret", ttl: 600 }),
-  email: otpEmailMinimal,
-  send: otpSendConsole,
+  storage: makeMemoryAdapters(),
+  session: makeSessionHmac({ secret: "dev-secret", ttl: 600 }),
+  registration: makeRegistrationHmac({
+    secret: "dev-secret",
+    ttl: 300,
+  }),
+  otp: otpSendConsole,
+  webauthn: {
+    rpId: "localhost",
+    rpName: "Bun Memory Example",
+  },
 });
+
+// In-memory user store for this example
+const users = new Map<string, { userId: string; email: string }>();
+let userIdCounter = 0;
+
+function upsertUser(email: string): { userId: string; isNew: boolean } {
+  const existing = Array.from(users.values()).find((u) => u.email === email);
+  if (existing) {
+    return { userId: existing.userId, isNew: false };
+  }
+  const userId = `user_${++userIdCounter}`;
+  users.set(userId, { userId, email });
+  return { userId, isNew: true };
+}
 
 // Cookie helpers
 const SESSION_COOKIE = "session";
@@ -93,6 +114,20 @@ function otpPage(email: string) {
 </html>`;
 }
 
+function registerPasskeyPage(registrationToken: string) {
+  // In a real app, this would trigger WebAuthn
+  return `<!DOCTYPE html>
+<html>
+<head><title>Register Passkey</title></head>
+<body>
+  <h1>Register Passkey</h1>
+  <p>OTP verified! In a real app, WebAuthn would prompt for passkey registration.</p>
+  <p>Registration token: ${escapeHtml(registrationToken.substring(0, 20))}...</p>
+  <p><a href="/">Return to home</a> (session not created - passkey required)</p>
+</body>
+</html>`;
+}
+
 // Per-request cookie state (stored during request, applied via headers)
 let pendingCookie: { value: string; maxAge: number } | null = null;
 
@@ -157,7 +192,7 @@ const server = Bun.serve({
       });
     }
 
-    // Verify OTP
+    // Verify OTP → create registration token → prompt for passkey
     if (url.pathname === "/auth/verify-otp" && req.method === "POST") {
       const form = await req.formData();
 
@@ -174,9 +209,18 @@ const server = Bun.serve({
       const result = await cookieAuth.verifyOtp(email, code);
 
       if (result.valid) {
-        return new Response(null, {
-          status: 302,
-          headers: addCookieHeader({ Location: "/" }),
+        // App upserts user
+        const { userId } = upsertUser(email);
+
+        // Create registration token for passkey registration
+        const { registrationToken } = await cookieAuth.createRegistrationToken(
+          userId,
+          email,
+        );
+
+        // In a real app, redirect to passkey registration flow
+        return new Response(registerPasskeyPage(registrationToken), {
+          headers: securityHeaders(),
         });
       }
 

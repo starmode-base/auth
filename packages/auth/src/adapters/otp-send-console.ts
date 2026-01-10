@@ -1,12 +1,11 @@
-import type { OtpSendAdapter } from "../types";
+import type { OtpAdapter } from "../types";
 
 /**
- * Send OTP to console.
+ * Console OTP send adapter (for development)
  *
- * @param email - The email address to send the OTP to.
- * @param content - The content of the OTP email.
- * @returns void
+ * @param email - The email address to send the OTP to
+ * @param code - The OTP code
  */
-export const otpSendConsole: OtpSendAdapter = async (email, content) => {
-  console.log(`[OTP] To: ${email} | ${content.subject}: ${content.body}`);
+export const otpSendConsole: OtpAdapter = async (email, code) => {
+  console.log(`[OTP] To: ${email} | Your code: ${code}`);
 };

@@ -1,17 +1,24 @@
 import {
   makeAuth,
   makeMemoryAdapters,
-  makeSessionTokenJwt,
-  otpEmailMinimal,
+  makeSessionHmac,
+  makeRegistrationHmac,
   otpSendConsole,
 } from "@starmode/auth";
 
 export const auth = makeAuth({
-  ...makeMemoryAdapters(),
-  ...makeSessionTokenJwt({
+  storage: makeMemoryAdapters(),
+  session: makeSessionHmac({
     secret: "dev-secret-do-not-use-in-production",
     ttl: 600,
   }),
-  email: otpEmailMinimal,
-  send: otpSendConsole,
+  registration: makeRegistrationHmac({
+    secret: "dev-secret-do-not-use-in-production",
+    ttl: 300,
+  }),
+  otp: otpSendConsole,
+  webauthn: {
+    rpId: "localhost",
+    rpName: "TanStack Start Example",
+  },
 });

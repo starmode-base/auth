@@ -24,20 +24,78 @@ export const makeCookieAuth: MakeCookieAuth = ({
   cookie,
 }: MakeCookieAuthConfig): CookieAuthReturn => {
   return {
+    // =========================================================================
+    // OTP (pass-through)
+    // =========================================================================
+
     async requestOtp(email) {
       return auth.requestOtp(email);
     },
 
     async verifyOtp(email, code) {
-      const result = await auth.verifyOtp(email, code);
+      return auth.verifyOtp(email, code);
+    },
 
-      if (result.valid && result.token) {
-        cookie.set(result.token);
+    // =========================================================================
+    // Registration token (server-side only)
+    // =========================================================================
+
+    async createRegistrationToken(userId, email) {
+      return auth.createRegistrationToken(userId, email);
+    },
+
+    // =========================================================================
+    // Passkey (auto cookie handling)
+    // =========================================================================
+
+    async generateRegistrationOptions(registrationToken) {
+      return auth.generateRegistrationOptions(registrationToken);
+    },
+
+    async verifyRegistration(registrationToken, credential) {
+      const result = await auth.verifyRegistration(
+        registrationToken,
+        credential,
+      );
+
+      if (result.success && result.session) {
+        cookie.set(result.session.token);
       }
 
       // Don't expose token to client — cookie is already set
-      return { valid: result.valid, userId: result.userId };
+      return {
+        success: result.success,
+        session: result.session
+          ? { token: "", userId: result.session.userId }
+          : undefined,
+        prf: result.prf,
+      };
     },
+
+    async generateAuthenticationOptions() {
+      return auth.generateAuthenticationOptions();
+    },
+
+    async verifyAuthentication(credential) {
+      const result = await auth.verifyAuthentication(credential);
+
+      if (result.valid && result.session) {
+        cookie.set(result.session.token);
+      }
+
+      // Don't expose token to client — cookie is already set
+      return {
+        valid: result.valid,
+        session: result.session
+          ? { token: "", userId: result.session.userId }
+          : undefined,
+        prf: result.prf,
+      };
+    },
+
+    // =========================================================================
+    // Session
+    // =========================================================================
 
     async getSession() {
       const token = cookie.get();

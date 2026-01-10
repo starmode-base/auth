@@ -1,22 +1,23 @@
 import { describe, expect, it } from "vitest";
 import {
   makeAuth,
-  otpEmailMinimal,
+  makeMemoryAdapters,
   otpSendConsole,
-  makeSessionTokenJwt,
+  makeSessionHmac,
+  makeRegistrationHmac,
 } from "./index";
 
 describe("makeAuth", () => {
+  const storage = makeMemoryAdapters();
   const auth = makeAuth({
-    storeOtp: async () => {},
-    verifyOtp: async () => true,
-    upsertUser: async () => ({ userId: "user_1", isNew: true }),
-    storeSession: async () => {},
-    getSession: async () => ({ userId: "user_1", expiresAt: new Date() }),
-    deleteSession: async () => {},
-    ...makeSessionTokenJwt({ secret: "test", ttl: 600 }),
-    email: otpEmailMinimal,
-    send: otpSendConsole,
+    storage,
+    session: makeSessionHmac({ secret: "test", ttl: 600 }),
+    registration: makeRegistrationHmac({ secret: "test", ttl: 300 }),
+    otp: otpSendConsole,
+    webauthn: {
+      rpId: "localhost",
+      rpName: "Test App",
+    },
   });
 
   it("requestOtp returns success", async () => {
@@ -24,21 +25,84 @@ describe("makeAuth", () => {
     expect(result).toEqual({ success: true });
   });
 
-  it("verifyOtp returns token and userId", async () => {
+  it("verifyOtp returns valid only (no session)", async () => {
+    // Pre-populate OTP
+    await storage.otp.store(
+      "test@example.com",
+      "123456",
+      new Date(Date.now() + 60000),
+    );
+
     const result = await auth.verifyOtp("test@example.com", "123456");
-    expect(result.valid).toBe(true);
-    expect(result.userId).toBe("user_1");
-    expect(result.token).toBeDefined();
+    expect(result).toEqual({ valid: true });
+  });
+
+  it("verifyOtp returns invalid for wrong code", async () => {
+    const result = await auth.verifyOtp("test@example.com", "000000");
+    expect(result).toEqual({ valid: false });
+  });
+
+  it("createRegistrationToken returns token", async () => {
+    const result = await auth.createRegistrationToken(
+      "user_1",
+      "test@example.com",
+    );
+    expect(result.registrationToken).toBeDefined();
+  });
+
+  it("validateRegistrationToken returns userId and email", async () => {
+    const { registrationToken } = await auth.createRegistrationToken(
+      "user_1",
+      "test@example.com",
+    );
+    const result = await auth.validateRegistrationToken(registrationToken);
+    expect(result).toEqual({
+      userId: "user_1",
+      email: "test@example.com",
+      valid: true,
+    });
+  });
+
+  it("validateRegistrationToken returns invalid for bad token", async () => {
+    const result = await auth.validateRegistrationToken("invalid-token");
+    expect(result.valid).toBe(false);
   });
 
   it("getSession returns userId from token", async () => {
-    const { token } = await auth.verifyOtp("test@example.com", "123456");
-    const session = await auth.getSession(token!);
+    // Create a session directly
+    await storage.session.store(
+      "session_1",
+      "user_1",
+      new Date(Date.now() + 60000),
+    );
+    const sessionCodec = makeSessionHmac({ secret: "test", ttl: 600 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_1",
+      userId: "user_1",
+    });
+
+    const session = await auth.getSession(token);
     expect(session).toEqual({ userId: "user_1" });
   });
 
+  it("getSession returns null for invalid token", async () => {
+    const session = await auth.getSession("invalid-token");
+    expect(session).toBeNull();
+  });
+
   it("deleteSession completes without error", async () => {
-    const { token } = await auth.verifyOtp("test@example.com", "123456");
-    await expect(auth.deleteSession(token!)).resolves.toBeUndefined();
+    // Create a session directly
+    await storage.session.store(
+      "session_2",
+      "user_1",
+      new Date(Date.now() + 60000),
+    );
+    const sessionCodec = makeSessionHmac({ secret: "test", ttl: 600 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_2",
+      userId: "user_1",
+    });
+
+    await expect(auth.deleteSession(token)).resolves.toBeUndefined();
   });
 });
