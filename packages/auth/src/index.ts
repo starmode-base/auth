@@ -11,7 +11,7 @@ export {
   makeSessionOpaque,
   makeSessionHmac,
   makeRegistrationHmac,
-} from "./adapters";
+} from "./presets";
 
 // Types
 export type {
