@@ -361,9 +361,9 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full client interf
 **How it works:**
 
 1. User authenticates via passkey (OTP only gives a registration token, not a session)
-2. Server creates session → encodes token → sets HttpOnly cookie
+2. Server creates session → stores in DB → encodes token → sets HttpOnly cookie
 3. Browser automatically sends cookie with every request
-4. Server decodes token → if expired, validates against DB → returns userId
+4. Server decodes token → validates → returns userId or null
 
 **Token format via codec:**
 
