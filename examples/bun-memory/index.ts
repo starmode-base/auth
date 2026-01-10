@@ -1,20 +1,20 @@
 import {
   makeAuth,
   makeCookieAuth,
-  makeMemoryAdapters,
-  makeSessionHmac,
-  makeRegistrationHmac,
-  otpSendConsole,
+  storageMemory,
+  sessionHmac,
+  registrationHmac,
+  otpSenderConsole,
 } from "@starmode/auth";
 
 const auth = makeAuth({
-  storage: makeMemoryAdapters(),
-  session: makeSessionHmac({ secret: "dev-secret", ttl: 600 }),
-  registration: makeRegistrationHmac({
+  storage: storageMemory(),
+  session: sessionHmac({ secret: "dev-secret", ttl: 600 }),
+  registration: registrationHmac({
     secret: "dev-secret",
     ttl: 300,
   }),
-  sendOtp: otpSendConsole,
+  sendOtp: otpSenderConsole,
   webauthn: {
     rpId: "localhost",
     rpName: "Bun Memory Example",

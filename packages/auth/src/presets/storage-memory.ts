@@ -4,7 +4,7 @@ type OtpRecord = { otp: string; expiresAt: Date };
 type SessionRecord = { userId: string; expiresAt: Date };
 type CredentialRecord = { userId: string; credential: StoredCredential };
 
-type MemoryAdaptersReturn = StorageAdapter & {
+type MemoryStorageReturn = StorageAdapter & {
   // Expose stores for testing
   _stores: {
     otps: Map<string, OtpRecord>;
@@ -13,7 +13,7 @@ type MemoryAdaptersReturn = StorageAdapter & {
   };
 };
 
-export const makeMemoryAdapters = (): MemoryAdaptersReturn => {
+export const storageMemory = (): MemoryStorageReturn => {
   const otps = new Map<string, OtpRecord>();
   const sessions = new Map<string, SessionRecord>();
   const credentials = new Map<string, CredentialRecord>();

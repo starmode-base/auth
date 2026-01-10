@@ -1,5 +1,5 @@
 import { encodePayload, decodePayload, hmacSign, hmacVerify } from "../crypto";
-import type { RegistrationCodec } from "../types";
+import type { SessionCodec } from "../types";
 
 type Options = {
   secret: string;
@@ -7,21 +7,23 @@ type Options = {
 };
 
 type TokenPayload = {
+  sessionId: string;
   userId: string;
-  email: string;
   exp: number;
 };
 
 /**
- * HMAC-signed registration codec
- *
- * Registration tokens are short-lived (e.g., 5 min) and single-purpose:
- * they authorize passkey registration for a specific userId + email.
+ * HMAC-signed session codec
  *
  * Token format: base64url(payload).base64url(signature)
- * Payload includes: userId, email, exp (unix timestamp)
+ * Payload includes: sessionId, userId, exp (unix timestamp)
+ *
+ * Use this when:
+ * - You want stateless token validation (no DB lookup for non-expired tokens)
+ * - You don't need JWT specifically
+ * - You want zero dependencies
  */
-export const makeRegistrationHmac = (options: Options): RegistrationCodec => {
+export const sessionHmac = (options: Options): SessionCodec => {
   const { secret, ttl } = options;
 
   return {
@@ -49,8 +51,8 @@ export const makeRegistrationHmac = (options: Options): RegistrationCodec => {
         const expired = payload.exp < now;
 
         return {
+          sessionId: payload.sessionId,
           userId: payload.userId,
-          email: payload.email,
           valid: !expired,
           expired,
         };

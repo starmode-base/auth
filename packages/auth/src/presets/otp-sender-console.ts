@@ -1,4 +1,4 @@
-import type { SendOtp } from "../types";
+import type { OtpSender } from "../types";
 
 /**
  * Console OTP send adapter (for development)
@@ -6,6 +6,6 @@ import type { SendOtp } from "../types";
  * @param email - The email address to send the OTP to
  * @param otp - The One-Time Password
  */
-export const otpSendConsole: SendOtp = async (email, otp) => {
+export const otpSenderConsole: OtpSender = async (email, otp) => {
   console.log(`[OTP] To: ${email} | Your One-Time Password: ${otp}`);
 };

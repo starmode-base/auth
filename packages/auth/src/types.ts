@@ -81,7 +81,7 @@ export type RegistrationCodec = {
 // ============================================================================
 
 /** Send OTP */
-export type SendOtp = (email: string, otp: string) => Promise<void>;
+export type OtpSender = (email: string, otp: string) => Promise<void>;
 
 // ============================================================================
 // Passkey config
@@ -188,7 +188,7 @@ export type MakeAuthConfig = {
   storage: StorageAdapter;
   session: SessionCodec;
   registration: RegistrationCodec;
-  sendOtp: SendOtp;
+  sendOtp: OtpSender;
   webauthn: WebAuthnConfig;
 };
 

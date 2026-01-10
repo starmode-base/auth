@@ -1,29 +1,29 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   makeAuth,
-  makeMemoryAdapters,
-  makeSessionHmac,
-  makeRegistrationHmac,
+  storageMemory,
+  sessionHmac,
+  registrationHmac,
 } from "./index";
-import type { SendOtp } from "./types";
+import type { OtpSender } from "./types";
 
 describe("auth integration", () => {
-  let storage: ReturnType<typeof makeMemoryAdapters>;
+  let storage: ReturnType<typeof storageMemory>;
   let sentOtps: { email: string; otp: string }[];
   let auth: ReturnType<typeof makeAuth>;
 
   beforeEach(() => {
-    storage = makeMemoryAdapters();
+    storage = storageMemory();
     sentOtps = [];
 
-    const captureSend: SendOtp = async (email, otp) => {
+    const captureSend: OtpSender = async (email, otp) => {
       sentOtps.push({ email, otp });
     };
 
     auth = makeAuth({
       storage,
-      session: makeSessionHmac({ secret: "test-secret", ttl: 600 }),
-      registration: makeRegistrationHmac({
+      session: sessionHmac({ secret: "test-secret", ttl: 600 }),
+      registration: registrationHmac({
         secret: "test-secret",
         ttl: 300,
       }),
@@ -115,7 +115,7 @@ describe("auth integration", () => {
         "user_1",
         new Date(Date.now() + 60000),
       );
-      const sessionCodec = makeSessionHmac({
+      const sessionCodec = sessionHmac({
         secret: "test-secret",
         ttl: 600,
       });
@@ -139,7 +139,7 @@ describe("auth integration", () => {
         "user_1",
         new Date(Date.now() + 60000),
       );
-      const sessionCodec = makeSessionHmac({
+      const sessionCodec = sessionHmac({
         secret: "test-secret",
         ttl: 600,
       });

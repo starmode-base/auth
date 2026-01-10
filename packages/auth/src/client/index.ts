@@ -1,5 +1,3 @@
-// @starmode/auth/client
-
 import type { AuthClient } from "../types";
 
 // Re-export types for convenience

@@ -11,7 +11,7 @@ import type { SessionCodec } from "../types";
  * - You're fine with a DB lookup on every request
  * - You don't need stateless token validation
  */
-export const makeSessionOpaque = (): SessionCodec => {
+export const sessionOpaque = (): SessionCodec => {
   return {
     encode: async (payload) => {
       // Token is just the sessionId

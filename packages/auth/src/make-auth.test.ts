@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   makeAuth,
-  makeMemoryAdapters,
-  otpSendConsole,
-  makeSessionHmac,
-  makeRegistrationHmac,
+  storageMemory,
+  otpSenderConsole,
+  sessionHmac,
+  registrationHmac,
 } from "./index";
 
 describe("makeAuth", () => {
-  const storage = makeMemoryAdapters();
+  const storage = storageMemory();
   const auth = makeAuth({
     storage,
-    session: makeSessionHmac({ secret: "test", ttl: 600 }),
-    registration: makeRegistrationHmac({ secret: "test", ttl: 300 }),
-    sendOtp: otpSendConsole,
+    session: sessionHmac({ secret: "test", ttl: 600 }),
+    registration: registrationHmac({ secret: "test", ttl: 300 }),
+    sendOtp: otpSenderConsole,
     webauthn: {
       rpId: "localhost",
       rpName: "Test App",
@@ -75,7 +75,7 @@ describe("makeAuth", () => {
       "user_1",
       new Date(Date.now() + 60000),
     );
-    const sessionCodec = makeSessionHmac({ secret: "test", ttl: 600 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 600 });
     const token = await sessionCodec.encode({
       sessionId: "session_1",
       userId: "user_1",
@@ -97,7 +97,7 @@ describe("makeAuth", () => {
       "user_1",
       new Date(Date.now() + 60000),
     );
-    const sessionCodec = makeSessionHmac({ secret: "test", ttl: 600 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 600 });
     const token = await sessionCodec.encode({
       sessionId: "session_2",
       userId: "user_1",
