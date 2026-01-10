@@ -66,7 +66,9 @@ The library provides primitives. The app orchestrates:
 ```ts
 // Sign up — app composes the flow
 await auth.requestOtp(email);
+
 const { valid } = await auth.verifyOtp(email, otp);
+
 if (valid) {
   const { userId } = await db.users.upsert({ email }); // App's DB
   const { registrationToken } = await auth.createRegistrationToken(
@@ -78,7 +80,9 @@ if (valid) {
 
 // Change email — different flow, same primitives
 await auth.requestOtp(newEmail);
+
 const { valid } = await auth.verifyOtp(newEmail, otp);
+
 if (valid) {
   await db.users.update(userId, { email: newEmail }); // App's DB
 }
@@ -206,7 +210,7 @@ const auth = makeAuth({
   }),
 
   // OTP delivery
-  otp: otpSendConsole,
+  sendOtp: otpSendConsole,
 
   // Passkey config
   webauthn: {
@@ -224,244 +228,40 @@ const cookieAuth = makeCookieAuth({
     clear: () => /* clear session cookie */,
   },
 });
-
-// Primitives available:
-// OTP
-// - auth.requestOtp(email) → { success }
-// - auth.verifyOtp(email, otp) → { valid }
-// Registration token
-// - auth.createRegistrationToken(userId, email) → { registrationToken }
-// - auth.validateRegistrationToken(token) → { userId, email, valid }
-// Passkey
-// - auth.generateRegistrationOptions(token) → { options }
-// - auth.verifyRegistration(token, credential) → { success, session, prf? }
-// - auth.generateAuthenticationOptions() → { options }
-// - auth.verifyAuthentication(credential) → { valid, session, prf? }
-// Session
-// - auth.getSession(token) → { userId } | null
-// - auth.deleteSession(token) → void
 ```
 
 **Custom storage adapters:**
+
+See `StorageAdapter` type in `packages/auth/src/types.ts` for the full interface. Example:
 
 ```ts
 const auth = makeAuth({
   storage: {
     otp: {
-      store: async (email, otp, expiresAt) => {
-        /* your ORM */
-      },
-      verify: async (email, otp) => {
-        /* your ORM */
-      },
+      store: async (email, otp, expiresAt) => { /* your ORM */ },
+      verify: async (email, otp) => { /* your ORM */ },
     },
     session: {
-      store: async (sessionId, userId, expiresAt) => {
-        /* your ORM */
-      },
-      get: async (sessionId) => {
-        /* your ORM */
-      },
-      delete: async (sessionId) => {
-        /* your ORM */
-      },
+      store: async (sessionId, userId, expiresAt) => { /* your ORM */ },
+      get: async (sessionId) => { /* your ORM */ },
+      delete: async (sessionId) => { /* your ORM */ },
     },
     credential: {
-      store: async (userId, credential) => {
-        /* your ORM */
-      },
-      get: async (userId) => {
-        /* your ORM */
-      },
-      getById: async (credentialId) => {
-        /* your ORM */
-      },
+      store: async (userId, credential) => { /* your ORM */ },
+      get: async (userId) => { /* your ORM */ },
+      getById: async (credentialId) => { /* your ORM */ },
+      updateCounter: async (credentialId, counter) => { /* your ORM */ },
     },
   },
-  session: makeSessionHmac({ secret, ttl: 600 }),
-  registration: makeRegistrationHmac({ secret, ttl: 300 }),
-  otp: otpSendConsole,
-  webauthn: { rpId: "example.com", rpName: "My App" },
+  // ... other config
 });
 ```
 
-**Why No Database Drivers?**
+**Why no database drivers?**
 
 Most auth libraries take a database pool and run queries internally. This means they control your schema, ID generation, and query patterns — and you fight them when it doesn't match your app.
 
 We don't touch your database. You write the persistence functions using whatever ORM/driver you already use. The library is pure orchestration.
-
-**Type Definitions:**
-
-```ts
-// Storage adapter (persistence)
-type StorageAdapter = {
-  otp: {
-    store: (email: string, otp: string, expiresAt: Date) => Promise<void>;
-    verify: (email: string, otp: string) => Promise<boolean>;
-  };
-  session: {
-    store: (
-      sessionId: string,
-      userId: string,
-      expiresAt: Date,
-    ) => Promise<void>;
-    get: (
-      sessionId: string,
-    ) => Promise<{ userId: string; expiresAt: Date } | null>;
-    delete: (sessionId: string) => Promise<void>;
-  };
-  credential: {
-    store: (userId: string, credential: Credential) => Promise<void>;
-    get: (userId: string) => Promise<Credential[]>;
-    getById: (
-      credentialId: string,
-    ) => Promise<{ userId: string; credential: Credential } | null>;
-    updateCounter: (credentialId: string, counter: number) => Promise<void>;
-  };
-};
-
-// Session codec (async for Web Crypto API)
-type SessionCodec = {
-  encode: (payload: { sessionId: string; userId: string }) => Promise<string>;
-  decode: (token: string) => Promise<{
-    sessionId: string;
-    userId: string;
-    valid: boolean;
-    expired: boolean;
-  } | null>;
-};
-
-// Registration codec (async for Web Crypto API)
-type RegistrationCodec = {
-  encode: (payload: { userId: string; email: string }) => Promise<string>;
-  decode: (token: string) => Promise<{
-    userId: string;
-    email: string;
-    valid: boolean;
-    expired: boolean;
-  } | null>;
-};
-
-// OTP delivery adapter
-type SendOtp = (email: string, otp: string) => Promise<void>;
-
-// Return types
-type RequestOtpReturn = { success: boolean };
-type VerifyOtpReturn = { valid: boolean };
-type CreateRegistrationTokenReturn = { registrationToken: string };
-type ValidateRegistrationTokenReturn = {
-  userId: string;
-  email: string;
-  valid: boolean;
-};
-type GenerateRegistrationOptionsReturn = {
-  options: PublicKeyCredentialCreationOptions;
-};
-type VerifyRegistrationReturn = {
-  success: boolean;
-  session?: { token: string; userId: string };
-  prf?: Uint8Array; // PRF result if extension was used
-};
-type GenerateAuthenticationOptionsReturn = {
-  options: PublicKeyCredentialRequestOptions;
-};
-type VerifyAuthenticationReturn = {
-  valid: boolean;
-  session?: { token: string; userId: string };
-  prf?: Uint8Array; // PRF result if extension was used
-};
-
-// Config
-type MakeAuthConfig = {
-  storage: StorageAdapter;
-  session: SessionCodec;
-  registration: RegistrationCodec;
-  otp: SendOtp;
-  webauthn: {
-    rpId: string;
-    rpName: string;
-  };
-};
-
-// Return — all primitives
-type MakeAuthReturn = {
-  // OTP primitives
-  requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
-
-  // Registration token primitives
-  createRegistrationToken: (
-    userId: string,
-    email: string,
-  ) => Promise<CreateRegistrationTokenReturn>;
-  validateRegistrationToken: (
-    token: string,
-  ) => Promise<ValidateRegistrationTokenReturn>;
-
-  // Passkey primitives
-  generateRegistrationOptions: (
-    registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsReturn>;
-  verifyRegistration: (
-    registrationToken: string,
-    credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>;
-  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
-  verifyAuthentication: (
-    credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>;
-
-  // Session primitives
-  getSession: (token: string) => Promise<{ userId: string } | null>;
-  deleteSession: (token: string) => Promise<void>;
-};
-
-// Main function
-type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
-
-// Cookie adapter — you provide these (framework-specific)
-type CookieAdapter = {
-  get: () => string | undefined;
-  set: (token: string) => void;
-  clear: () => void;
-};
-
-// Cookie auth — wraps primitives with automatic cookie handling
-type CookieAuthReturn = {
-  // OTP
-  requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
-
-  // Registration token (server-side only — use in composed flows like signUp)
-  createRegistrationToken: (
-    userId: string,
-    email: string,
-  ) => Promise<CreateRegistrationTokenReturn>;
-
-  // Passkey (sets session cookie automatically)
-  generateRegistrationOptions: (
-    registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsReturn>;
-  verifyRegistration: (
-    registrationToken: string,
-    credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>;
-  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
-  verifyAuthentication: (
-    credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>;
-
-  // Session
-  getSession: () => Promise<{ userId: string } | null>;
-  signOut: () => Promise<void>;
-};
-
-type MakeCookieAuth = (config: {
-  auth: MakeAuthReturn;
-  cookie: CookieAdapter;
-}) => CookieAuthReturn;
-```
 
 **Shipped adapters:**
 
@@ -554,37 +354,7 @@ export const signUp = makeSignUpFlow({
 const { registrationToken } = await signUp("user@example.com", "123456");
 ```
 
-**Type definitions:**
-
-```ts
-// Client interface — OTP + passkey primitives only
-// Note: createRegistrationToken is server-side only (needs userId from DB)
-type AuthClient = {
-  // OTP
-  requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (email: string, otp: string) => Promise<{ valid: boolean }>;
-
-  // Passkey (registrationToken comes from server-side signUp flow)
-  generateRegistrationOptions: (
-    registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsReturn>;
-  verifyRegistration: (
-    registrationToken: string,
-    credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>;
-  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
-  verifyAuthentication: (
-    credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>;
-
-  signOut: () => Promise<void>;
-};
-
-// HTTP client factory
-type HttpClient = (endpoint: string) => AuthClient;
-```
-
-The `AuthClient` exposes OTP and passkey primitives. Registration token creation happens server-side via composed flows like `signUp`.
+See `AuthClient` type in `packages/auth/src/types.ts` for the full client interface.
 
 ### Session management
 
