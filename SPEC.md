@@ -37,7 +37,7 @@ This means:
 | Primitive                                | What it does                   | Client |
 | ---------------------------------------- | ------------------------------ | ------ |
 | `requestOtp(email)`                      | Send OTP to email              | ✅     |
-| `verifyOtp(email, code)`                 | Verify OTP → `{ valid }`       | ✅     |
+| `verifyOtp(email, otp)`                  | Verify OTP → `{ valid }`       | ✅     |
 | `createRegistrationToken(userId, email)` | Create registration token      | ❌     |
 | `validateRegistrationToken(token)`       | Validate → `{ userId, email }` | ❌     |
 | `generateRegistrationOptions(token)`     | WebAuthn registration options  | ✅     |
@@ -49,7 +49,7 @@ This means:
 
 **Client column:** ✅ = exposed via `httpClient` / callable from browser. ❌ = server-side only.
 
-Key design: **OTP never creates a session.** Only webauthn create sessions. `verifyOtp` just verifies the code — it doesn't upsert users or create tokens. Apps compose the flow they need.
+Key design: **OTP never creates a session.** Only webauthn create sessions. `verifyOtp` just verifies the otp — it doesn't upsert users or create tokens. Apps compose the flow they need.
 
 ### Flows (composed from primitives)
 
@@ -66,7 +66,7 @@ The library provides primitives. The app orchestrates:
 ```ts
 // Sign up — app composes the flow
 await auth.requestOtp(email);
-const { valid } = await auth.verifyOtp(email, code);
+const { valid } = await auth.verifyOtp(email, otp);
 if (valid) {
   const { userId } = await db.users.upsert({ email }); // App's DB
   const { registrationToken } = await auth.createRegistrationToken(
@@ -78,7 +78,7 @@ if (valid) {
 
 // Change email — different flow, same primitives
 await auth.requestOtp(newEmail);
-const { valid } = await auth.verifyOtp(newEmail, code);
+const { valid } = await auth.verifyOtp(newEmail, otp);
 if (valid) {
   await db.users.update(userId, { email: newEmail }); // App's DB
 }
@@ -102,7 +102,7 @@ const signUp = makeSignUpFlow({
 });
 
 // Usage — one call instead of multiple
-const { registrationToken } = await signUp(email, code);
+const { registrationToken } = await signUp(email, otp);
 ```
 
 Flow adapters are optional. You can always use primitives directly.
@@ -228,7 +228,7 @@ const cookieAuth = makeCookieAuth({
 // Primitives available:
 // OTP
 // - auth.requestOtp(email) → { success }
-// - auth.verifyOtp(email, code) → { valid }
+// - auth.verifyOtp(email, otp) → { valid }
 // Registration token
 // - auth.createRegistrationToken(userId, email) → { registrationToken }
 // - auth.validateRegistrationToken(token) → { userId, email, valid }
@@ -248,10 +248,10 @@ const cookieAuth = makeCookieAuth({
 const auth = makeAuth({
   storage: {
     otp: {
-      store: async (email, code, expiresAt) => {
+      store: async (email, otp, expiresAt) => {
         /* your ORM */
       },
-      verify: async (email, code) => {
+      verify: async (email, otp) => {
         /* your ORM */
       },
     },
@@ -297,8 +297,8 @@ We don't touch your database. You write the persistence functions using whatever
 // Storage adapter (persistence)
 type StorageAdapter = {
   otp: {
-    store: (email: string, code: string, expiresAt: Date) => Promise<void>;
-    verify: (email: string, code: string) => Promise<boolean>;
+    store: (email: string, otp: string, expiresAt: Date) => Promise<void>;
+    verify: (email: string, otp: string) => Promise<boolean>;
   };
   session: {
     store: (
@@ -344,7 +344,7 @@ type RegistrationCodec = {
 };
 
 // OTP delivery adapter
-type OtpAdapter = (email: string, code: string) => Promise<void>;
+type OtpAdapter = (email: string, otp: string) => Promise<void>;
 
 // Return types
 type RequestOtpReturn = { success: boolean };
@@ -388,7 +388,7 @@ type MakeAuthConfig = {
 type MakeAuthReturn = {
   // OTP primitives
   requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Registration token primitives
   createRegistrationToken: (
@@ -431,7 +431,7 @@ type CookieAdapter = {
 type CookieAuthReturn = {
   // OTP
   requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Registration token (server-side only — use in composed flows like signUp)
   createRegistrationToken: (
@@ -562,7 +562,7 @@ const { registrationToken } = await signUp("user@example.com", "123456");
 type AuthClient = {
   // OTP
   requestOtp: (email: string) => Promise<{ success: boolean }>;
-  verifyOtp: (email: string, code: string) => Promise<{ valid: boolean }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ valid: boolean }>;
 
   // Passkey (registrationToken comes from server-side signUp flow)
   generateRegistrationOptions: (
@@ -656,8 +656,8 @@ export const signOut = cookieAuth.signOut;
 
 // Composed flow — this is what clients call for signup
 // (createRegistrationToken is used internally, not exposed directly)
-export async function signUp(email: string, code: string) {
-  const { valid } = await cookieAuth.verifyOtp(email, code);
+export async function signUp(email: string, otp: string) {
+  const { valid } = await cookieAuth.verifyOtp(email, otp);
   if (!valid) return { valid: false };
 
   const { userId } = await db.users.upsert({ email });
@@ -691,7 +691,7 @@ const schema = z.discriminatedUnion("method", [
   z.object({
     method: z.literal("verifyOtp"),
     email: z.string().email(),
-    code: z.string(),
+    otp: z.string(),
   }),
   // Passkey (createRegistrationToken is NOT exposed — use signUp server action)
   z.object({
@@ -715,7 +715,7 @@ export async function POST(req: Request) {
     case "requestOtp":
       return Response.json(await cookieAuth.requestOtp(body.email));
     case "verifyOtp":
-      return Response.json(await cookieAuth.verifyOtp(body.email, body.code));
+      return Response.json(await cookieAuth.verifyOtp(body.email, body.otp));
     case "generateRegistrationOptions":
       return Response.json(
         await cookieAuth.generateRegistrationOptions(body.registrationToken),
@@ -755,14 +755,14 @@ export const requestOtp = createServerFn({ method: "POST" })
   .handler(({ data: email }) => cookieAuth.requestOtp(email));
 
 export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; code: string }) => input)
-  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.code));
+  .inputValidator((input: { email: string; otp: string }) => input)
+  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.otp));
 
 // Composed flow
 export const signUp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; code: string }) => input)
+  .inputValidator((input: { email: string; otp: string }) => input)
   .handler(async ({ data }) => {
-    const { valid } = await cookieAuth.verifyOtp(data.email, data.code);
+    const { valid } = await cookieAuth.verifyOtp(data.email, data.otp);
     if (!valid) return { valid: false };
 
     const { userId } = await db.users.upsert({ email: data.email });
@@ -780,7 +780,7 @@ import { requestOtp, signUp, verifyRegistration } from "../lib/auth.server";
 await requestOtp("user@example.com");
 const { registrationToken } = await signUp({
   email: "user@example.com",
-  code: "123456",
+  otp: "123456",
 });
 // ... WebAuthn flow, then:
 await verifyRegistration({ registrationToken, credential });

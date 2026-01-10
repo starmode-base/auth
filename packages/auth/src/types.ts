@@ -18,8 +18,8 @@ export type StoredCredential = {
  */
 export type StorageAdapter = {
   otp: {
-    store: (email: string, code: string, expiresAt: Date) => Promise<void>;
-    verify: (email: string, code: string) => Promise<boolean>;
+    store: (email: string, otp: string, expiresAt: Date) => Promise<void>;
+    verify: (email: string, otp: string) => Promise<boolean>;
   };
   session: {
     store: (
@@ -80,8 +80,8 @@ export type RegistrationCodec = {
 // OTP delivery adapters
 // ============================================================================
 
-/** Send OTP email (format + send combined) */
-export type OtpAdapter = (email: string, code: string) => Promise<void>;
+/** Send OTP */
+export type OtpAdapter = (email: string, otp: string) => Promise<void>;
 
 // ============================================================================
 // Passkey config
@@ -188,7 +188,7 @@ export type MakeAuthConfig = {
   storage: StorageAdapter;
   session: SessionCodec;
   registration: RegistrationCodec;
-  otp: OtpAdapter;
+  sendOtp: OtpAdapter;
   webauthn: WebAuthnConfig;
 };
 
@@ -196,7 +196,7 @@ export type MakeAuthConfig = {
 export type MakeAuthReturn = {
   // OTP primitives
   requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Registration token primitives
   createRegistrationToken: (
@@ -248,7 +248,7 @@ export type MakeCookieAuthConfig = {
 export type CookieAuthReturn = {
   // OTP
   requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Registration token (server-side only — use in composed flows like signUp)
   createRegistrationToken: (
@@ -287,7 +287,7 @@ export type MakeCookieAuth = (config: MakeCookieAuthConfig) => CookieAuthReturn;
 export type AuthClient = {
   // OTP
   requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, code: string) => Promise<VerifyOtpReturn>;
+  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Passkey (registrationToken comes from server-side signUp flow)
   generateRegistrationOptions: (

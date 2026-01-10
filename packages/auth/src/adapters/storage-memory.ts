@@ -1,6 +1,6 @@
 import type { StorageAdapter, StoredCredential } from "../types";
 
-type OtpRecord = { code: string; expiresAt: Date };
+type OtpRecord = { otp: string; expiresAt: Date };
 type SessionRecord = { userId: string; expiresAt: Date };
 type CredentialRecord = { userId: string; credential: StoredCredential };
 
@@ -20,18 +20,18 @@ export const makeMemoryAdapters = (): MemoryAdaptersReturn => {
 
   return {
     otp: {
-      store: async (email, code, expiresAt) => {
-        otps.set(email, { code, expiresAt });
+      store: async (email, otp, expiresAt) => {
+        otps.set(email, { otp, expiresAt });
       },
 
-      verify: async (email, code) => {
+      verify: async (email, otp) => {
         const record = otps.get(email);
         if (!record) return false;
         if (record.expiresAt < new Date()) {
           otps.delete(email);
           return false;
         }
-        if (record.code !== code) return false;
+        if (record.otp !== otp) return false;
         otps.delete(email); // One-time use
         return true;
       },

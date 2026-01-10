@@ -32,8 +32,8 @@ export const makeCookieAuth: MakeCookieAuth = ({
       return auth.requestOtp(email);
     },
 
-    async verifyOtp(email, code) {
-      return auth.verifyOtp(email, code);
+    async verifyOtp(email, otp) {
+      return auth.verifyOtp(email, otp);
     },
 
     // =========================================================================

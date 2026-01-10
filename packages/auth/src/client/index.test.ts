@@ -60,7 +60,7 @@ describe("httpClient", () => {
         body: JSON.stringify({
           method: "verifyOtp",
           email: "user@example.com",
-          code: "123456",
+          otp: "123456",
         }),
       });
     });
@@ -78,7 +78,7 @@ describe("httpClient", () => {
       expect(result).toEqual({ valid: true });
     });
 
-    it("returns invalid response for wrong code", async () => {
+    it("returns invalid response for wrong otp", async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         text: () => Promise.resolve(JSON.stringify({ valid: false })),

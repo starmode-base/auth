@@ -16,8 +16,8 @@ Open http://localhost:3000
 ## How it works
 
 1. Enter your email and click "Send OTP"
-2. Check your terminal for the OTP code (printed by `otpSendConsole`)
-3. Enter the code to authenticate
+2. Check your terminal for the OTP (printed by `otpSendConsole`)
+3. Enter the OTP to authenticate
 4. You're signed in — session stored in an HttpOnly cookie
 
 ## Files

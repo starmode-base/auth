@@ -14,7 +14,7 @@ const auth = makeAuth({
     secret: "dev-secret",
     ttl: 300,
   }),
-  otp: otpSendConsole,
+  sendOtp: otpSendConsole,
   webauthn: {
     rpId: "localhost",
     rpName: "Bun Memory Example",
@@ -107,8 +107,8 @@ function otpPage(email: string) {
   <h1>Check your console for OTP</h1>
   <form method="POST" action="/auth/verify-otp">
     <input name="email" type="hidden" value="${safeEmail}" />
-    <input name="code" type="text" placeholder="123456" required pattern="[0-9]{6}" />
-    <button type="submit">Verify</button>
+    <input name="otp" type="text" placeholder="123456" required pattern="[0-9]{6}" />
+    <button type="submit">Verify OTP</button>
   </form>
 </body>
 </html>`;
@@ -201,12 +201,12 @@ const server = Bun.serve({
         return new Response("Invalid email", { status: 400 });
       }
 
-      const code = form.get("code");
-      if (typeof code !== "string") {
-        return new Response("Invalid code", { status: 400 });
+      const otp = form.get("otp");
+      if (typeof otp !== "string") {
+        return new Response("Invalid OTP", { status: 400 });
       }
 
-      const result = await cookieAuth.verifyOtp(email, code);
+      const result = await cookieAuth.verifyOtp(email, otp);
 
       if (result.valid) {
         // App upserts user

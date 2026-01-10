@@ -51,18 +51,18 @@ export const requestOtp = createServerFn({ method: "POST" })
   .handler(({ data: email }) => cookieAuth.requestOtp(email));
 
 export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; code: string }) => input)
-  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.code));
+  .inputValidator((input: { email: string; otp: string }) => input)
+  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.otp));
 
 // ============================================================================
 // Sign up flow (composed from primitives)
 // ============================================================================
 
 export const signUp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; code: string }) => input)
+  .inputValidator((input: { email: string; otp: string }) => input)
   .handler(async ({ data }) => {
     // Verify OTP
-    const { valid } = await cookieAuth.verifyOtp(data.email, data.code);
+    const { valid } = await cookieAuth.verifyOtp(data.email, data.otp);
     if (!valid) {
       return { valid: false, registrationToken: undefined };
     }

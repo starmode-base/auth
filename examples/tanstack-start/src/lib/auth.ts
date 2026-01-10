@@ -16,7 +16,7 @@ export const auth = makeAuth({
     secret: "dev-secret-do-not-use-in-production",
     ttl: 300,
   }),
-  otp: otpSendConsole,
+  sendOtp: otpSendConsole,
   webauthn: {
     rpId: "localhost",
     rpName: "TanStack Start Example",

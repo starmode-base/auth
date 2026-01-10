@@ -13,7 +13,7 @@ describe("makeAuth", () => {
     storage,
     session: makeSessionHmac({ secret: "test", ttl: 600 }),
     registration: makeRegistrationHmac({ secret: "test", ttl: 300 }),
-    otp: otpSendConsole,
+    sendOtp: otpSendConsole,
     webauthn: {
       rpId: "localhost",
       rpName: "Test App",
@@ -37,7 +37,7 @@ describe("makeAuth", () => {
     expect(result).toEqual({ valid: true });
   });
 
-  it("verifyOtp returns invalid for wrong code", async () => {
+  it("verifyOtp returns invalid for wrong otp", async () => {
     const result = await auth.verifyOtp("test@example.com", "000000");
     expect(result).toEqual({ valid: false });
   });

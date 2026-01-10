@@ -44,27 +44,27 @@ function EmailForm({
             required
           />
           <Button variant="primary" type="submit" disabled={loading}>
-            {loading ? "Sending..." : "Send code"}
+            {loading ? "Sending..." : "Send OTP"}
           </Button>
-          <Text>Check your server terminal for the OTP code</Text>
+          <Text>Check your server terminal for the OTP</Text>
         </Stack>
       </Stack>
     </form>
   );
 }
 
-function CodeForm({
+function OtpForm({
   email,
-  code,
-  setCode,
+  otp,
+  setOtp,
   onSubmit,
   onBack,
   loading,
   error,
 }: {
   email: string;
-  code: string;
-  setCode: (code: string) => void;
+  otp: string;
+  setOtp: (otp: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onBack: () => void;
   loading: boolean;
@@ -76,15 +76,15 @@ function CodeForm({
         <Stack direction="col">
           <Heading>Check your email</Heading>
           <Text>
-            Code sent to <span className="text-cyan-400">{email}</span>
+            OTP sent to <span className="text-cyan-400">{email}</span>
           </Text>
         </Stack>
         <Stack direction="col">
-          <Label>Enter the verification code</Label>
+          <Label>Enter the OTP</Label>
           <Input
             type="text"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
             placeholder="123456"
             required
             maxLength={6}
@@ -99,7 +99,7 @@ function CodeForm({
               disabled={loading}
               className="flex-1"
             >
-              {loading ? "Verifying..." : "Verify"}
+              {loading ? "Verifying..." : "Verify OTP"}
             </Button>
             <Button type="button" variant="secondary" onClick={onBack}>
               Back
@@ -141,8 +141,8 @@ function RouteComponent() {
   const router = useRouter();
   const { session } = Route.useLoaderData();
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,7 +150,7 @@ function RouteComponent() {
     e.preventDefault();
     setLoading(true);
     const result = await requestOtp({ data: email });
-    if (result.success) setStep("code");
+    if (result.success) setStep("otp");
     setLoading(false);
   };
 
@@ -158,12 +158,12 @@ function RouteComponent() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const result = await verifyOtp({ data: { email, code } });
+    const result = await verifyOtp({ data: { email, otp } });
     if (result.valid) {
       // Session cookie is set server-side, reload to get fresh session
       await router.invalidate();
     } else {
-      setError("Invalid code");
+      setError("Invalid otp");
     }
     setLoading(false);
   };
@@ -174,14 +174,14 @@ function RouteComponent() {
     // Cookie is cleared server-side, reload to reflect logged out state
     await router.invalidate();
     setEmail("");
-    setCode("");
+    setOtp("");
     setStep("email");
     setLoading(false);
   };
 
   const handleBack = () => {
     setStep("email");
-    setCode("");
+    setOtp("");
     setError(null);
   };
 
@@ -213,10 +213,10 @@ function RouteComponent() {
               loading={loading}
             />
           ) : (
-            <CodeForm
+            <OtpForm
               email={email}
-              code={code}
-              setCode={setCode}
+              otp={otp}
+              setOtp={setOtp}
               onSubmit={handleVerifyOtp}
               onBack={handleBack}
               loading={loading}

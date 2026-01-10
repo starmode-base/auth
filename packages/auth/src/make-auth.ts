@@ -6,12 +6,12 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
 } from "./types";
 
-/** Generate a random 6-digit OTP code */
-function generateOtpCode(): string {
+/** Generate a random 6-digit OTP */
+function generateOtp(): string {
   const array = new Uint32Array(1);
   crypto.getRandomValues(array);
-  const code = (array[0]! % 1000000).toString().padStart(6, "0");
-  return code;
+  const otp = (array[0]! % 1000000).toString().padStart(6, "0");
+  return otp;
 }
 
 /** Generate a random session ID */
@@ -57,7 +57,7 @@ const challengeStore = new Map<
 >();
 
 export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
-  const { storage, session, registration, otp, webauthn } = config;
+  const { storage, session, registration, sendOtp, webauthn } = config;
 
   return {
     // =========================================================================
@@ -65,18 +65,18 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
     // =========================================================================
 
     async requestOtp(email: string) {
-      const code = generateOtpCode();
+      const code = generateOtp();
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
       await storage.otp.store(email, code, expiresAt);
 
-      await otp(email, code);
+      await sendOtp(email, code);
 
       return { success: true };
     },
 
-    async verifyOtp(email: string, code: string) {
-      const valid = await storage.otp.verify(email, code);
+    async verifyOtp(email: string, otp: string) {
+      const valid = await storage.otp.verify(email, otp);
       return { valid };
     },
 
