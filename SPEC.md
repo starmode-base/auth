@@ -344,7 +344,7 @@ type RegistrationCodec = {
 };
 
 // OTP delivery adapter
-type OtpAdapter = (email: string, otp: string) => Promise<void>;
+type SendOtp = (email: string, otp: string) => Promise<void>;
 
 // Return types
 type RequestOtpReturn = { success: boolean };
@@ -377,7 +377,7 @@ type MakeAuthConfig = {
   storage: StorageAdapter;
   session: SessionCodec;
   registration: RegistrationCodec;
-  otp: OtpAdapter;
+  otp: SendOtp;
   webauthn: {
     rpId: string;
     rpName: string;
@@ -838,7 +838,7 @@ await requestOtp(email);
 - Passkey management utilities — `getPasskeys()`, `deletePasskey()` (users can query DB directly for now)
 - Multi-email support — add/remove emails per user (not prevented now, users own their schema)
 - LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
-- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (separate project, `OtpAdapter` adapter ready)
+- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (separate project, `SendOtp` adapter ready)
 
 **Exclusions:**
 

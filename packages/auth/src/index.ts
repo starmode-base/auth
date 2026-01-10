@@ -27,8 +27,8 @@ export type {
   RegistrationPayload,
   RegistrationDecoded,
 
-  // OTP delivery adapters
-  OtpAdapter,
+  // Send OTP
+  SendOtp,
 
   // WebAuthn config
   WebAuthnConfig,

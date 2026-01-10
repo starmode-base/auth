@@ -5,7 +5,7 @@ import {
   makeSessionHmac,
   makeRegistrationHmac,
 } from "./index";
-import type { OtpAdapter } from "./types";
+import type { SendOtp } from "./types";
 
 describe("auth integration", () => {
   let storage: ReturnType<typeof makeMemoryAdapters>;
@@ -16,7 +16,7 @@ describe("auth integration", () => {
     storage = makeMemoryAdapters();
     sentOtps = [];
 
-    const captureSend: OtpAdapter = async (email, otp) => {
+    const captureSend: SendOtp = async (email, otp) => {
       sentOtps.push({ email, otp });
     };
 
