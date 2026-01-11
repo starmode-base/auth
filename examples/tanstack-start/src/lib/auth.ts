@@ -22,4 +22,5 @@ export const auth = makeAuth({
     rpName: "TanStack Start Example",
     origin: "http://localhost:3000",
   },
+  debug: true,
 });

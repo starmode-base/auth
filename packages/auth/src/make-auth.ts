@@ -4,6 +4,7 @@ import type {
   MakeAuthReturn,
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
+  AuthErrorCode,
 } from "./types";
 import { base64urlEncode, base64urlDecode } from "./crypto";
 import {
@@ -47,7 +48,19 @@ type ChallengeRecord = {
 const challengeStore = new Map<string, ChallengeRecord>();
 
 export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
-  const { storage, session, registration, sendOtp, webauthn } = config;
+  const { storage, session, registration, sendOtp, webauthn, debug } = config;
+
+  // Result helpers with optional debug logging
+  const result = {
+    ok: <T extends object>(data: T) => ({ success: true as const, ...data }),
+
+    fail: (error: AuthErrorCode, err?: unknown) => {
+      if (debug === true) console.error(`[auth] ${error}`);
+      if (debug === "trace") console.error(`[auth] ${error}`, err);
+
+      return { success: false as const, error };
+    },
+  };
 
   return {
     async requestOtp(email: string) {
@@ -58,17 +71,17 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
       await sendOtp(email, code);
 
-      return { success: true };
+      return result.ok({});
     },
 
     async verifyOtp(email: string, otp: string) {
       const valid = await storage.otp.verify(email, otp);
 
       if (!valid) {
-        return { success: false, error: "invalid_otp" };
+        return result.fail("invalid_otp");
       }
 
-      return { success: true };
+      return result.ok({});
     },
 
     async createRegistrationToken(userId: string, email: string) {
@@ -78,24 +91,17 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
     async validateRegistrationToken(token: string) {
       const decoded = await registration.decode(token);
-
       if (!decoded || !decoded.valid) {
-        return { success: false, error: "invalid_token" };
+        return result.fail("invalid_token");
       }
-
-      return {
-        success: true,
-        userId: decoded.userId,
-        email: decoded.email,
-      };
+      return result.ok({ userId: decoded.userId, email: decoded.email });
     },
 
     async generateRegistrationOptions(regToken: string) {
       // Validate registration token
       const decoded = await registration.decode(regToken);
-
       if (!decoded || !decoded.valid) {
-        throw new Error("Invalid or expired registration token");
+        return result.fail("invalid_token");
       }
 
       const { userId, email } = decoded;
@@ -139,15 +145,14 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         },
       };
 
-      return { options };
+      return result.ok({ options });
     },
 
     async verifyRegistration(regToken: string, credential) {
       // Validate registration token
       const decoded = await registration.decode(regToken);
-
       if (!decoded || !decoded.valid) {
-        return { success: false, error: "invalid_token" };
+        return result.fail("invalid_token");
       }
 
       const { userId } = decoded;
@@ -156,7 +161,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const expectedOrigin = webauthn.origin ?? `https://${webauthn.rpId}`;
 
       // Find the challenge from the credential's clientDataJSON
-      // We need to extract it to look up our stored challenge
       const clientDataBytes = base64urlDecode(
         credential.response.clientDataJSON,
       );
@@ -167,13 +171,13 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const storedChallenge = challengeStore.get(challenge);
       if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
         if (storedChallenge) challengeStore.delete(challenge);
-        return { success: false, error: "challenge_expired" };
+        return result.fail("challenge_expired");
       }
 
       // Verify userId matches
       if (storedChallenge.userId !== userId) {
         challengeStore.delete(challenge);
-        return { success: false, error: "user_mismatch" };
+        return result.fail("user_mismatch");
       }
 
       try {
@@ -204,10 +208,10 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         const token = await session.encode({ sessionId, userId });
 
-        return { success: true, session: { token, userId } };
-      } catch {
+        return result.ok({ session: { token, userId } });
+      } catch (err) {
         challengeStore.delete(challenge);
-        return { success: false, error: "verification_failed" };
+        return result.fail("verification_failed", err);
       }
     },
 
@@ -235,9 +239,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
     async verifyAuthentication(credential) {
       // Look up the credential by ID
       const stored = await storage.credential.getById(credential.id);
-
       if (!stored) {
-        return { success: false, error: "credential_not_found" };
+        return result.fail("credential_not_found");
       }
 
       const { userId, credential: storedCred } = stored;
@@ -256,7 +259,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const storedChallenge = challengeStore.get(challenge);
       if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
         if (storedChallenge) challengeStore.delete(challenge);
-        return { success: false, error: "challenge_expired" };
+        return result.fail("challenge_expired");
       }
 
       try {
@@ -283,10 +286,10 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         const token = await session.encode({ sessionId, userId });
 
-        return { success: true, session: { token, userId } };
-      } catch {
+        return result.ok({ session: { token, userId } });
+      } catch (err) {
         challengeStore.delete(challenge);
-        return { success: false, error: "verification_failed" };
+        return result.fail("verification_failed", err);
       }
     },
 

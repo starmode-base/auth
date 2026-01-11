@@ -31,6 +31,12 @@ This is security-critical code.
 - Factories should be prefixed with `make` (e.g., `makeAuth`, `makeMemoryAdapters`)
 - Never export local symbols
 
+## Error handling
+
+- All public API functions return `Result<T>` — never throw
+- Use `result.ok()` for success, `result.fail()` for expected failures
+- Invariants: Never use type assertions (`as`). Throw instead — surfaces bugs immediately. Comment each invariant `Invariant: reasoning`
+
 ## Prose style
 
 - Use sentence case, never title case

@@ -151,9 +151,9 @@ export type AuthenticationCredential = {
   clientExtensionResults: AuthenticationExtensionsClientOutputs;
 };
 
-export type GenerateRegistrationOptionsReturn = {
+export type GenerateRegistrationOptionsReturn = Result<{
   options: PublicKeyCredentialCreationOptionsJSON;
-};
+}>;
 
 export type VerifyRegistrationReturn = Result<{
   session: { token: string; userId: string };
@@ -173,6 +173,8 @@ export type MakeAuthConfig = {
   registration: RegistrationCodec;
   sendOtp: OtpSender;
   webauthn: WebAuthnConfig;
+  /** Enable debug logging for development */
+  debug?: true | "trace";
 };
 
 /** All primitives returned by makeAuth */

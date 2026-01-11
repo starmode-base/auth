@@ -281,9 +281,17 @@ function RouteComponent() {
     setError(null);
     try {
       // Get registration options from server
-      const { options } = await generateRegistrationOptions({
+      const optionsResult = await generateRegistrationOptions({
         data: registrationToken,
       });
+
+      if (!optionsResult.success) {
+        setError("Failed to get registration options");
+        setLoading(false);
+        return;
+      }
+
+      const { options } = optionsResult;
 
       // Convert challenge to ArrayBuffer for WebAuthn API
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
@@ -293,10 +301,12 @@ function RouteComponent() {
           ...options.user,
           id: base64urlToBuffer(options.user.id),
         },
-        excludeCredentials: options.excludeCredentials?.map((cred) => ({
-          ...cred,
-          id: base64urlToBuffer(cred.id),
-        })),
+        excludeCredentials: options.excludeCredentials?.map(
+          (cred: { id: string; type: "public-key" }) => ({
+            ...cred,
+            id: base64urlToBuffer(cred.id),
+          }),
+        ),
       };
 
       // Trigger browser WebAuthn ceremony
