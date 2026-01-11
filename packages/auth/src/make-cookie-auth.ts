@@ -24,10 +24,6 @@ export const makeCookieAuth: MakeCookieAuth = ({
   cookie,
 }: MakeCookieAuthConfig): CookieAuthReturn => {
   return {
-    // =========================================================================
-    // OTP (pass-through)
-    // =========================================================================
-
     async requestOtp(email) {
       return auth.requestOtp(email);
     },
@@ -36,17 +32,9 @@ export const makeCookieAuth: MakeCookieAuth = ({
       return auth.verifyOtp(email, otp);
     },
 
-    // =========================================================================
-    // Registration token (server-side only)
-    // =========================================================================
-
     async createRegistrationToken(userId, email) {
       return auth.createRegistrationToken(userId, email);
     },
-
-    // =========================================================================
-    // Passkey (auto cookie handling)
-    // =========================================================================
 
     async generateRegistrationOptions(registrationToken) {
       return auth.generateRegistrationOptions(registrationToken);
@@ -88,10 +76,6 @@ export const makeCookieAuth: MakeCookieAuth = ({
         session: { token: "", userId: result.session.userId },
       };
     },
-
-    // =========================================================================
-    // Session
-    // =========================================================================
 
     async getSession() {
       const token = cookie.get();

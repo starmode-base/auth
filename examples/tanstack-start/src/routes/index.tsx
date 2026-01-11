@@ -28,10 +28,6 @@ export const Route = createFileRoute("/")({
   },
 });
 
-// =============================================================================
-// WebAuthn browser helpers
-// =============================================================================
-
 /** Convert base64url to ArrayBuffer */
 function base64urlToBuffer(base64url: string): ArrayBuffer {
   const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
@@ -56,10 +52,6 @@ function bufferToBase64url(buffer: ArrayBuffer): string {
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
-
-// =============================================================================
-// Form components
-// =============================================================================
 
 function EmailForm({
   email,
@@ -235,10 +227,6 @@ function AuthenticatedView({
     </Stack>
   );
 }
-
-// =============================================================================
-// Main component
-// =============================================================================
 
 type Step = "email" | "otp" | "passkey-register";
 

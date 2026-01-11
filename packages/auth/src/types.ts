@@ -1,7 +1,3 @@
-// ============================================================================
-// Storage adapters
-// ============================================================================
-
 /** Credential (passkey) stored data */
 export type StoredCredential = {
   id: string;
@@ -42,10 +38,6 @@ export type StorageAdapter = {
   };
 };
 
-// ============================================================================
-// Codecs (token encode/decode)
-// ============================================================================
-
 /** Session payload */
 export type SessionPayload = { sessionId: string; userId: string };
 
@@ -76,16 +68,8 @@ export type RegistrationCodec = {
   decode: (token: string) => Promise<RegistrationDecoded | null>;
 };
 
-// ============================================================================
-// OTP delivery adapters
-// ============================================================================
-
 /** Send OTP */
 export type OtpSender = (email: string, otp: string) => Promise<void>;
-
-// ============================================================================
-// Passkey config
-// ============================================================================
 
 export type WebAuthnConfig = {
   rpId: string;
@@ -93,10 +77,6 @@ export type WebAuthnConfig = {
   // Optional: origin override for verification (defaults to https://{rpId})
   origin?: string;
 };
-
-// ============================================================================
-// Return types
-// ============================================================================
 
 /** Error codes for auth failures */
 export type AuthErrorCode =
@@ -187,10 +167,6 @@ export type VerifyAuthenticationReturn = Result<{
   session: { token: string; userId: string };
 }>;
 
-// ============================================================================
-// Config & main return type
-// ============================================================================
-
 export type MakeAuthConfig = {
   storage: StorageAdapter;
   session: SessionCodec;
@@ -233,10 +209,6 @@ export type MakeAuthReturn = {
 };
 
 export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
-
-// ============================================================================
-// Cookie auth types
-// ============================================================================
 
 /** Cookie adapter — you provide these (framework-specific) */
 export type CookieAdapter = {
@@ -282,10 +254,6 @@ export type CookieAuthReturn = {
 };
 
 export type MakeCookieAuth = (config: MakeCookieAuthConfig) => CookieAuthReturn;
-
-// ============================================================================
-// Client types
-// ============================================================================
 
 /**
  * Auth client interface — OTP + passkey primitives only.

@@ -50,10 +50,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
   const { storage, session, registration, sendOtp, webauthn } = config;
 
   return {
-    // =========================================================================
-    // OTP primitives
-    // =========================================================================
-
     async requestOtp(email: string) {
       const code = generateOtp();
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
@@ -75,10 +71,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       return { success: true };
     },
 
-    // =========================================================================
-    // Registration token primitives
-    // =========================================================================
-
     async createRegistrationToken(userId: string, email: string) {
       const token = await registration.encode({ userId, email });
       return { registrationToken: token };
@@ -97,10 +89,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         email: decoded.email,
       };
     },
-
-    // =========================================================================
-    // Passkey primitives
-    // =========================================================================
 
     async generateRegistrationOptions(regToken: string) {
       // Validate registration token
@@ -301,10 +289,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         return { success: false, error: "verification_failed" };
       }
     },
-
-    // =========================================================================
-    // Session primitives
-    // =========================================================================
 
     async getSession(token: string) {
       const decoded = await session.decode(token);

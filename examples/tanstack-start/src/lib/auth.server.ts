@@ -42,10 +42,6 @@ function upsertUser(email: string): { userId: string; isNew: boolean } {
   return { userId, isNew: true };
 }
 
-// ============================================================================
-// OTP primitives
-// ============================================================================
-
 export const requestOtp = createServerFn({ method: "POST" })
   .inputValidator((email: string) => email)
   .handler(({ data: email }) => cookieAuth.requestOtp(email));
@@ -53,10 +49,6 @@ export const requestOtp = createServerFn({ method: "POST" })
 export const verifyOtp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; otp: string }) => input)
   .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.otp));
-
-// ============================================================================
-// Sign up flow (composed from primitives)
-// ============================================================================
 
 export const signUp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; otp: string }) => input)
@@ -79,10 +71,6 @@ export const signUp = createServerFn({ method: "POST" })
 
     return { success: true, registrationToken };
   });
-
-// ============================================================================
-// Passkey primitives
-// ============================================================================
 
 export const generateRegistrationOptions = createServerFn({ method: "POST" })
   .inputValidator((registrationToken: string) => registrationToken)
@@ -110,10 +98,6 @@ export const verifyAuthentication = createServerFn({ method: "POST" })
   .handler(({ data: credential }) =>
     cookieAuth.verifyAuthentication(credential as never),
   );
-
-// ============================================================================
-// Session
-// ============================================================================
 
 export const signOut = createServerFn({ method: "POST" }).handler(() =>
   cookieAuth.signOut(),

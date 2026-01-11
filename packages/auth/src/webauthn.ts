@@ -15,10 +15,6 @@ import type {
 
 const encoder = new TextEncoder();
 
-// =============================================================================
-// Types
-// =============================================================================
-
 type ClientData = {
   type: string;
   challenge: string;
@@ -35,10 +31,6 @@ type ParsedAuthData = {
   credentialId?: Uint8Array;
   coseKey?: Map<CborValue, CborValue>;
 };
-
-// =============================================================================
-// Helpers
-// =============================================================================
 
 /** Compare two Uint8Arrays for equality */
 function arrayEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -101,10 +93,6 @@ function derToRaw(der: Uint8Array): Uint8Array {
   return raw;
 }
 
-// =============================================================================
-// AuthData parsing
-// =============================================================================
-
 /**
  * Parse authenticator data
  *
@@ -160,10 +148,6 @@ function parseAuthData(authData: Uint8Array): ParsedAuthData {
     coseKey,
   };
 }
-
-// =============================================================================
-// COSE key handling
-// =============================================================================
 
 /**
  * Convert COSE key to CryptoKey for signature verification
@@ -258,10 +242,6 @@ async function importStoredKey(publicKey: Uint8Array): Promise<CryptoKey> {
   );
 }
 
-// =============================================================================
-// Registration verification
-// =============================================================================
-
 export type VerifyRegistrationResult = {
   credentialId: string;
   publicKey: Uint8Array;
@@ -342,10 +322,6 @@ export async function verifyRegistrationCredential(
     transports: credential.response.transports,
   };
 }
-
-// =============================================================================
-// Authentication verification
-// =============================================================================
 
 export type VerifyAuthenticationResult = {
   counter: number;

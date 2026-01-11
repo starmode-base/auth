@@ -11,10 +11,6 @@ export type {
   VerifyAuthenticationReturn,
 } from "../types";
 
-// ============================================================================
-// HTTP client
-// ============================================================================
-
 /**
  * HTTP client factory — creates a method-based auth client that calls a server endpoint.
  *
