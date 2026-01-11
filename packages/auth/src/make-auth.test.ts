@@ -25,7 +25,7 @@ describe("makeAuth", () => {
     expect(result).toEqual({ success: true });
   });
 
-  it("verifyOtp returns valid only (no session)", async () => {
+  it("verifyOtp returns success only (no session)", async () => {
     // Pre-populate OTP
     await storage.otp.store(
       "test@example.com",
@@ -34,12 +34,12 @@ describe("makeAuth", () => {
     );
 
     const result = await auth.verifyOtp("test@example.com", "123456");
-    expect(result).toEqual({ valid: true });
+    expect(result).toEqual({ success: true });
   });
 
-  it("verifyOtp returns invalid for wrong otp", async () => {
+  it("verifyOtp returns failure for wrong otp", async () => {
     const result = await auth.verifyOtp("test@example.com", "000000");
-    expect(result).toEqual({ valid: false });
+    expect(result).toEqual({ success: false, error: "invalid_otp" });
   });
 
   it("createRegistrationToken returns token", async () => {
@@ -59,13 +59,13 @@ describe("makeAuth", () => {
     expect(result).toEqual({
       userId: "user_1",
       email: "test@example.com",
-      valid: true,
+      success: true,
     });
   });
 
-  it("validateRegistrationToken returns invalid for bad token", async () => {
+  it("validateRegistrationToken returns failure for bad token", async () => {
     const result = await auth.validateRegistrationToken("invalid-token");
-    expect(result.valid).toBe(false);
+    expect(result.success).toBe(false);
   });
 
   it("getSession returns userId from token", async () => {

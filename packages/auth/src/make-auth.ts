@@ -67,7 +67,12 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
     async verifyOtp(email: string, otp: string) {
       const valid = await storage.otp.verify(email, otp);
-      return { valid };
+
+      if (!valid) {
+        return { success: false, error: "invalid_otp" };
+      }
+
+      return { success: true };
     },
 
     // =========================================================================
@@ -83,13 +88,13 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const decoded = await registration.decode(token);
 
       if (!decoded || !decoded.valid) {
-        return { userId: "", email: "", valid: false };
+        return { success: false, error: "invalid_token" };
       }
 
       return {
+        success: true,
         userId: decoded.userId,
         email: decoded.email,
-        valid: true,
       };
     },
 
@@ -154,7 +159,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const decoded = await registration.decode(regToken);
 
       if (!decoded || !decoded.valid) {
-        console.warn("[auth] verifyRegistration: invalid registration token");
         return { success: false, error: "invalid_token" };
       }
 
@@ -174,23 +178,19 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       // Get stored challenge
       const storedChallenge = challengeStore.get(challenge);
       if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
-        console.warn(
-          "[auth] verifyRegistration: challenge not found or expired",
-        );
         if (storedChallenge) challengeStore.delete(challenge);
         return { success: false, error: "challenge_expired" };
       }
 
       // Verify userId matches
       if (storedChallenge.userId !== userId) {
-        console.warn("[auth] verifyRegistration: userId mismatch");
         challengeStore.delete(challenge);
         return { success: false, error: "user_mismatch" };
       }
 
       try {
         // Verify the credential
-        const result = await verifyRegistrationCredential(
+        const verified = await verifyRegistrationCredential(
           credential,
           challenge,
           expectedOrigin,
@@ -199,10 +199,10 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         // Store the credential
         await storage.credential.store(userId, {
-          id: result.credentialId,
-          publicKey: result.publicKey,
-          counter: result.counter,
-          transports: result.transports,
+          id: verified.credentialId,
+          publicKey: verified.publicKey,
+          counter: verified.counter,
+          transports: verified.transports,
         });
 
         // Clean up challenge
@@ -216,12 +216,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         const token = await session.encode({ sessionId, userId });
 
-        return {
-          success: true,
-          session: { token, userId },
-        };
-      } catch (err) {
-        console.error("[auth] verifyRegistration failed:", err);
+        return { success: true, session: { token, userId } };
+      } catch {
         challengeStore.delete(challenge);
         return { success: false, error: "verification_failed" };
       }
@@ -253,8 +249,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const stored = await storage.credential.getById(credential.id);
 
       if (!stored) {
-        console.warn("[auth] verifyAuthentication: credential not found");
-        return { valid: false, error: "credential_not_found" };
+        return { success: false, error: "credential_not_found" };
       }
 
       const { userId, credential: storedCred } = stored;
@@ -272,16 +267,13 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       // Get stored challenge
       const storedChallenge = challengeStore.get(challenge);
       if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
-        console.warn(
-          "[auth] verifyAuthentication: challenge not found or expired",
-        );
         if (storedChallenge) challengeStore.delete(challenge);
-        return { valid: false, error: "challenge_expired" };
+        return { success: false, error: "challenge_expired" };
       }
 
       try {
         // Verify the credential
-        const result = await verifyAuthenticationCredential(
+        const verified = await verifyAuthenticationCredential(
           credential,
           storedCred,
           challenge,
@@ -290,7 +282,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         );
 
         // Update counter
-        await storage.credential.updateCounter(credential.id, result.counter);
+        await storage.credential.updateCounter(credential.id, verified.counter);
 
         // Clean up challenge
         challengeStore.delete(challenge);
@@ -303,14 +295,10 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         const token = await session.encode({ sessionId, userId });
 
-        return {
-          valid: true,
-          session: { token, userId },
-        };
-      } catch (err) {
-        console.error("[auth] verifyAuthentication failed:", err);
+        return { success: true, session: { token, userId } };
+      } catch {
         challengeStore.delete(challenge);
-        return { valid: false, error: "verification_failed" };
+        return { success: false, error: "verification_failed" };
       }
     },
 

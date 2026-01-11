@@ -62,9 +62,10 @@ export const signUp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; otp: string }) => input)
   .handler(async ({ data }) => {
     // Verify OTP
-    const { valid } = await cookieAuth.verifyOtp(data.email, data.otp);
-    if (!valid) {
-      return { valid: false, registrationToken: undefined };
+    const result = await cookieAuth.verifyOtp(data.email, data.otp);
+
+    if (!result.success) {
+      return { success: false, registrationToken: undefined };
     }
 
     // App upserts user
@@ -76,7 +77,7 @@ export const signUp = createServerFn({ method: "POST" })
       data.email,
     );
 
-    return { valid: true, registrationToken };
+    return { success: true, registrationToken };
   });
 
 // ============================================================================

@@ -1,5 +1,7 @@
 # Agent guidelines
 
+- Use `bun run check` after edits to type check all workspaces
+
 ## Development workflow
 
 - Use `SPEC.md` as the source of intent

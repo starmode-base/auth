@@ -208,7 +208,7 @@ const server = Bun.serve({
 
       const result = await cookieAuth.verifyOtp(email, otp);
 
-      if (result.valid) {
+      if (result.success) {
         // App upserts user
         const { userId } = upsertUser(email);
 

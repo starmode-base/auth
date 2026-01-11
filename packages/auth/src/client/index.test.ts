@@ -263,7 +263,7 @@ describe("client types", () => {
       // These should all type-check
       const _r1: { success: boolean } =
         await auth.requestOtp("test@example.com");
-      const _r2: { valid: boolean } = await auth.verifyOtp(
+      const _r2: { success: boolean } = await auth.verifyOtp(
         "test@example.com",
         "123456",
       );

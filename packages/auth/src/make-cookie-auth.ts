@@ -77,14 +77,14 @@ export const makeCookieAuth: MakeCookieAuth = ({
     async verifyAuthentication(credential) {
       const result = await auth.verifyAuthentication(credential);
 
-      if (!result.valid) {
+      if (!result.success) {
         return result;
       }
 
       // Set cookie, but don't expose token to client
       cookie.set(result.session.token);
       return {
-        valid: true,
+        success: true,
         session: { token: "", userId: result.session.userId },
       };
     },

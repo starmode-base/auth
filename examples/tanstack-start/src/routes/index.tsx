@@ -274,7 +274,7 @@ function RouteComponent() {
     try {
       // Sign up flow: verify OTP + upsert user + get registration token
       const result = await signUp({ data: { email, otp } });
-      if (result.valid && result.registrationToken) {
+      if (result.success && result.registrationToken) {
         setRegistrationToken(result.registrationToken);
         setStep("passkey-register");
       } else {
@@ -406,7 +406,7 @@ function RouteComponent() {
       // Verify with server
       const result = await verifyAuthentication({ data: credentialJSON });
 
-      if (result.valid) {
+      if (result.success) {
         // Session cookie is set, reload to get fresh session
         await router.invalidate();
       } else {

@@ -98,17 +98,29 @@ export type WebAuthnConfig = {
 // Return types
 // ============================================================================
 
-export type RequestOtpReturn = { success: boolean };
+/** Error codes for auth failures */
+export type AuthErrorCode =
+  | "invalid_otp"
+  | "invalid_token"
+  | "challenge_expired"
+  | "user_mismatch"
+  | "credential_not_found"
+  | "verification_failed";
 
-export type VerifyOtpReturn = { valid: boolean };
+/** Generic result type for failable operations */
+export type Result<T = object> =
+  | ({ success: true } & T)
+  | { success: false; error: AuthErrorCode };
+
+export type RequestOtpReturn = { success: true };
+export type VerifyOtpReturn = Result;
 
 export type CreateRegistrationTokenReturn = { registrationToken: string };
 
-export type ValidateRegistrationTokenReturn = {
+export type ValidateRegistrationTokenReturn = Result<{
   userId: string;
   email: string;
-  valid: boolean;
-};
+}>;
 
 // WebAuthn types (JSON for transport)
 export type PublicKeyCredentialCreationOptionsJSON = {
@@ -163,25 +175,17 @@ export type GenerateRegistrationOptionsReturn = {
   options: PublicKeyCredentialCreationOptionsJSON;
 };
 
-/** Error codes for passkey verification failures */
-export type AuthErrorCode =
-  | "invalid_token"
-  | "challenge_expired"
-  | "user_mismatch"
-  | "credential_not_found"
-  | "verification_failed";
-
-export type VerifyRegistrationReturn =
-  | { success: true; session: { token: string; userId: string } }
-  | { success: false; error: AuthErrorCode };
+export type VerifyRegistrationReturn = Result<{
+  session: { token: string; userId: string };
+}>;
 
 export type GenerateAuthenticationOptionsReturn = {
   options: PublicKeyCredentialRequestOptionsJSON;
 };
 
-export type VerifyAuthenticationReturn =
-  | { valid: true; session: { token: string; userId: string } }
-  | { valid: false; error: AuthErrorCode };
+export type VerifyAuthenticationReturn = Result<{
+  session: { token: string; userId: string };
+}>;
 
 // ============================================================================
 // Config & main return type

@@ -48,14 +48,14 @@ describe("auth integration", () => {
       const otp = sentOtps[0]!.otp;
 
       const result = await auth.verifyOtp("user@example.com", otp);
-      expect(result.valid).toBe(true);
+      expect(result.success).toBe(true);
     });
 
     it("rejects wrong OTP", async () => {
       await auth.requestOtp("user@example.com");
 
       const result = await auth.verifyOtp("user@example.com", "000000");
-      expect(result.valid).toBe(false);
+      expect(result.success).toBe(false);
     });
 
     it("rejects OTP for wrong email", async () => {
@@ -63,7 +63,7 @@ describe("auth integration", () => {
       const otp = sentOtps[0]!.otp;
 
       const result = await auth.verifyOtp("other@example.com", otp);
-      expect(result.valid).toBe(false);
+      expect(result.success).toBe(false);
     });
 
     it("OTP can only be used once", async () => {
@@ -71,10 +71,10 @@ describe("auth integration", () => {
       const otp = sentOtps[0]!.otp;
 
       const first = await auth.verifyOtp("user@example.com", otp);
-      expect(first.valid).toBe(true);
+      expect(first.success).toBe(true);
 
       const second = await auth.verifyOtp("user@example.com", otp);
-      expect(second.valid).toBe(false);
+      expect(second.success).toBe(false);
     });
   });
 
@@ -83,8 +83,11 @@ describe("auth integration", () => {
       await auth.requestOtp("user@example.com");
       const otp = sentOtps[0]!.otp;
 
-      const { valid } = await auth.verifyOtp("user@example.com", otp);
-      expect(valid).toBe(true);
+      const { success: success } = await auth.verifyOtp(
+        "user@example.com",
+        otp,
+      );
+      expect(success).toBe(true);
 
       // App would upsert user here, then:
       const { registrationToken } = await auth.createRegistrationToken(
@@ -101,9 +104,11 @@ describe("auth integration", () => {
       );
       const result = await auth.validateRegistrationToken(registrationToken);
 
-      expect(result.valid).toBe(true);
-      expect(result.userId).toBe("user_1");
-      expect(result.email).toBe("user@example.com");
+      expect(result).toEqual({
+        success: true,
+        userId: "user_1",
+        email: "user@example.com",
+      });
     });
   });
 
@@ -161,8 +166,11 @@ describe("auth integration", () => {
       const otp = sentOtps[0]!.otp;
 
       // Verify OTP
-      const { valid } = await auth.verifyOtp("user@example.com", otp);
-      expect(valid).toBe(true);
+      const { success: success } = await auth.verifyOtp(
+        "user@example.com",
+        otp,
+      );
+      expect(success).toBe(true);
 
       // App upserts user (simulated)
       const userId = "user_1";
@@ -177,8 +185,12 @@ describe("auth integration", () => {
       // Validate it
       const validation =
         await auth.validateRegistrationToken(registrationToken);
-      expect(validation.valid).toBe(true);
-      expect(validation.userId).toBe(userId);
+
+      expect(validation).toEqual({
+        success: true,
+        userId,
+        email: "user@example.com",
+      });
     });
   });
 });
