@@ -55,8 +55,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
     ok: <T extends object>(data: T) => ({ success: true as const, ...data }),
 
     fail: (error: AuthErrorCode, err?: unknown) => {
-      if (debug === true) console.error(`[auth] ${error}`);
-      if (debug === "trace") console.error(`[auth] ${error}`, err);
+      if (debug) console.error(`[auth] ${error}`, err);
 
       return { success: false as const, error };
     },

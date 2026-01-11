@@ -32,6 +32,7 @@ describe("auth integration", () => {
         rpId: "localhost",
         rpName: "Test App",
       },
+      debug: false,
     });
   });
 

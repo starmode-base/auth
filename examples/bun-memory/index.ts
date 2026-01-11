@@ -19,6 +19,7 @@ const auth = makeAuth({
     rpId: "localhost",
     rpName: "Bun Memory Example",
   },
+  debug: true,
 });
 
 // In-memory user store for this example

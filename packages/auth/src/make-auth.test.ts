@@ -18,6 +18,7 @@ describe("makeAuth", () => {
       rpId: "localhost",
       rpName: "Test App",
     },
+    debug: false,
   });
 
   it("requestOtp returns success", async () => {

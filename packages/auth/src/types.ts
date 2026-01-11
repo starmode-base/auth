@@ -174,7 +174,7 @@ export type MakeAuthConfig = {
   sendOtp: OtpSender;
   webauthn: WebAuthnConfig;
   /** Enable debug logging for development */
-  debug?: true | "trace";
+  debug: boolean;
 };
 
 /** All primitives returned by makeAuth */
