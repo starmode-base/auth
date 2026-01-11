@@ -37,7 +37,12 @@ This is security-critical code.
 - Use `result.ok()` for success, `result.fail()` for expected failures
 - Invariants: Never use type assertions (`as`). Throw instead — surfaces bugs immediately. Comment each invariant `Invariant: reasoning`
 - Must prove the error with a test before adding try-catch
-- TDD: Always write tests for desired behavior first, run to see them FAIL, then fix code
+
+## TDD (critical)
+
+- NEVER look at implementation code before writing a test
+- Derive expected behavior ONLY from: SPEC, requirements, or asking the user
+- Test expectations based on reading code = INVALID test
 
 ## Prose style
 
