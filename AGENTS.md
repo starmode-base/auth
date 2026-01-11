@@ -36,6 +36,8 @@ This is security-critical code.
 - All public API functions return `Result<T>` — never throw
 - Use `result.ok()` for success, `result.fail()` for expected failures
 - Invariants: Never use type assertions (`as`). Throw instead — surfaces bugs immediately. Comment each invariant `Invariant: reasoning`
+- Must prove the error with a test before adding try-catch
+- TDD: Always write tests for desired behavior first, run to see them FAIL, then fix code
 
 ## Prose style
 
