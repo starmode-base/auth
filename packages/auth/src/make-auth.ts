@@ -5,6 +5,11 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "./types";
+import { base64urlEncode, base64urlDecode } from "./crypto";
+import {
+  verifyRegistrationCredential,
+  verifyAuthenticationCredential,
+} from "./webauthn";
 
 /** Generate a random 6-digit OTP */
 function generateOtp(): string {
@@ -25,36 +30,21 @@ function generateSessionId(): string {
 function generateChallenge(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
-
-/** Convert Uint8Array to base64url */
-function uint8ArrayToBase64url(array: Uint8Array): string {
-  return btoa(String.fromCharCode(...array))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
-
-/** Convert base64url to Uint8Array */
-function base64urlToUint8Array(base64url: string): Uint8Array {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(base64 + padding);
-  return new Uint8Array([...binary].map((c) => c.charCodeAt(0)));
+  return base64urlEncode(array);
 }
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
 const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
-// In-memory challenge store (should use storage adapter in production)
-const challengeStore = new Map<
-  string,
-  { challenge: string; expiresAt: Date }
->();
+type ChallengeRecord = {
+  challenge: string;
+  userId?: string; // Only set for registration
+  expiresAt: Date;
+};
+
+// Challenge store keyed by challenge value for lookup during verification
+const challengeStore = new Map<string, ChallengeRecord>();
 
 export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
   const { storage, session, registration, sendOtp, webauthn } = config;
@@ -123,10 +113,11 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       // Generate challenge
       const challenge = generateChallenge();
 
-      // Store challenge for verification
-      challengeStore.set(userId, {
+      // Store challenge for verification (keyed by challenge for lookup)
+      challengeStore.set(challenge, {
         challenge,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 min
+        userId,
+        expiresAt: new Date(Date.now() + CHALLENGE_EXPIRY_MS),
       });
 
       const options: PublicKeyCredentialCreationOptionsJSON = {
@@ -136,13 +127,12 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
           id: webauthn.rpId,
         },
         user: {
-          id: uint8ArrayToBase64url(new TextEncoder().encode(userId)),
+          id: base64urlEncode(new TextEncoder().encode(userId)),
           name: email,
           displayName: email,
         },
         pubKeyCredParams: [
           { type: "public-key", alg: -7 }, // ES256
-          { type: "public-key", alg: -257 }, // RS256
         ],
         timeout: 60000,
         attestation: "none",
@@ -164,63 +154,87 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const decoded = await registration.decode(regToken);
 
       if (!decoded || !decoded.valid) {
-        return { success: false };
+        console.warn("[auth] verifyRegistration: invalid registration token");
+        return { success: false, error: "invalid_token" };
       }
 
       const { userId } = decoded;
 
+      // Determine expected origin
+      const expectedOrigin = webauthn.origin ?? `https://${webauthn.rpId}`;
+
+      // Find the challenge from the credential's clientDataJSON
+      // We need to extract it to look up our stored challenge
+      const clientDataBytes = base64urlDecode(
+        credential.response.clientDataJSON,
+      );
+      const clientData = JSON.parse(new TextDecoder().decode(clientDataBytes));
+      const challenge = clientData.challenge;
+
       // Get stored challenge
-      const storedChallenge = challengeStore.get(userId);
+      const storedChallenge = challengeStore.get(challenge);
       if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
-        challengeStore.delete(userId);
-        return { success: false };
+        console.warn(
+          "[auth] verifyRegistration: challenge not found or expired",
+        );
+        if (storedChallenge) challengeStore.delete(challenge);
+        return { success: false, error: "challenge_expired" };
       }
 
-      // TODO: Verify the credential response with @simplewebauthn/server
-      // For now, we trust the credential and store it
-      // In production, use verifyRegistrationResponse from @simplewebauthn/server
+      // Verify userId matches
+      if (storedChallenge.userId !== userId) {
+        console.warn("[auth] verifyRegistration: userId mismatch");
+        challengeStore.delete(challenge);
+        return { success: false, error: "user_mismatch" };
+      }
 
-      // Parse attestation object to get public key
-      // This is a simplified version - real implementation needs CBOR decoding
-      const publicKey = base64urlToUint8Array(
-        credential.response.attestationObject,
-      );
+      try {
+        // Verify the credential
+        const result = await verifyRegistrationCredential(
+          credential,
+          challenge,
+          expectedOrigin,
+          webauthn.rpId,
+        );
 
-      // Store the credential
-      await storage.credential.store(userId, {
-        id: credential.id,
-        publicKey,
-        counter: 0,
-        transports: credential.response.transports,
-      });
+        // Store the credential
+        await storage.credential.store(userId, {
+          id: result.credentialId,
+          publicKey: result.publicKey,
+          counter: result.counter,
+          transports: result.transports,
+        });
 
-      // Clean up challenge
-      challengeStore.delete(userId);
+        // Clean up challenge
+        challengeStore.delete(challenge);
 
-      // Create session
-      const sessionId = generateSessionId();
-      const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
+        // Create session
+        const sessionId = generateSessionId();
+        const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
 
-      await storage.session.store(sessionId, userId, expiresAt);
+        await storage.session.store(sessionId, userId, expiresAt);
 
-      const token = await session.encode({ sessionId, userId });
+        const token = await session.encode({ sessionId, userId });
 
-      return {
-        success: true,
-        session: { token, userId },
-        // TODO: Extract PRF result if extension was used
-      };
+        return {
+          success: true,
+          session: { token, userId },
+        };
+      } catch (err) {
+        console.error("[auth] verifyRegistration failed:", err);
+        challengeStore.delete(challenge);
+        return { success: false, error: "verification_failed" };
+      }
     },
 
     async generateAuthenticationOptions() {
       // Generate challenge
       const challenge = generateChallenge();
 
-      // Store challenge for verification (using a temporary key)
-      const tempId = generateSessionId();
-      challengeStore.set(tempId, {
+      // Store challenge for verification (keyed by challenge for lookup)
+      challengeStore.set(challenge, {
         challenge,
-        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 min
+        expiresAt: new Date(Date.now() + CHALLENGE_EXPIRY_MS),
       });
 
       const options: PublicKeyCredentialRequestOptionsJSON = {
@@ -239,34 +253,65 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const stored = await storage.credential.getById(credential.id);
 
       if (!stored) {
-        return { valid: false };
+        console.warn("[auth] verifyAuthentication: credential not found");
+        return { valid: false, error: "credential_not_found" };
       }
 
       const { userId, credential: storedCred } = stored;
 
-      // TODO: Verify the credential response with @simplewebauthn/server
-      // For now, we trust the credential
-      // In production, use verifyAuthenticationResponse from @simplewebauthn/server
+      // Determine expected origin
+      const expectedOrigin = webauthn.origin ?? `https://${webauthn.rpId}`;
 
-      // Update counter
-      await storage.credential.updateCounter(
-        credential.id,
-        storedCred.counter + 1,
+      // Extract challenge from clientDataJSON to look up stored challenge
+      const clientDataBytes = base64urlDecode(
+        credential.response.clientDataJSON,
       );
+      const clientData = JSON.parse(new TextDecoder().decode(clientDataBytes));
+      const challenge = clientData.challenge;
 
-      // Create session
-      const sessionId = generateSessionId();
-      const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
+      // Get stored challenge
+      const storedChallenge = challengeStore.get(challenge);
+      if (!storedChallenge || storedChallenge.expiresAt < new Date()) {
+        console.warn(
+          "[auth] verifyAuthentication: challenge not found or expired",
+        );
+        if (storedChallenge) challengeStore.delete(challenge);
+        return { valid: false, error: "challenge_expired" };
+      }
 
-      await storage.session.store(sessionId, userId, expiresAt);
+      try {
+        // Verify the credential
+        const result = await verifyAuthenticationCredential(
+          credential,
+          storedCred,
+          challenge,
+          expectedOrigin,
+          webauthn.rpId,
+        );
 
-      const token = await session.encode({ sessionId, userId });
+        // Update counter
+        await storage.credential.updateCounter(credential.id, result.counter);
 
-      return {
-        valid: true,
-        session: { token, userId },
-        // TODO: Extract PRF result if extension was used
-      };
+        // Clean up challenge
+        challengeStore.delete(challenge);
+
+        // Create session
+        const sessionId = generateSessionId();
+        const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
+
+        await storage.session.store(sessionId, userId, expiresAt);
+
+        const token = await session.encode({ sessionId, userId });
+
+        return {
+          valid: true,
+          session: { token, userId },
+        };
+      } catch (err) {
+        console.error("[auth] verifyAuthentication failed:", err);
+        challengeStore.delete(challenge);
+        return { valid: false, error: "verification_failed" };
+      }
     },
 
     // =========================================================================

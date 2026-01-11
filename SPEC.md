@@ -238,19 +238,37 @@ See `StorageAdapter` type in `packages/auth/src/types.ts` for the full interface
 const auth = makeAuth({
   storage: {
     otp: {
-      store: async (email, otp, expiresAt) => { /* your ORM */ },
-      verify: async (email, otp) => { /* your ORM */ },
+      store: async (email, otp, expiresAt) => {
+        /* your ORM */
+      },
+      verify: async (email, otp) => {
+        /* your ORM */
+      },
     },
     session: {
-      store: async (sessionId, userId, expiresAt) => { /* your ORM */ },
-      get: async (sessionId) => { /* your ORM */ },
-      delete: async (sessionId) => { /* your ORM */ },
+      store: async (sessionId, userId, expiresAt) => {
+        /* your ORM */
+      },
+      get: async (sessionId) => {
+        /* your ORM */
+      },
+      delete: async (sessionId) => {
+        /* your ORM */
+      },
     },
     credential: {
-      store: async (userId, credential) => { /* your ORM */ },
-      get: async (userId) => { /* your ORM */ },
-      getById: async (credentialId) => { /* your ORM */ },
-      updateCounter: async (credentialId, counter) => { /* your ORM */ },
+      store: async (userId, credential) => {
+        /* your ORM */
+      },
+      get: async (userId) => {
+        /* your ORM */
+      },
+      getById: async (credentialId) => {
+        /* your ORM */
+      },
+      updateCounter: async (credentialId, counter) => {
+        /* your ORM */
+      },
     },
   },
   // ... other config

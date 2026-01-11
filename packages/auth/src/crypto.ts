@@ -7,10 +7,6 @@
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-// =============================================================================
-// Base64url encoding
-// =============================================================================
-
 /** Encode bytes to base64url string */
 export function base64urlEncode(data: Uint8Array): string {
   const binary = String.fromCharCode(...data);
@@ -27,9 +23,13 @@ export function base64urlDecode(str: string): Uint8Array {
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
 }
 
-// =============================================================================
-// HMAC signing
-// =============================================================================
+/** Compute SHA-256 hash of data */
+export async function sha256(data: Uint8Array): Promise<Uint8Array> {
+  // Create a fresh ArrayBuffer to satisfy TypeScript's BufferSource type
+  const buffer = new Uint8Array(data).buffer;
+  const hash = await crypto.subtle.digest("SHA-256", buffer);
+  return new Uint8Array(hash);
+}
 
 /** Import a secret string as an HMAC-SHA256 key */
 async function importHmacKey(
@@ -71,10 +71,6 @@ export async function hmacVerify(
   const sigBuffer = new Uint8Array(sigBytes).buffer;
   return crypto.subtle.verify("HMAC", key, sigBuffer, encoder.encode(payload));
 }
-
-// =============================================================================
-// Token helpers
-// =============================================================================
 
 /** Encode a JSON payload to base64url */
 export function encodePayload<T extends object>(payload: T): string {

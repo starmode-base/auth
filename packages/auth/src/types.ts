@@ -161,24 +161,27 @@ export type AuthenticationCredential = {
 
 export type GenerateRegistrationOptionsReturn = {
   options: PublicKeyCredentialCreationOptionsJSON;
-  // Challenge stored server-side for verification
 };
 
-export type VerifyRegistrationReturn = {
-  success: boolean;
-  session?: { token: string; userId: string };
-  prf?: Uint8Array; // PRF result if extension was used
-};
+/** Error codes for passkey verification failures */
+export type AuthErrorCode =
+  | "invalid_token"
+  | "challenge_expired"
+  | "user_mismatch"
+  | "credential_not_found"
+  | "verification_failed";
+
+export type VerifyRegistrationReturn =
+  | { success: true; session: { token: string; userId: string } }
+  | { success: false; error: AuthErrorCode };
 
 export type GenerateAuthenticationOptionsReturn = {
   options: PublicKeyCredentialRequestOptionsJSON;
 };
 
-export type VerifyAuthenticationReturn = {
-  valid: boolean;
-  session?: { token: string; userId: string };
-  prf?: Uint8Array; // PRF result if extension was used
-};
+export type VerifyAuthenticationReturn =
+  | { valid: true; session: { token: string; userId: string } }
+  | { valid: false; error: AuthErrorCode };
 
 // ============================================================================
 // Config & main return type

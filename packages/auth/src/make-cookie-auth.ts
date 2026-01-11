@@ -58,17 +58,15 @@ export const makeCookieAuth: MakeCookieAuth = ({
         credential,
       );
 
-      if (result.success && result.session) {
-        cookie.set(result.session.token);
+      if (!result.success) {
+        return result;
       }
 
-      // Don't expose token to client — cookie is already set
+      // Set cookie, but don't expose token to client
+      cookie.set(result.session.token);
       return {
-        success: result.success,
-        session: result.session
-          ? { token: "", userId: result.session.userId }
-          : undefined,
-        prf: result.prf,
+        success: true,
+        session: { token: "", userId: result.session.userId },
       };
     },
 
@@ -79,17 +77,15 @@ export const makeCookieAuth: MakeCookieAuth = ({
     async verifyAuthentication(credential) {
       const result = await auth.verifyAuthentication(credential);
 
-      if (result.valid && result.session) {
-        cookie.set(result.session.token);
+      if (!result.valid) {
+        return result;
       }
 
-      // Don't expose token to client — cookie is already set
+      // Set cookie, but don't expose token to client
+      cookie.set(result.session.token);
       return {
-        valid: result.valid,
-        session: result.session
-          ? { token: "", userId: result.session.userId }
-          : undefined,
-        prf: result.prf,
+        valid: true,
+        session: { token: "", userId: result.session.userId },
       };
     },
 
