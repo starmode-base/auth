@@ -10,8 +10,8 @@
   "dependencies": {
     "@starmode/auth": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
-    "@tanstack/react-router": "^1.147.1",
-    "@tanstack/react-start": "^1.147.1",
+    "@tanstack/react-router": "^1.147.2",
+    "@tanstack/react-start": "^1.147.2",
     "lucide-react": "^0.562.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
