@@ -1,21 +1,15 @@
 import { encodePayload, decodePayload, hmacSign, hmacVerify } from "../crypto";
 
-type HmacCodecOptions = {
-  secret: string;
-  ttl: number;
-};
-
 /**
  * Generic HMAC-signed codec for stateless tokens
  *
  * Token format: base64url(payload).base64url(signature)
  * Payload automatically includes exp (unix timestamp)
- *
- * This is our home-cooked JWT-like codec (but not JWT).
  */
-export function makeHmacCodec<TPayload extends object>(
-  options: HmacCodecOptions,
-) {
+export function makeHmacCodec<TPayload extends object>(options: {
+  secret: string;
+  ttl: number; // seconds
+}) {
   const { secret, ttl } = options;
 
   return {
@@ -23,8 +17,10 @@ export function makeHmacCodec<TPayload extends object>(
       const exp = Math.floor(Date.now() / 1000) + ttl;
       const encoded = encodePayload({ ...payload, exp });
       const signature = await hmacSign(encoded, secret);
+
       // Invariant: signature must exist for valid HMAC key
       if (!signature) throw new Error("HMAC signing failed");
+
       return `${encoded}.${signature}`;
     },
 
@@ -35,6 +31,7 @@ export function makeHmacCodec<TPayload extends object>(
         const [encoded, signature] = token.split(".");
         if (!encoded || !signature) return null;
 
+        // Verify signature (constant-time comparison via Web Crypto)
         const valid = await hmacVerify(encoded, signature, secret);
         if (!valid) return null;
 
