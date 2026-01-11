@@ -1,4 +1,4 @@
-# @starmode/auth
+# ΛUTH
 
 The LLM-friendly auth library. Passkeys + OTP. That's it.
 

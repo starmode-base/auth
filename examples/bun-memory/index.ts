@@ -74,7 +74,7 @@ function homePage(session: { userId: string } | null) {
     const safeUserId = escapeHtml(session.userId);
     return `<!DOCTYPE html>
 <html>
-<head><title>Auth Example</title></head>
+<head><title>ΛUTH Example</title></head>
 <body>
   <h1>Authenticated</h1>
   <p>User ID: ${safeUserId}</p>
@@ -87,7 +87,7 @@ function homePage(session: { userId: string } | null) {
 
   return `<!DOCTYPE html>
 <html>
-<head><title>Auth Example</title></head>
+<head><title>ΛUTH Example</title></head>
 <body>
   <h1>Sign In</h1>
   <form method="POST" action="/auth/request-otp">

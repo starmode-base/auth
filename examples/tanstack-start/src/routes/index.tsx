@@ -448,7 +448,7 @@ function RouteComponent() {
           <h1 className="text-4xl font-bold">
             <span className="text-gray-300">STΛR MODΞ</span>{" "}
             <span className="bg-linear-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              AUTH
+              ΛUTH
             </span>
           </h1>
           <Text>Passkey authentication demo</Text>

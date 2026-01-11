@@ -104,7 +104,7 @@ describe("auth integration", () => {
       );
       const result = await auth.validateRegistrationToken(registrationToken);
 
-      expect(result).toEqual({
+      expect(result).toStrictEqual({
         success: true,
         userId: "user_1",
         email: "user@example.com",
@@ -130,7 +130,7 @@ describe("auth integration", () => {
       });
 
       const session = await auth.getSession(token);
-      expect(session).toEqual({ userId: "user_1" });
+      expect(session).toStrictEqual({ userId: "user_1" });
     });
 
     it("getSession returns null for invalid token", async () => {
@@ -186,7 +186,7 @@ describe("auth integration", () => {
       const validation =
         await auth.validateRegistrationToken(registrationToken);
 
-      expect(validation).toEqual({
+      expect(validation).toStrictEqual({
         success: true,
         userId,
         email: "user@example.com",

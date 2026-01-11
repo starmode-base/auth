@@ -22,7 +22,7 @@ describe("makeAuth", () => {
 
   it("requestOtp returns success", async () => {
     const result = await auth.requestOtp("test@example.com");
-    expect(result).toEqual({ success: true });
+    expect(result).toStrictEqual({ success: true });
   });
 
   it("verifyOtp returns success only (no session)", async () => {
@@ -34,12 +34,12 @@ describe("makeAuth", () => {
     );
 
     const result = await auth.verifyOtp("test@example.com", "123456");
-    expect(result).toEqual({ success: true });
+    expect(result).toStrictEqual({ success: true });
   });
 
   it("verifyOtp returns failure for wrong otp", async () => {
     const result = await auth.verifyOtp("test@example.com", "000000");
-    expect(result).toEqual({ success: false, error: "invalid_otp" });
+    expect(result).toStrictEqual({ success: false, error: "invalid_otp" });
   });
 
   it("createRegistrationToken returns token", async () => {
@@ -56,7 +56,7 @@ describe("makeAuth", () => {
       "test@example.com",
     );
     const result = await auth.validateRegistrationToken(registrationToken);
-    expect(result).toEqual({
+    expect(result).toStrictEqual({
       userId: "user_1",
       email: "test@example.com",
       success: true,
@@ -82,7 +82,7 @@ describe("makeAuth", () => {
     });
 
     const session = await auth.getSession(token);
-    expect(session).toEqual({ userId: "user_1" });
+    expect(session).toStrictEqual({ userId: "user_1" });
   });
 
   it("getSession returns null for invalid token", async () => {

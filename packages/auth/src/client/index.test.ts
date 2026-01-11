@@ -39,7 +39,7 @@ describe("httpClient", () => {
       const auth = httpClient("/api/auth");
       const result = await auth.requestOtp("user@example.com");
 
-      expect(result).toEqual({ success: true });
+      expect(result).toStrictEqual({ success: true });
     });
   });
 
@@ -75,7 +75,7 @@ describe("httpClient", () => {
       const auth = httpClient("/api/auth");
       const result = await auth.verifyOtp("user@example.com", "123456");
 
-      expect(result).toEqual({ valid: true });
+      expect(result).toStrictEqual({ valid: true });
     });
 
     it("returns invalid response for wrong otp", async () => {
@@ -88,7 +88,7 @@ describe("httpClient", () => {
       const auth = httpClient("/api/auth");
       const result = await auth.verifyOtp("user@example.com", "000000");
 
-      expect(result).toEqual({ valid: false });
+      expect(result).toStrictEqual({ valid: false });
     });
   });
 

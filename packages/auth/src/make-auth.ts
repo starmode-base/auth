@@ -143,7 +143,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         attestation: "none",
         excludeCredentials: existingCredentials.map((cred) => ({
           id: cred.id,
-          type: "public-key" as const,
+          type: "public-key",
         })),
         authenticatorSelection: {
           residentKey: "preferred",

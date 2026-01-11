@@ -1,4 +1,4 @@
-# STΛR MODΞ Auth
+# STΛR MODΞ ΛUTH
 
 The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
