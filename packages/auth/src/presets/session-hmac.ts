@@ -32,6 +32,10 @@ export const sessionHmac = (options: Options): SessionCodec => {
       const data: TokenPayload = { ...payload, exp };
       const encoded = encodePayload(data);
       const signature = await hmacSign(encoded, secret);
+
+      // Invariant: signature must exist for valid HMAC key
+      if (!signature) throw new Error("HMAC signing failed");
+
       return `${encoded}.${signature}`;
     },
 

@@ -265,6 +265,9 @@ export async function verifyRegistrationCredential(
 ): Promise<VerifyRegistrationResult> {
   // 1. Decode and verify clientDataJSON
   const clientDataBytes = base64urlDecode(credential.response.clientDataJSON);
+  if (!clientDataBytes) {
+    throw new Error("Invalid clientDataJSON encoding");
+  }
   const clientData: ClientData = JSON.parse(
     new TextDecoder().decode(clientDataBytes),
   );
@@ -284,9 +287,16 @@ export async function verifyRegistrationCredential(
   }
 
   // 2. Decode attestationObject (CBOR)
-  const attestationObject = decodeCbor(
-    base64urlDecode(credential.response.attestationObject),
-  ) as Map<CborValue, CborValue>;
+  const attestationBytes = base64urlDecode(
+    credential.response.attestationObject,
+  );
+  if (!attestationBytes) {
+    throw new Error("Invalid attestationObject encoding");
+  }
+  const attestationObject = decodeCbor(attestationBytes) as Map<
+    CborValue,
+    CborValue
+  >;
 
   const authData = attestationObject.get("authData") as Uint8Array;
   if (!authData) {
@@ -345,6 +355,9 @@ export async function verifyAuthenticationCredential(
 ): Promise<VerifyAuthenticationResult> {
   // 1. Decode and verify clientDataJSON
   const clientDataBytes = base64urlDecode(credential.response.clientDataJSON);
+  if (!clientDataBytes) {
+    throw new Error("Invalid clientDataJSON encoding");
+  }
   const clientData: ClientData = JSON.parse(
     new TextDecoder().decode(clientDataBytes),
   );
@@ -365,6 +378,9 @@ export async function verifyAuthenticationCredential(
 
   // 2. Decode authenticatorData
   const authData = base64urlDecode(credential.response.authenticatorData);
+  if (!authData) {
+    throw new Error("Invalid authenticatorData encoding");
+  }
   const parsed = parseAuthData(authData);
 
   // 3. Verify rpIdHash
@@ -392,6 +408,9 @@ export async function verifyAuthenticationCredential(
   const clientDataHash = await sha256(clientDataBytes);
   const signedData = concat(authData, clientDataHash);
   const signature = base64urlDecode(credential.response.signature);
+  if (!signature) {
+    throw new Error("Invalid signature encoding");
+  }
 
   const publicKey = await importStoredKey(storedCredential.publicKey);
   const rawSignature = derToRaw(signature);

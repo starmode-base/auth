@@ -163,6 +163,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const clientDataBytes = base64urlDecode(
         credential.response.clientDataJSON,
       );
+      if (!clientDataBytes) return result.fail("verification_failed");
       const clientData = JSON.parse(new TextDecoder().decode(clientDataBytes));
       const challenge = clientData.challenge;
 
@@ -251,6 +252,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const clientDataBytes = base64urlDecode(
         credential.response.clientDataJSON,
       );
+      if (!clientDataBytes) return result.fail("verification_failed");
       const clientData = JSON.parse(new TextDecoder().decode(clientDataBytes));
       const challenge = clientData.challenge;
 

@@ -9,6 +9,7 @@
     "format": "prettier --write .",
     "check": "echo '📦 packages/auth' && (cd packages/auth && tsc); for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && tsc); done",
     "test": "vitest run",
+    "test:watch": "vitest",
     "outdated": "echo '📦 Root' && bun outdated; for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && bun outdated); done",
     "update": "echo '📦 Root' && bun update; for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && bun update); done",
     "clean:soft": "rm -rf node_modules examples/*/{node_modules,.output,tsconfig.tsbuildinfo} packages/*/node_modules && bun install",
