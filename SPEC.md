@@ -1,3 +1,5 @@
+IMPORTANT: THIS IS A LOOSE SPEC THAT WE _SHOULD_ CHANGE AS WE IMPLEMENT AND FIND BETTER PATTERNS
+
 # STΛR MODΞ ΛUTH
 
 The LLM-friendly auth library. Auth that AI can set up in one prompt.

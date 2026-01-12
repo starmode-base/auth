@@ -47,3 +47,4 @@ This is security-critical code.
 ## Prose style
 
 - Use sentence case, never title case
+- Don't use the word "code" with regards to OTP (use "otp")
