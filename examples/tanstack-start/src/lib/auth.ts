@@ -20,7 +20,6 @@ export const auth = makeAuth({
   webauthn: {
     rpId: "localhost",
     rpName: "TanStack Start Example",
-    origin: "http://localhost:3000",
   },
   debug: true,
 });

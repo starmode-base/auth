@@ -74,8 +74,6 @@ export type OtpSender = (email: string, otp: string) => Promise<void>;
 export type WebAuthnConfig = {
   rpId: string;
   rpName: string;
-  // Optional: origin override for verification (defaults to https://{rpId})
-  origin?: string;
 };
 
 /** Error codes for auth failures */

@@ -156,9 +156,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
       const { userId } = decoded;
 
-      // Determine expected origin
-      const expectedOrigin = webauthn.origin ?? `https://${webauthn.rpId}`;
-
       // Find the challenge from the credential's clientDataJSON
       const clientDataBytes = base64urlDecode(
         credential.response.clientDataJSON,
@@ -185,7 +182,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         const verified = await verifyRegistrationCredential(
           credential,
           challenge,
-          expectedOrigin,
           webauthn.rpId,
         );
 
@@ -245,9 +241,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
       const { userId, credential: storedCred } = stored;
 
-      // Determine expected origin
-      const expectedOrigin = webauthn.origin ?? `https://${webauthn.rpId}`;
-
       // Extract challenge from clientDataJSON to look up stored challenge
       const clientDataBytes = base64urlDecode(
         credential.response.clientDataJSON,
@@ -269,7 +262,6 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
           credential,
           storedCred,
           challenge,
-          expectedOrigin,
           webauthn.rpId,
         );
 

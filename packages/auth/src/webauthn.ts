@@ -41,6 +41,27 @@ function arrayEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+/** Verify origin hostname matches rpId (exact match or subdomain) */
+function verifyOrigin(origin: string, expectedRpId: string): void {
+  try {
+    const originUrl = new URL(origin);
+    const originHostname = originUrl.hostname;
+    if (
+      originHostname !== expectedRpId &&
+      !originHostname.endsWith(`.${expectedRpId}`)
+    ) {
+      throw new Error(
+        `Origin hostname mismatch: got ${originHostname}, expected ${expectedRpId} or subdomain`,
+      );
+    }
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error(`Invalid origin URL: ${origin}`);
+    }
+    throw err;
+  }
+}
+
 /** Concatenate two Uint8Arrays */
 function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
   const result = new Uint8Array(a.length + b.length);
@@ -254,13 +275,11 @@ export type VerifyRegistrationResult = {
  *
  * @param credential - The credential from navigator.credentials.create()
  * @param expectedChallenge - The challenge sent to the client
- * @param expectedOrigin - The expected origin (e.g., "https://example.com")
  * @param expectedRpId - The relying party ID (e.g., "example.com")
  */
 export async function verifyRegistrationCredential(
   credential: RegistrationCredential,
   expectedChallenge: string,
-  expectedOrigin: string,
   expectedRpId: string,
 ): Promise<VerifyRegistrationResult> {
   // 1. Decode and verify clientDataJSON
@@ -280,11 +299,7 @@ export async function verifyRegistrationCredential(
     throw new Error("Challenge mismatch");
   }
 
-  if (clientData.origin !== expectedOrigin) {
-    throw new Error(
-      `Origin mismatch: got ${clientData.origin}, expected ${expectedOrigin}`,
-    );
-  }
+  verifyOrigin(clientData.origin, expectedRpId);
 
   // 2. Decode attestationObject (CBOR)
   const attestationBytes = base64urlDecode(
@@ -343,14 +358,12 @@ export type VerifyAuthenticationResult = {
  * @param credential - The credential from navigator.credentials.get()
  * @param storedCredential - The stored credential to verify against
  * @param expectedChallenge - The challenge sent to the client
- * @param expectedOrigin - The expected origin
  * @param expectedRpId - The relying party ID
  */
 export async function verifyAuthenticationCredential(
   credential: AuthenticationCredential,
   storedCredential: StoredCredential,
   expectedChallenge: string,
-  expectedOrigin: string,
   expectedRpId: string,
 ): Promise<VerifyAuthenticationResult> {
   // 1. Decode and verify clientDataJSON
@@ -370,11 +383,7 @@ export async function verifyAuthenticationCredential(
     throw new Error("Challenge mismatch");
   }
 
-  if (clientData.origin !== expectedOrigin) {
-    throw new Error(
-      `Origin mismatch: got ${clientData.origin}, expected ${expectedOrigin}`,
-    );
-  }
+  verifyOrigin(clientData.origin, expectedRpId);
 
   // 2. Decode authenticatorData
   const authData = base64urlDecode(credential.response.authenticatorData);
