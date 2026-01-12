@@ -171,47 +171,6 @@ function parseAuthData(authData: Uint8Array): ParsedAuthData {
 }
 
 /**
- * Convert COSE key to CryptoKey for signature verification
- *
- * COSE key map keys:
- *   1 (kty): 2 = EC2
- *   3 (alg): -7 = ES256
- *  -1 (crv): 1 = P-256
- *  -2 (x): x coordinate (32 bytes)
- *  -3 (y): y coordinate (32 bytes)
- */
-async function importCoseKey(
-  coseKey: Map<CborValue, CborValue>,
-): Promise<CryptoKey> {
-  const kty = coseKey.get(1);
-  const alg = coseKey.get(3);
-
-  if (kty !== 2 || alg !== -7) {
-    throw new Error("Only ES256 (P-256) keys supported");
-  }
-
-  const x = coseKey.get(-2) as Uint8Array;
-  const y = coseKey.get(-3) as Uint8Array;
-
-  if (!x || !y || x.length !== 32 || y.length !== 32) {
-    throw new Error("Invalid EC key coordinates");
-  }
-
-  return crypto.subtle.importKey(
-    "jwk",
-    {
-      kty: "EC",
-      crv: "P-256",
-      x: base64urlEncode(x),
-      y: base64urlEncode(y),
-    },
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["verify"],
-  );
-}
-
-/**
  * Serialize COSE key to Uint8Array for storage
  *
  * We store just the raw x,y coordinates (64 bytes) with a type prefix
