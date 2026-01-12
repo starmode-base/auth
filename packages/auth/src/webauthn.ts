@@ -41,6 +41,14 @@ function arrayEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+/** Concatenate two Uint8Arrays */
+function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const result = new Uint8Array(a.length + b.length);
+  result.set(a, 0);
+  result.set(b, a.length);
+  return result;
+}
+
 /** Verify origin hostname matches rpId (exact match or subdomain) */
 function verifyOrigin(origin: string, expectedRpId: string): void {
   try {
@@ -60,14 +68,6 @@ function verifyOrigin(origin: string, expectedRpId: string): void {
     }
     throw err;
   }
-}
-
-/** Concatenate two Uint8Arrays */
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const result = new Uint8Array(a.length + b.length);
-  result.set(a, 0);
-  result.set(b, a.length);
-  return result;
 }
 
 /**
