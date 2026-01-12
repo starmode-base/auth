@@ -27,6 +27,20 @@ export function base64urlDecode(str: string): Uint8Array | null {
   }
 }
 
+/** Convert base64url string to ArrayBuffer */
+export function base64urlToBuffer(base64url: string): ArrayBuffer {
+  const bytes = base64urlDecode(base64url);
+  // Invariant: base64urlDecode only returns null for malformed input; WebAuthn options from server are well-formed
+  if (!bytes) throw new Error("Invalid base64url string");
+  // Create a fresh ArrayBuffer (not SharedArrayBuffer) for WebAuthn API compatibility
+  return new Uint8Array(bytes).buffer as ArrayBuffer;
+}
+
+/** Convert ArrayBuffer to base64url string */
+export function bufferToBase64url(buffer: ArrayBuffer): string {
+  return base64urlEncode(new Uint8Array(buffer));
+}
+
 /** Compute SHA-256 hash of data */
 export async function sha256(data: Uint8Array): Promise<Uint8Array> {
   // Create a fresh ArrayBuffer to satisfy TypeScript's BufferSource type

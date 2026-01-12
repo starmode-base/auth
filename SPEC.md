@@ -119,11 +119,11 @@ OTP verification:
 2. Server stores OTP, sends via configured channel
 3. User submits OTP
 4. Server verifies OTP (checks OTP table)
-5. Server returns { valid: true }
+5. Server returns true
    ← app decides what to do next →
 
 Sign up (app orchestrates):
-1. App calls verifyOtp → { valid }
+1. App calls verifyOtp → valid
 2. App upserts user → userId
 3. App calls createRegistrationToken(userId, email)
 4. Continue with passkey registration...

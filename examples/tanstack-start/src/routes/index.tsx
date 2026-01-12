@@ -1,3 +1,4 @@
+import { createPasskey, getPasskey } from "@starmode/auth/client";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import {
@@ -27,31 +28,6 @@ export const Route = createFileRoute("/")({
     return { session };
   },
 });
-
-/** Convert base64url to ArrayBuffer */
-function base64urlToBuffer(base64url: string): ArrayBuffer {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
-  const binary = atob(base64 + padding);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-/** Convert ArrayBuffer to base64url */
-function bufferToBase64url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
-  }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
 
 function EmailForm({
   email,
@@ -291,28 +267,8 @@ function RouteComponent() {
         return;
       }
 
-      const { options } = optionsResult;
-
-      // Convert challenge to ArrayBuffer for WebAuthn API
-      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        ...options,
-        challenge: base64urlToBuffer(options.challenge),
-        user: {
-          ...options.user,
-          id: base64urlToBuffer(options.user.id),
-        },
-        excludeCredentials: options.excludeCredentials?.map(
-          (cred: { id: string; type: "public-key" }) => ({
-            ...cred,
-            id: base64urlToBuffer(cred.id),
-          }),
-        ),
-      };
-
-      // Trigger browser WebAuthn ceremony
-      const credential = (await navigator.credentials.create({
-        publicKey: publicKeyOptions,
-      })) as PublicKeyCredential | null;
+      // Create passkey (handles browser ceremony + serialization)
+      const credential = await createPasskey(optionsResult.options);
 
       if (!credential) {
         setError("Passkey creation was cancelled");
@@ -320,29 +276,12 @@ function RouteComponent() {
         return;
       }
 
-      const response = credential.response as AuthenticatorAttestationResponse;
-
-      // Serialize credential for server
-      const credentialJSON = {
-        id: credential.id,
-        rawId: bufferToBase64url(credential.rawId),
-        type: credential.type,
-        response: {
-          clientDataJSON: bufferToBase64url(response.clientDataJSON),
-          attestationObject: bufferToBase64url(response.attestationObject),
-          transports: response.getTransports?.() as AuthenticatorTransport[],
-        },
-        authenticatorAttachment: credential.authenticatorAttachment,
-        clientExtensionResults: credential.getClientExtensionResults(),
-      };
-
       // Verify with server
       const result = await verifyRegistration({
-        data: { registrationToken, credential: credentialJSON },
+        data: { registrationToken, credential },
       });
 
       if (result.success) {
-        // Session cookie is set, reload to get fresh session
         await router.invalidate();
       } else {
         setError("Failed to register passkey");
@@ -361,20 +300,8 @@ function RouteComponent() {
       // Get authentication options from server
       const { options } = await generateAuthenticationOptions();
 
-      // Convert challenge to ArrayBuffer for WebAuthn API
-      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        ...options,
-        challenge: base64urlToBuffer(options.challenge),
-        allowCredentials: options.allowCredentials?.map((cred) => ({
-          ...cred,
-          id: base64urlToBuffer(cred.id),
-        })),
-      };
-
-      // Trigger browser WebAuthn ceremony
-      const credential = (await navigator.credentials.get({
-        publicKey: publicKeyOptions,
-      })) as PublicKeyCredential | null;
+      // Get passkey (handles browser ceremony + serialization)
+      const credential = await getPasskey(options);
 
       if (!credential) {
         setError("Passkey sign-in was cancelled");
@@ -382,30 +309,10 @@ function RouteComponent() {
         return;
       }
 
-      const response = credential.response as AuthenticatorAssertionResponse;
-
-      // Serialize credential for server
-      const credentialJSON = {
-        id: credential.id,
-        rawId: bufferToBase64url(credential.rawId),
-        type: credential.type,
-        response: {
-          clientDataJSON: bufferToBase64url(response.clientDataJSON),
-          authenticatorData: bufferToBase64url(response.authenticatorData),
-          signature: bufferToBase64url(response.signature),
-          userHandle: response.userHandle
-            ? bufferToBase64url(response.userHandle)
-            : undefined,
-        },
-        authenticatorAttachment: credential.authenticatorAttachment,
-        clientExtensionResults: credential.getClientExtensionResults(),
-      };
-
       // Verify with server
-      const result = await verifyAuthentication({ data: credentialJSON });
+      const result = await verifyAuthentication({ data: credential });
 
       if (result.success) {
-        // Session cookie is set, reload to get fresh session
         await router.invalidate();
       } else {
         setError("Invalid passkey");
