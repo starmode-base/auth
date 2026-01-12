@@ -24,47 +24,47 @@ function upsertUser(email: string): { userId: string; isNew: boolean } {
 /**
  * Request OTP
  *
- * Sends a one-time password to the given email address. The OTP is valid for a
+ * Sends a one-time password to the given identifier (email or phone). The OTP is valid for a
  * short window and must be verified before the user can proceed.
  */
 export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator((email: string) => email)
-  .handler(({ data: email }) => auth.requestOtp(email));
+  .inputValidator((identifier: string) => identifier)
+  .handler(({ data: identifier }) => auth.requestOtp(identifier));
 
 /**
  * Verify OTP
  *
- * Checks whether the provided OTP matches what was sent to the email. Returns
+ * Checks whether the provided OTP matches what was sent to the identifier. Returns
  * success if valid, allowing the client to proceed with sign-up or sign-in.
  */
 export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; otp: string }) => input)
-  .handler(({ data }) => auth.verifyOtp(data.email, data.otp));
+  .inputValidator((input: { identifier: string; otp: string }) => input)
+  .handler(({ data }) => auth.verifyOtp(data.identifier, data.otp));
 
 /**
  * Sign up
  *
  * Creates a new user account after verifying the OTP. Returns a short-lived
  * registration token that authorizes the client to register a passkey for this
- * user without needing to re-verify email ownership.
+ * user without needing to re-verify identifier ownership.
  */
 export const signUp = createServerFn({ method: "POST" })
-  .inputValidator((input: { email: string; otp: string }) => input)
+  .inputValidator((input: { identifier: string; otp: string }) => input)
   .handler(async ({ data }) => {
     // Verify OTP
-    const result = await auth.verifyOtp(data.email, data.otp);
+    const result = await auth.verifyOtp(data.identifier, data.otp);
 
     if (!result.success) {
       return { success: false, registrationToken: undefined };
     }
 
     // App upserts user
-    const { userId } = upsertUser(data.email);
+    const { userId } = upsertUser(data.identifier);
 
     // Create registration token for passkey registration
     const { registrationToken } = await auth.createRegistrationToken(
       userId,
-      data.email,
+      data.identifier,
     );
 
     return { success: true, registrationToken };

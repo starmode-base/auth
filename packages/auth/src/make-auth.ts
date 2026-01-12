@@ -70,19 +70,19 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
   };
 
   return {
-    async requestOtp(email: string) {
+    async requestOtp(identifier: string) {
       const code = generateOtp();
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
-      await storage.otp.store(email, code, expiresAt);
+      await storage.otp.store(identifier, code, expiresAt);
 
-      await otpTransport.send(email, code);
+      await otpTransport.send(identifier, code);
 
       return result.ok({});
     },
 
-    async verifyOtp(email: string, otp: string) {
-      const valid = await storage.otp.verify(email, otp);
+    async verifyOtp(identifier: string, otp: string) {
+      const valid = await storage.otp.verify(identifier, otp);
 
       if (!valid) {
         return result.fail("invalid_otp");
@@ -91,8 +91,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       return result.ok({});
     },
 
-    async createRegistrationToken(userId: string, email: string) {
-      const token = await registrationCodec.encode({ userId, email });
+    async createRegistrationToken(userId: string, identifier: string) {
+      const token = await registrationCodec.encode({ userId, identifier });
       return { registrationToken: token };
     },
 
@@ -101,7 +101,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
-      return result.ok({ userId: decoded.userId, email: decoded.email });
+      return result.ok({ userId: decoded.userId, identifier: decoded.identifier });
     },
 
     async generateRegistrationOptions(regToken: string) {
@@ -111,7 +111,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         return result.fail("invalid_token");
       }
 
-      const { userId, email } = decoded;
+      const { userId, identifier } = decoded;
 
       // Get existing credentials to exclude
       const existingCredentials = await storage.credential.get(userId);
@@ -134,8 +134,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         },
         user: {
           id: base64urlEncode(new TextEncoder().encode(userId)),
-          name: email,
-          displayName: email,
+          name: identifier,
+          displayName: identifier,
         },
         pubKeyCredParams: [
           { type: "public-key", alg: -7 }, // ES256

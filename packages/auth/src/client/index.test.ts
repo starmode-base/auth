@@ -24,7 +24,7 @@ describe("httpClient", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "requestOtp",
-          email: "user@example.com",
+          identifier: "user@example.com",
         }),
       });
     });
@@ -59,7 +59,7 @@ describe("httpClient", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "verifyOtp",
-          email: "user@example.com",
+          identifier: "user@example.com",
           otp: "123456",
         }),
       });

@@ -151,8 +151,8 @@ export const httpClient = (endpoint: string): AuthClient => {
 
   return {
     // OTP
-    requestOtp: (email) => call("requestOtp", { email }),
-    verifyOtp: (email, otp) => call("verifyOtp", { email, otp }),
+    requestOtp: (identifier) => call("requestOtp", { identifier }),
+    verifyOtp: (identifier, otp) => call("verifyOtp", { identifier, otp }),
 
     // Passkey
     generateRegistrationOptions: (registrationToken) =>

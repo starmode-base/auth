@@ -14,8 +14,8 @@ export type StoredCredential = {
  */
 export type StorageAdapter = {
   otp: {
-    store: (email: string, otp: string, expiresAt: Date) => Promise<void>;
-    verify: (email: string, otp: string) => Promise<boolean>;
+    store: (identifier: string, otp: string, expiresAt: Date) => Promise<void>;
+    verify: (identifier: string, otp: string) => Promise<boolean>;
   };
   session: {
     store: (
@@ -54,7 +54,7 @@ export type SessionCodec = {
 };
 
 /** Registration payload */
-export type RegistrationPayload = { userId: string; email: string };
+export type RegistrationPayload = { userId: string; identifier: string };
 
 /** Decoded registration result */
 export type RegistrationDecoded = RegistrationPayload & {
@@ -70,7 +70,7 @@ export type RegistrationCodec = {
 
 /** OTP transport adapter for code delivery */
 export type OtpTransportAdapter = {
-  send: (email: string, otp: string) => Promise<void>;
+  send: (identifier: string, otp: string) => Promise<void>;
 };
 
 /** Session transport adapter for token delivery */
@@ -119,7 +119,7 @@ export type CreateRegistrationTokenReturn = { registrationToken: string };
 
 export type ValidateRegistrationTokenReturn = Result<{
   userId: string;
-  email: string;
+  identifier: string;
 }>;
 
 // WebAuthn types (JSON for transport)
@@ -201,13 +201,13 @@ export type MakeAuthConfig = {
 /** All primitives returned by makeAuth */
 export type MakeAuthReturn = {
   // OTP primitives
-  requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
+  requestOtp: (identifier: string) => Promise<RequestOtpReturn>;
+  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Registration token primitives
   createRegistrationToken: (
     userId: string,
-    email: string,
+    identifier: string,
   ) => Promise<CreateRegistrationTokenReturn>;
   validateRegistrationToken: (
     token: string,
@@ -239,8 +239,8 @@ export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
  */
 export type AuthClient = {
   // OTP
-  requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
+  requestOtp: (identifier: string) => Promise<RequestOtpReturn>;
+  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpReturn>;
 
   // Passkey (registrationToken comes from server-side signUp flow)
   generateRegistrationOptions: (

@@ -237,7 +237,7 @@ function RouteComponent() {
     setError(null);
     try {
       // Sign up flow: verify OTP + upsert user + get registration token
-      const result = await signUp({ data: { email, otp } });
+      const result = await signUp({ data: { identifier: email, otp } });
       if (result.success && result.registrationToken) {
         setRegistrationToken(result.registrationToken);
         setStep("passkey-register");

@@ -20,19 +20,19 @@ export const storageMemory = (): MemoryStorageReturn => {
 
   return {
     otp: {
-      store: async (email, otp, expiresAt) => {
-        otps.set(email, { otp, expiresAt });
+      store: async (identifier, otp, expiresAt) => {
+        otps.set(identifier, { otp, expiresAt });
       },
 
-      verify: async (email, otp) => {
-        const record = otps.get(email);
+      verify: async (identifier, otp) => {
+        const record = otps.get(identifier);
         if (!record) return false;
         if (record.expiresAt < new Date()) {
-          otps.delete(email);
+          otps.delete(identifier);
           return false;
         }
         if (record.otp !== otp) return false;
-        otps.delete(email); // One-time use
+        otps.delete(identifier); // One-time use
         return true;
       },
     },

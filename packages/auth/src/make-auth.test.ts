@@ -55,7 +55,7 @@ describe("makeAuth", () => {
     expect(result.registrationToken).toBeDefined();
   });
 
-  it("validateRegistrationToken returns userId and email", async () => {
+  it("validateRegistrationToken returns userId and identifier", async () => {
     const { registrationToken } = await auth.createRegistrationToken(
       "user_1",
       "test@example.com",
@@ -63,7 +63,7 @@ describe("makeAuth", () => {
     const result = await auth.validateRegistrationToken(registrationToken);
     expect(result).toStrictEqual({
       userId: "user_1",
-      email: "test@example.com",
+      identifier: "test@example.com",
       success: true,
     });
   });

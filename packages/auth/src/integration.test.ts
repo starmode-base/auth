@@ -11,7 +11,7 @@ import type { SessionTransportMemoryAdapter } from "./presets/session-transport-
 
 describe("auth integration", () => {
   let storage: ReturnType<typeof storageMemory>;
-  let sentOtps: { email: string; otp: string }[];
+  let sentOtps: { identifier: string; otp: string }[];
   let auth: ReturnType<typeof makeAuth>;
   let sessionTransport: SessionTransportMemoryAdapter;
 
@@ -21,8 +21,8 @@ describe("auth integration", () => {
     sessionTransport = sessionTransportMemory();
 
     const otpTransport: OtpTransportAdapter = {
-      send: async (email, otp) => {
-        sentOtps.push({ email, otp });
+      send: async (identifier, otp) => {
+        sentOtps.push({ identifier, otp });
       },
     };
 
@@ -44,10 +44,10 @@ describe("auth integration", () => {
   });
 
   describe("OTP flow", () => {
-    it("sends OTP to email", async () => {
+    it("sends OTP to identifier", async () => {
       await auth.requestOtp("user@example.com");
       expect(sentOtps).toHaveLength(1);
-      expect(sentOtps[0]?.email).toBe("user@example.com");
+      expect(sentOtps[0]?.identifier).toBe("user@example.com");
       expect(sentOtps[0]?.otp).toMatch(/^\d{6}$/);
     });
 
@@ -66,7 +66,7 @@ describe("auth integration", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects OTP for wrong email", async () => {
+    it("rejects OTP for wrong identifier", async () => {
       await auth.requestOtp("user@example.com");
       const otp = sentOtps[0]!.otp;
 
@@ -115,7 +115,7 @@ describe("auth integration", () => {
       expect(result).toStrictEqual({
         success: true,
         userId: "user_1",
-        email: "user@example.com",
+        identifier: "user@example.com",
       });
     });
   });
@@ -202,7 +202,7 @@ describe("auth integration", () => {
       expect(validation).toStrictEqual({
         success: true,
         userId,
-        email: "user@example.com",
+        identifier: "user@example.com",
       });
     });
   });
