@@ -68,8 +68,30 @@ export type RegistrationCodec = {
   decode: (token: string) => Promise<RegistrationDecoded | null>;
 };
 
-/** Send OTP */
-export type OtpSender = (email: string, otp: string) => Promise<void>;
+/** OTP transport adapter for code delivery */
+export type OtpTransportAdapter = {
+  send: (email: string, otp: string) => Promise<void>;
+};
+
+/** Session transport adapter for token delivery */
+export type SessionTransportAdapter = {
+  /** Read token from incoming request */
+  get: () => string | undefined;
+  /** Store token and return what goes in response body */
+  set: (token: string) => string;
+  /** Clear stored token */
+  clear: () => void;
+};
+
+/** Cookie options for session transport */
+export type SessionCookieOptions = {
+  cookieName: string;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "lax" | "strict" | "none";
+  path: string;
+  maxAge: number;
+};
 
 export type WebAuthnConfig = {
   rpId: string;
@@ -167,12 +189,13 @@ export type VerifyAuthenticationReturn = Result<{
 
 export type MakeAuthConfig = {
   storage: StorageAdapter;
-  session: SessionCodec;
-  registration: RegistrationCodec;
-  sendOtp: OtpSender;
+  sessionCodec: SessionCodec;
+  registrationCodec: RegistrationCodec;
+  otpTransport: OtpTransportAdapter;
   webauthn: WebAuthnConfig;
+  sessionTransport: SessionTransportAdapter;
   /** Enable debug logging for development */
-  debug: boolean;
+  debug?: boolean;
 };
 
 /** All primitives returned by makeAuth */
@@ -204,56 +227,11 @@ export type MakeAuthReturn = {
   ) => Promise<VerifyAuthenticationReturn>;
 
   // Session primitives
-  getSession: (token: string) => Promise<{ userId: string } | null>;
-  deleteSession: (token: string) => Promise<void>;
-};
-
-export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
-
-/** Cookie adapter — you provide these (framework-specific) */
-export type CookieAdapter = {
-  get: () => string | undefined;
-  set: (token: string) => void;
-  clear: () => void;
-};
-
-/** Cookie auth config */
-export type MakeCookieAuthConfig = {
-  auth: MakeAuthReturn;
-  cookie: CookieAdapter;
-};
-
-/** Cookie auth — wraps auth with automatic cookie handling */
-export type CookieAuthReturn = {
-  // OTP
-  requestOtp: (email: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (email: string, otp: string) => Promise<VerifyOtpReturn>;
-
-  // Registration token (server-side only — use in composed flows like signUp)
-  createRegistrationToken: (
-    userId: string,
-    email: string,
-  ) => Promise<CreateRegistrationTokenReturn>;
-
-  // Passkey (sets session cookie automatically)
-  generateRegistrationOptions: (
-    registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsReturn>;
-  verifyRegistration: (
-    registrationToken: string,
-    credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>;
-  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
-  verifyAuthentication: (
-    credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>;
-
-  // Session
   getSession: () => Promise<{ userId: string } | null>;
   signOut: () => Promise<void>;
 };
 
-export type MakeCookieAuth = (config: MakeCookieAuthConfig) => CookieAuthReturn;
+export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
 
 /**
  * Auth client interface — OTP + passkey primitives only.

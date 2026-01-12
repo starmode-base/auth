@@ -2,22 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
   makeAuth,
   storageMemory,
-  otpSenderConsole,
+  otpTransportConsole,
   sessionHmac,
   registrationHmac,
+  sessionTransportMemory,
 } from "./index";
 
 describe("makeAuth", () => {
   const storage = storageMemory();
+  const sessionTransport = sessionTransportMemory();
+
   const auth = makeAuth({
     storage,
-    session: sessionHmac({ secret: "test", ttl: 600 }),
-    registration: registrationHmac({ secret: "test", ttl: 300 }),
-    sendOtp: otpSenderConsole,
+    sessionCodec: sessionHmac({ secret: "test", ttl: 600 }),
+    registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+    otpTransport: otpTransportConsole,
     webauthn: {
       rpId: "localhost",
       rpName: "Test App",
     },
+    sessionTransport,
     debug: false,
   });
 
@@ -82,16 +86,18 @@ describe("makeAuth", () => {
       userId: "user_1",
     });
 
-    const session = await auth.getSession(token);
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
     expect(session).toStrictEqual({ userId: "user_1" });
   });
 
   it("getSession returns null for invalid token", async () => {
-    const session = await auth.getSession("invalid-token");
+    sessionTransport.setToken("invalid-token");
+    const session = await auth.getSession();
     expect(session).toBeNull();
   });
 
-  it("deleteSession completes without error", async () => {
+  it("signOut completes without error", async () => {
     // Create a session directly
     await storage.session.store(
       "session_2",
@@ -104,6 +110,7 @@ describe("makeAuth", () => {
       userId: "user_1",
     });
 
-    await expect(auth.deleteSession(token)).resolves.toBeUndefined();
+    sessionTransport.setToken(token);
+    await expect(auth.signOut()).resolves.toBeUndefined();
   });
 });

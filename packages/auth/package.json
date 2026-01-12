@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./client": "./src/client/index.ts"
+    "./client": "./src/client/index.ts",
+    "./tanstack": "./src/presets/session-transport-tanstack.ts"
   },
   "files": [
     "src/"
@@ -13,6 +14,7 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@tanstack/react-start": "^1.147.2",
     "neon-testing": "^2.3.1"
   }
 }

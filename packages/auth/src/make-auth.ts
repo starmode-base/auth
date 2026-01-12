@@ -48,7 +48,15 @@ type ChallengeRecord = {
 const challengeStore = new Map<string, ChallengeRecord>();
 
 export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
-  const { storage, session, registration, sendOtp, webauthn, debug } = config;
+  const {
+    storage,
+    sessionCodec,
+    registrationCodec,
+    otpTransport,
+    webauthn,
+    sessionTransport,
+    debug,
+  } = config;
 
   // Result helpers with optional debug logging
   const result = {
@@ -68,7 +76,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
       await storage.otp.store(email, code, expiresAt);
 
-      await sendOtp(email, code);
+      await otpTransport.send(email, code);
 
       return result.ok({});
     },
@@ -84,12 +92,12 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
     },
 
     async createRegistrationToken(userId: string, email: string) {
-      const token = await registration.encode({ userId, email });
+      const token = await registrationCodec.encode({ userId, email });
       return { registrationToken: token };
     },
 
     async validateRegistrationToken(token: string) {
-      const decoded = await registration.decode(token);
+      const decoded = await registrationCodec.decode(token);
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
@@ -98,7 +106,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
     async generateRegistrationOptions(regToken: string) {
       // Validate registration token
-      const decoded = await registration.decode(regToken);
+      const decoded = await registrationCodec.decode(regToken);
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
@@ -149,7 +157,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
     async verifyRegistration(regToken: string, credential) {
       // Validate registration token
-      const decoded = await registration.decode(regToken);
+      const decoded = await registrationCodec.decode(regToken);
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
@@ -202,9 +210,10 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         await storage.session.store(sessionId, userId, expiresAt);
 
-        const token = await session.encode({ sessionId, userId });
+        const token = await sessionCodec.encode({ sessionId, userId });
+        const responseToken = sessionTransport.set(token);
 
-        return result.ok({ session: { token, userId } });
+        return result.ok({ session: { token: responseToken, userId } });
       } catch (err) {
         challengeStore.delete(challenge);
         return result.fail("verification_failed", err);
@@ -277,17 +286,21 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
         await storage.session.store(sessionId, userId, expiresAt);
 
-        const token = await session.encode({ sessionId, userId });
+        const token = await sessionCodec.encode({ sessionId, userId });
+        const responseToken = sessionTransport.set(token);
 
-        return result.ok({ session: { token, userId } });
+        return result.ok({ session: { token: responseToken, userId } });
       } catch (err) {
         challengeStore.delete(challenge);
         return result.fail("verification_failed", err);
       }
     },
 
-    async getSession(token: string) {
-      const decoded = await session.decode(token);
+    async getSession() {
+      const token = sessionTransport.get();
+      if (!token) return null;
+
+      const decoded = await sessionCodec.decode(token);
 
       if (!decoded || !decoded.valid) {
         return null;
@@ -295,24 +308,27 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
       // If token is expired, validate against storage
       if (decoded.expired) {
-        const session = await storage.session.get(decoded.sessionId);
+        const storedSession = await storage.session.get(decoded.sessionId);
 
-        if (!session || session.expiresAt < new Date()) {
+        if (!storedSession || storedSession.expiresAt < new Date()) {
           return null;
         }
 
-        return { userId: session.userId };
+        return { userId: storedSession.userId };
       }
 
       return { userId: decoded.userId };
     },
 
-    async deleteSession(token: string) {
-      const decoded = await session.decode(token);
-
-      if (decoded) {
-        await storage.session.delete(decoded.sessionId);
+    async signOut() {
+      const token = sessionTransport.get();
+      if (token) {
+        const decoded = await sessionCodec.decode(token);
+        if (decoded) {
+          await storage.session.delete(decoded.sessionId);
+        }
       }
+      sessionTransport.clear();
     },
   };
 };

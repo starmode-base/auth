@@ -1,39 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, setCookie } from "@tanstack/react-start/server";
-import { makeCookieAuth } from "@starmode/auth";
 import { auth } from "./auth";
-
-/**
- * Cookie authentication
- *
- * Wraps the auth instance with cookie helpers that automatically read and
- * write session tokens via HTTP-only cookies. The cookie is secured in
- * production and expires after 30 days.
- */
-const SESSION_COOKIE = "session";
-
-const cookieAuth = makeCookieAuth({
-  auth,
-  cookie: {
-    get: () => getCookie(SESSION_COOKIE),
-    set: (token) =>
-      setCookie(SESSION_COOKIE, token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 30 * 24 * 60 * 60, // 30 days
-      }),
-    clear: () =>
-      setCookie(SESSION_COOKIE, "", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge: 0,
-      }),
-  },
-});
 
 /**
  * In-memory user store
@@ -63,7 +29,7 @@ function upsertUser(email: string): { userId: string; isNew: boolean } {
  */
 export const requestOtp = createServerFn({ method: "POST" })
   .inputValidator((email: string) => email)
-  .handler(({ data: email }) => cookieAuth.requestOtp(email));
+  .handler(({ data: email }) => auth.requestOtp(email));
 
 /**
  * Verify OTP
@@ -73,7 +39,7 @@ export const requestOtp = createServerFn({ method: "POST" })
  */
 export const verifyOtp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; otp: string }) => input)
-  .handler(({ data }) => cookieAuth.verifyOtp(data.email, data.otp));
+  .handler(({ data }) => auth.verifyOtp(data.email, data.otp));
 
 /**
  * Sign up
@@ -86,7 +52,7 @@ export const signUp = createServerFn({ method: "POST" })
   .inputValidator((input: { email: string; otp: string }) => input)
   .handler(async ({ data }) => {
     // Verify OTP
-    const result = await cookieAuth.verifyOtp(data.email, data.otp);
+    const result = await auth.verifyOtp(data.email, data.otp);
 
     if (!result.success) {
       return { success: false, registrationToken: undefined };
@@ -96,7 +62,7 @@ export const signUp = createServerFn({ method: "POST" })
     const { userId } = upsertUser(data.email);
 
     // Create registration token for passkey registration
-    const { registrationToken } = await cookieAuth.createRegistrationToken(
+    const { registrationToken } = await auth.createRegistrationToken(
       userId,
       data.email,
     );
@@ -114,7 +80,7 @@ export const signUp = createServerFn({ method: "POST" })
 export const generateRegistrationOptions = createServerFn({ method: "POST" })
   .inputValidator((registrationToken: string) => registrationToken)
   .handler(({ data: registrationToken }) =>
-    cookieAuth.generateRegistrationOptions(registrationToken),
+    auth.generateRegistrationOptions(registrationToken),
   );
 
 /**
@@ -128,10 +94,7 @@ export const verifyRegistration = createServerFn({ method: "POST" })
     (input: { registrationToken: string; credential: unknown }) => input,
   )
   .handler(({ data }) =>
-    cookieAuth.verifyRegistration(
-      data.registrationToken,
-      data.credential as never,
-    ),
+    auth.verifyRegistration(data.registrationToken, data.credential as never),
   );
 
 /**
@@ -143,7 +106,7 @@ export const verifyRegistration = createServerFn({ method: "POST" })
  */
 export const generateAuthenticationOptions = createServerFn({
   method: "POST",
-}).handler(() => cookieAuth.generateAuthenticationOptions());
+}).handler(() => auth.generateAuthenticationOptions());
 
 /**
  * Verify authentication
@@ -154,7 +117,7 @@ export const generateAuthenticationOptions = createServerFn({
 export const verifyAuthentication = createServerFn({ method: "POST" })
   .inputValidator((credential: unknown) => credential)
   .handler(({ data: credential }) =>
-    cookieAuth.verifyAuthentication(credential as never),
+    auth.verifyAuthentication(credential as never),
   );
 
 /**
@@ -163,7 +126,7 @@ export const verifyAuthentication = createServerFn({ method: "POST" })
  * Invalidates the current session and clears the session cookie.
  */
 export const signOut = createServerFn({ method: "POST" }).handler(() =>
-  cookieAuth.signOut(),
+  auth.signOut(),
 );
 
 /**
@@ -173,5 +136,5 @@ export const signOut = createServerFn({ method: "POST" }).handler(() =>
  * Used to check auth state on page load and during navigation.
  */
 export const getSession = createServerFn({ method: "GET" }).handler(() =>
-  cookieAuth.getSession(),
+  auth.getSession(),
 );

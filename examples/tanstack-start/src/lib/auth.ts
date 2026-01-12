@@ -3,23 +3,28 @@ import {
   storageMemory,
   sessionHmac,
   registrationHmac,
-  otpSenderConsole,
+  otpTransportConsole,
 } from "@starmode/auth";
+import {
+  sessionTransportTanstack,
+  sessionCookieDefaults,
+} from "@starmode/auth/tanstack";
 
 export const auth = makeAuth({
   storage: storageMemory(),
-  session: sessionHmac({
+  sessionCodec: sessionHmac({
     secret: "dev-secret-do-not-use-in-production",
     ttl: 600,
   }),
-  registration: registrationHmac({
+  registrationCodec: registrationHmac({
     secret: "dev-secret-do-not-use-in-production",
     ttl: 300,
   }),
-  sendOtp: otpSenderConsole,
+  otpTransport: otpTransportConsole,
   webauthn: {
     rpId: "localhost",
     rpName: "TanStack Start Example",
   },
+  sessionTransport: sessionTransportTanstack(sessionCookieDefaults),
   debug: true,
 });

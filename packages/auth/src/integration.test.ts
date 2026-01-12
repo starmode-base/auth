@@ -4,34 +4,41 @@ import {
   storageMemory,
   sessionHmac,
   registrationHmac,
+  sessionTransportMemory,
 } from "./index";
-import type { OtpSender } from "./types";
+import type { OtpTransportAdapter } from "./types";
+import type { SessionTransportMemoryAdapter } from "./presets/session-transport-memory";
 
 describe("auth integration", () => {
   let storage: ReturnType<typeof storageMemory>;
   let sentOtps: { email: string; otp: string }[];
   let auth: ReturnType<typeof makeAuth>;
+  let sessionTransport: SessionTransportMemoryAdapter;
 
   beforeEach(() => {
     storage = storageMemory();
     sentOtps = [];
+    sessionTransport = sessionTransportMemory();
 
-    const captureSend: OtpSender = async (email, otp) => {
-      sentOtps.push({ email, otp });
+    const otpTransport: OtpTransportAdapter = {
+      send: async (email, otp) => {
+        sentOtps.push({ email, otp });
+      },
     };
 
     auth = makeAuth({
       storage,
-      session: sessionHmac({ secret: "test-secret", ttl: 600 }),
-      registration: registrationHmac({
+      sessionCodec: sessionHmac({ secret: "test-secret", ttl: 600 }),
+      registrationCodec: registrationHmac({
         secret: "test-secret",
         ttl: 300,
       }),
-      sendOtp: captureSend,
+      otpTransport,
       webauthn: {
         rpId: "localhost",
         rpName: "Test App",
       },
+      sessionTransport,
       debug: false,
     });
   });
@@ -130,16 +137,20 @@ describe("auth integration", () => {
         userId: "user_1",
       });
 
-      const session = await auth.getSession(token);
+      // Set token in transport
+      sessionTransport.setToken(token);
+
+      const session = await auth.getSession();
       expect(session).toStrictEqual({ userId: "user_1" });
     });
 
     it("getSession returns null for invalid token", async () => {
-      const session = await auth.getSession("invalid-token");
+      sessionTransport.setToken("invalid-token");
+      const session = await auth.getSession();
       expect(session).toBeNull();
     });
 
-    it("deleteSession removes session", async () => {
+    it("signOut removes session", async () => {
       await storage.session.store(
         "session_1",
         "user_1",
@@ -154,7 +165,8 @@ describe("auth integration", () => {
         userId: "user_1",
       });
 
-      await auth.deleteSession(token);
+      sessionTransport.setToken(token);
+      await auth.signOut();
 
       expect(storage._stores.sessions.size).toBe(0);
     });
