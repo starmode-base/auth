@@ -1,7 +1,7 @@
 import type {
   MakeAuth,
   MakeAuthConfig,
-  MakeAuthReturn,
+  MakeAuthResult,
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
   AuthErrorCode,
@@ -47,13 +47,13 @@ type ChallengeRecord = {
 // Challenge store keyed by challenge value for lookup during verification
 const challengeStore = new Map<string, ChallengeRecord>();
 
-export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
+export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
   const {
     storage,
     sessionCodec,
     registrationCodec,
     otpTransport,
-    webauthn,
+    webAuthn,
     sessionTransport,
     debug,
   } = config;
@@ -101,7 +101,10 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
-      return result.ok({ userId: decoded.userId, identifier: decoded.identifier });
+      return result.ok({
+        userId: decoded.userId,
+        identifier: decoded.identifier,
+      });
     },
 
     async generateRegistrationOptions(regToken: string) {
@@ -129,8 +132,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
       const options: PublicKeyCredentialCreationOptionsJSON = {
         challenge,
         rp: {
-          name: webauthn.rpName,
-          id: webauthn.rpId,
+          name: webAuthn.rpName,
+          id: webAuthn.rpId,
         },
         user: {
           id: base64urlEncode(new TextEncoder().encode(userId)),
@@ -190,7 +193,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
         const verified = await verifyRegistrationCredential(
           credential,
           challenge,
-          webauthn.rpId,
+          webAuthn.rpId,
         );
 
         // Store the credential
@@ -232,7 +235,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
 
       const options: PublicKeyCredentialRequestOptionsJSON = {
         challenge,
-        rpId: webauthn.rpId,
+        rpId: webAuthn.rpId,
         timeout: 60000,
         userVerification: "preferred",
         // Empty allowCredentials = discoverable credential (passkey)
@@ -271,7 +274,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthReturn => {
           credential,
           storedCred,
           challenge,
-          webauthn.rpId,
+          webAuthn.rpId,
         );
 
         // Update counter

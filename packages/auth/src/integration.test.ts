@@ -34,7 +34,7 @@ describe("auth integration", () => {
         ttl: 300,
       }),
       otpTransport,
-      webauthn: {
+      webAuthn: {
         rpId: "localhost",
         rpName: "Test App",
       },

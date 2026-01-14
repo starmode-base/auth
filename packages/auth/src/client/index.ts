@@ -14,10 +14,10 @@ export type {
   AuthenticationCredential,
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
-  GenerateRegistrationOptionsReturn,
-  VerifyRegistrationReturn,
-  GenerateAuthenticationOptionsReturn,
-  VerifyAuthenticationReturn,
+  GenerateRegistrationOptionsResult,
+  VerifyRegistrationResult,
+  GenerateAuthenticationOptionsResult,
+  VerifyAuthenticationResult,
 } from "../types";
 
 /**

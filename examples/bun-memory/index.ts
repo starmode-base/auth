@@ -39,7 +39,7 @@ function createAuthForRequest(req: Request) {
       ttl: 300,
     }),
     otpTransport: otpTransportConsole,
-    webauthn: {
+    webAuthn: {
       rpId: "localhost",
       rpName: "Bun Memory Example",
     },

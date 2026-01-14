@@ -16,9 +16,13 @@ import type {
 const encoder = new TextEncoder();
 
 type ClientData = {
-  type: string;
+  /** https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-type */
+  type: string; // "webauthn.create" or "webauthn.get"
+  /** https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-challenge */
   challenge: string;
+  /** https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-origin */
   origin: string;
+  /** https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-crossorigin */
   crossOrigin?: boolean;
 };
 
@@ -250,6 +254,7 @@ export async function verifyRegistrationCredential(
     new TextDecoder().decode(clientDataBytes),
   );
 
+  // https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-type
   if (clientData.type !== "webauthn.create") {
     throw new Error("Invalid clientData type: expected webauthn.create");
   }
@@ -334,6 +339,7 @@ export async function verifyAuthenticationCredential(
     new TextDecoder().decode(clientDataBytes),
   );
 
+  // https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-type
   if (clientData.type !== "webauthn.get") {
     throw new Error("Invalid clientData type: expected webauthn.get");
   }

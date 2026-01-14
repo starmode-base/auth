@@ -112,12 +112,12 @@ export type Result<T = object> =
   | ({ success: true } & T)
   | { success: false; error: AuthErrorCode };
 
-export type RequestOtpReturn = { success: true };
-export type VerifyOtpReturn = Result;
+export type RequestOtpResult = { success: true };
+export type VerifyOtpResult = Result;
 
-export type CreateRegistrationTokenReturn = { registrationToken: string };
+export type CreateRegistrationTokenResult = { registrationToken: string };
 
-export type ValidateRegistrationTokenReturn = Result<{
+export type ValidateRegistrationTokenResult = Result<{
   userId: string;
   identifier: string;
 }>;
@@ -171,19 +171,19 @@ export type AuthenticationCredential = {
   clientExtensionResults: AuthenticationExtensionsClientOutputs;
 };
 
-export type GenerateRegistrationOptionsReturn = Result<{
+export type GenerateRegistrationOptionsResult = Result<{
   options: PublicKeyCredentialCreationOptionsJSON;
 }>;
 
-export type VerifyRegistrationReturn = Result<{
+export type VerifyRegistrationResult = Result<{
   session: { token: string; userId: string };
 }>;
 
-export type GenerateAuthenticationOptionsReturn = {
+export type GenerateAuthenticationOptionsResult = {
   options: PublicKeyCredentialRequestOptionsJSON;
 };
 
-export type VerifyAuthenticationReturn = Result<{
+export type VerifyAuthenticationResult = Result<{
   session: { token: string; userId: string };
 }>;
 
@@ -192,46 +192,46 @@ export type MakeAuthConfig = {
   sessionCodec: SessionCodec;
   registrationCodec: RegistrationCodec;
   otpTransport: OtpTransportAdapter;
-  webauthn: WebAuthnConfig;
   sessionTransport: SessionTransportAdapter;
+  webAuthn: WebAuthnConfig;
   /** Enable debug logging for development */
   debug?: boolean;
 };
 
 /** All primitives returned by makeAuth */
-export type MakeAuthReturn = {
+export type MakeAuthResult = {
   // OTP primitives
-  requestOtp: (identifier: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpReturn>;
+  requestOtp: (identifier: string) => Promise<RequestOtpResult>;
+  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
 
   // Registration token primitives
   createRegistrationToken: (
     userId: string,
     identifier: string,
-  ) => Promise<CreateRegistrationTokenReturn>;
+  ) => Promise<CreateRegistrationTokenResult>;
   validateRegistrationToken: (
     token: string,
-  ) => Promise<ValidateRegistrationTokenReturn>;
+  ) => Promise<ValidateRegistrationTokenResult>;
 
   // Passkey primitives
   generateRegistrationOptions: (
     registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsReturn>;
+  ) => Promise<GenerateRegistrationOptionsResult>;
   verifyRegistration: (
     registrationToken: string,
     credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>;
-  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
+  ) => Promise<VerifyRegistrationResult>;
+  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsResult>;
   verifyAuthentication: (
     credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>;
+  ) => Promise<VerifyAuthenticationResult>;
 
   // Session primitives
   getSession: () => Promise<{ userId: string } | null>;
   signOut: () => Promise<void>;
 };
 
-export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
+export type MakeAuth = (config: MakeAuthConfig) => MakeAuthResult;
 
 /**
  * Auth client interface — OTP + passkey primitives only.
@@ -239,21 +239,21 @@ export type MakeAuth = (config: MakeAuthConfig) => MakeAuthReturn;
  */
 export type AuthClient = {
   // OTP
-  requestOtp: (identifier: string) => Promise<RequestOtpReturn>;
-  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpReturn>;
+  requestOtp: (identifier: string) => Promise<RequestOtpResult>;
+  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
 
   // Passkey (registrationToken comes from server-side signUp flow)
   generateRegistrationOptions: (
     registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsReturn>;
+  ) => Promise<GenerateRegistrationOptionsResult>;
   verifyRegistration: (
     registrationToken: string,
     credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationReturn>;
-  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsReturn>;
+  ) => Promise<VerifyRegistrationResult>;
+  generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsResult>;
   verifyAuthentication: (
     credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationReturn>;
+  ) => Promise<VerifyAuthenticationResult>;
 
   signOut: () => Promise<void>;
 };

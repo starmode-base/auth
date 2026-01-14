@@ -21,7 +21,7 @@ export const auth = makeAuth({
     ttl: 300,
   }),
   otpTransport: otpTransportConsole,
-  webauthn: {
+  webAuthn: {
     rpId: "localhost",
     rpName: "TanStack Start Example",
   },

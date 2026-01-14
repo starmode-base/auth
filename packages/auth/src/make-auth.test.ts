@@ -17,7 +17,7 @@ describe("makeAuth", () => {
     sessionCodec: sessionHmac({ secret: "test", ttl: 600 }),
     registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
     otpTransport: otpTransportConsole,
-    webauthn: {
+    webAuthn: {
       rpId: "localhost",
       rpName: "Test App",
     },
