@@ -16,8 +16,8 @@
     "clean:hard": "rm -rf node_modules examples/*/{node_modules,.output,tsconfig.tsbuildinfo} packages/*/node_modules bun.lock && bun install"
   },
   "devDependencies": {
-    "prettier": "^3.7.4",
+    "prettier": "^3.8.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.17"
   }
 }
