@@ -7,6 +7,11 @@ import type { SessionCookieOptions } from "../types";
 
 export { sessionCookieDefaults };
 
+/**
+ * TanStack session transport
+ *
+ * Wires cookie-based session transport to TanStack's cookie helpers.
+ */
 export const sessionTransportTanstack = (options: SessionCookieOptions) =>
   sessionTransportCookie({
     get: (name) => getCookie(name),
