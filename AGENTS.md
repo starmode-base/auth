@@ -30,6 +30,7 @@ This is security-critical code.
 - TypeScript only, no transpile to JS
 - Factories should be prefixed with `make` (e.g., `makeAuth`, `makeMemoryAdapters`)
 - Never export local symbols
+- Use TS/JS style comments
 
 ## Error handling
 
@@ -48,3 +49,8 @@ This is security-critical code.
 
 - Use sentence case, never title case
 - Don't use the word "code" with regards to OTP (use "otp")
+
+## Code review instructions
+
+- Look for dead code
+- Look uselsee assertions in tests

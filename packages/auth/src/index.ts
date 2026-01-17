@@ -20,5 +20,8 @@ export {
 export { sessionTransportHeader } from "./presets/session-transport-header";
 export { sessionTransportMemory } from "./presets/session-transport-memory";
 
+// Parser
+export { p } from "./parser";
+
 // Types
 export type * from "./types";

@@ -1,5 +1,50 @@
 import { createServerFn } from "@tanstack/react-start";
+import { p } from "@starmode/auth";
 import { auth } from "./auth";
+
+const registrationCredential = p.obj({
+  id: p.str(),
+  rawId: p.str(),
+  type: p.literal(["public-key"]),
+  response: p.obj({
+    clientDataJSON: p.str(),
+    attestationObject: p.str(),
+    transports: p.optional(
+      p.array(p.literal(["usb", "nfc", "ble", "internal", "hybrid"])),
+    ),
+  }),
+  authenticatorAttachment: p.optional(
+    p.literal(["platform", "cross-platform"]),
+  ),
+  clientExtensionResults: p.record(),
+});
+
+const authenticationCredential = p.obj({
+  id: p.str(),
+  rawId: p.str(),
+  type: p.literal(["public-key"]),
+  response: p.obj({
+    clientDataJSON: p.str(),
+    authenticatorData: p.str(),
+    signature: p.str(),
+    userHandle: p.optional(p.str()),
+  }),
+  authenticatorAttachment: p.optional(
+    p.literal(["platform", "cross-platform"]),
+  ),
+  clientExtensionResults: p.record(),
+});
+
+const validate = {
+  identifier: p.str(),
+  verifyOtp: p.obj({ identifier: p.str(), otp: p.str() }),
+  registrationToken: p.str(),
+  verifyRegistration: p.obj({
+    registrationToken: p.str(),
+    credential: registrationCredential,
+  }),
+  credential: authenticationCredential,
+};
 
 /**
  * In-memory user store
@@ -7,8 +52,7 @@ import { auth } from "./auth";
  * Simple in-memory user store for demonstration purposes. In a real app this
  * would be replaced with a database. Returns whether the user was newly created
  * so the caller can distinguish sign-up from sign-in.
- */
-const users = new Map<string, { userId: string; email: string }>();
+ */ const users = new Map<string, { userId: string; email: string }>();
 let userIdCounter = 0;
 
 function upsertUser(email: string): { userId: string; isNew: boolean } {
@@ -24,21 +68,22 @@ function upsertUser(email: string): { userId: string; isNew: boolean } {
 /**
  * Request OTP
  *
- * Sends a one-time password to the given identifier (email or phone). The OTP is valid for a
- * short window and must be verified before the user can proceed.
+ * Sends a one-time password to the given identifier (email or phone). The OTP
+ * is valid for a short window and must be verified before the user can proceed.
  */
 export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator((identifier: string) => identifier)
-  .handler(({ data: identifier }) => auth.requestOtp(identifier));
+  .inputValidator(validate.identifier)
+  .handler(({ data }) => auth.requestOtp(data));
 
 /**
  * Verify OTP
  *
- * Checks whether the provided OTP matches what was sent to the identifier. Returns
- * success if valid, allowing the client to proceed with sign-up or sign-in.
+ * Checks whether the provided OTP matches what was sent to the identifier.
+ * Returns success if valid, allowing the client to proceed with sign-up or
+ * sign-in.
  */
 export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { identifier: string; otp: string }) => input)
+  .inputValidator(validate.verifyOtp)
   .handler(({ data }) => auth.verifyOtp(data.identifier, data.otp));
 
 /**
@@ -49,11 +94,9 @@ export const verifyOtp = createServerFn({ method: "POST" })
  * user without needing to re-verify identifier ownership.
  */
 export const signUp = createServerFn({ method: "POST" })
-  .inputValidator((input: { identifier: string; otp: string }) => input)
+  .inputValidator(validate.verifyOtp)
   .handler(async ({ data }) => {
-    // Verify OTP
     const result = await auth.verifyOtp(data.identifier, data.otp);
-
     if (!result.success) {
       return { success: false, registrationToken: undefined };
     }
@@ -78,23 +121,20 @@ export const signUp = createServerFn({ method: "POST" })
  * user ID to the client.
  */
 export const generateRegistrationOptions = createServerFn({ method: "POST" })
-  .inputValidator((registrationToken: string) => registrationToken)
-  .handler(({ data: registrationToken }) =>
-    auth.generateRegistrationOptions(registrationToken),
-  );
+  .inputValidator(validate.registrationToken)
+  .handler(({ data }) => auth.generateRegistrationOptions(data));
 
 /**
  * Verify registration
  *
- * Validates the credential response from the browser and stores the new passkey.
- * On success, sets a session cookie so the user is immediately signed in.
+ * Validates the credential response from the browser and stores the new
+ * passkey. On success, sets a session cookie so the user is immediately signed
+ * in.
  */
 export const verifyRegistration = createServerFn({ method: "POST" })
-  .inputValidator(
-    (input: { registrationToken: string; credential: unknown }) => input,
-  )
+  .inputValidator(validate.verifyRegistration)
   .handler(({ data }) =>
-    auth.verifyRegistration(data.registrationToken, data.credential as never),
+    auth.verifyRegistration(data.registrationToken, data.credential),
   );
 
 /**
@@ -115,10 +155,8 @@ export const generateAuthenticationOptions = createServerFn({
  * On success, sets a session cookie to establish the authenticated session.
  */
 export const verifyAuthentication = createServerFn({ method: "POST" })
-  .inputValidator((credential: unknown) => credential)
-  .handler(({ data: credential }) =>
-    auth.verifyAuthentication(credential as never),
-  );
+  .inputValidator(validate.credential)
+  .handler(({ data }) => auth.verifyAuthentication(data));
 
 /**
  * Sign out
