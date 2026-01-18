@@ -40,9 +40,8 @@ export function makeHmacCodec<TPayload extends object>(options: {
 
         const now = Math.floor(Date.now() / 1000);
         const expired = data.exp < now;
-        const { exp, ...payload } = data;
 
-        return { ...(payload as TPayload), valid: !expired, expired };
+        return { ...data, valid: !expired, expired };
       } catch {
         return null;
       }
