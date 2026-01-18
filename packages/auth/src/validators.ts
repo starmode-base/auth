@@ -55,8 +55,12 @@ export const authValidators = {
 
 /** Auth handler request body validator (discriminated union by method) */
 export const authBodyValidator = p.tagged("method", {
-  requestOtp: p.obj({ args: p.obj({ identifier: p.str() }) }),
-  verifyOtp: p.obj({ args: p.obj({ identifier: p.str(), otp: p.str() }) }),
+  requestOtp: p.obj({
+    args: p.obj({ identifier: p.str() }),
+  }),
+  verifyOtp: p.obj({
+    args: p.obj({ identifier: p.str(), otp: p.str() }),
+  }),
   generateRegistrationOptions: p.obj({
     args: p.obj({ registrationToken: p.str() }),
   }),
