@@ -11,6 +11,7 @@
     "src/"
   ],
   "scripts": {
+    "lint": "eslint --fix",
     "test": "vitest run"
   },
   "devDependencies": {
