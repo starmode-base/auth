@@ -36,127 +36,73 @@ This means:
 
 ### Primitives
 
-| Primitive                                     | What it does                         | Client |
-| --------------------------------------------- | ------------------------------------ | ------ |
-| `requestOtp(identifier)`                      | Send OTP to identifier (email/phone) | ✅     |
-| `verifyOtp(identifier, otp)`                  | Verify OTP → `{ valid }`             | ✅     |
-| `createRegistrationToken(userId, identifier)` | Create registration token            | ❌     |
-| `validateRegistrationToken(token)`            | Validate → `{ userId, identifier }`  | ❌     |
-| `generateRegistrationOptions(token)`          | WebAuthn registration options        | ✅     |
-| `verifyRegistration(token, credential)`       | Verify + store + session             | ✅     |
-| `generateAuthenticationOptions()`             | WebAuthn sign-in options             | ✅     |
-| `verifyAuthentication(credential)`            | Verify + session                     | ✅     |
-| `getSession()`                                | Get session data                     | ❌     |
-| `signOut()`                                   | End session                          | ✅     |
+See `MakeAuthResult` and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
+
+| Primitive                                               | What it does                         | Client |
+| ------------------------------------------------------- | ------------------------------------ | ------ |
+| `requestOtp({ identifier })`                            | Send OTP to identifier (email/phone) | ✅     |
+| `verifyOtp({ identifier, otp })`                        | Verify OTP → `{ success }`           | ✅     |
+| `createRegistrationToken({ userId, identifier })`       | Create registration token            | ❌     |
+| `validateRegistrationToken({ token })`                  | Validate → `{ userId, identifier }`  | ❌     |
+| `generateRegistrationOptions({ registrationToken })`    | WebAuthn registration options        | ✅     |
+| `verifyRegistration({ registrationToken, credential })` | Verify + store + session             | ✅     |
+| `generateAuthenticationOptions()`                       | WebAuthn sign-in options             | ✅     |
+| `verifyAuthentication({ credential })`                  | Verify + session                     | ✅     |
+| `getSession()`                                          | Get session data                     | ❌     |
+| `signOut()`                                             | End session                          | ✅     |
 
 **Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
 Key design: **OTP never creates a session.** Only webauthn create sessions. `verifyOtp` just verifies the otp — it doesn't upsert users or create tokens. Apps compose the flow they need.
 
-### Flows (composed from primitives)
+### Flows
+
+The library provides primitives. Apps compose flows.
 
 ```
-Sign up:    verifyOtp → upsertUser (app) → createRegistrationToken → passkey → session
-Sign in:    passkey → session
-Recovery:   verifyOtp → upsertUser (app) → createRegistrationToken → passkey → session
-Change email: verifyOtp → app updates user record
-Add email:    verifyOtp → app adds email to user
+Sign up:      requestOtp → verifyOtp → [app: upsertUser] → createRegistrationToken → passkey → session
+Sign in:      passkey → session
+Add passkey:  getSession → createRegistrationToken → passkey
+Recovery:     requestOtp → verifyOtp → [app: lookupUser] → createRegistrationToken → passkey → session
 ```
 
-The library provides primitives. The app orchestrates:
+Below shows where each call runs — `authClient.` runs in the browser, `auth.` runs on your server, and app code (like `signUp()`) is your server function.
 
-```ts
-// Sign up — app composes the flow
-await auth.requestOtp(identifier);
+**Sign up** (OTP + passkey):
 
-const { valid } = await auth.verifyOtp(identifier, otp);
+1. Client: `authClient.requestOtp({ identifier })` — sends OTP
+2. User receives OTP via email/phone
+3. User submits OTP to app
+4. Client: `signUp({ identifier, otp })` — your server function:
+   - `auth.verifyOtp({ identifier, otp })` — validates OTP
+   - App upserts user → `userId`
+   - `auth.createRegistrationToken({ userId, identifier })` → `registrationToken`
+5. Client: `authClient.generateRegistrationOptions({ registrationToken })`
+6. Client: `authClient.createPasskey(options)` — browser WebAuthn
+7. Client: `authClient.verifyRegistration({ registrationToken, credential })`
+   - Server stores passkey, creates session → user authenticated
 
-if (valid) {
-  const { userId } = await db.users.upsert({ email: identifier }); // App's DB
-  const { registrationToken } = await auth.createRegistrationToken(
-    userId,
-    identifier,
-  );
-  // Continue with passkey registration...
-}
+**Sign in** (passkey only):
 
-// Change identifier — different flow, same primitives
-await auth.requestOtp(newIdentifier);
+1. Client: `authClient.generateAuthenticationOptions()`
+2. Client: `authClient.getPasskey(options)` — browser WebAuthn
+3. Client: `authClient.verifyAuthentication({ credential })`
+   - Server verifies signature, creates session → user authenticated
 
-const { valid } = await auth.verifyOtp(newIdentifier, otp);
+**Add passkey** (while authenticated):
 
-if (valid) {
-  await db.users.update(userId, { email: newIdentifier }); // App's DB
-}
-```
+1. Client: `addPasskey({ identifier })` — your server function:
+   - `auth.getSession()` → `userId`
+   - `auth.createRegistrationToken({ userId, identifier })` → `registrationToken`
+2. Client: `authClient.generateRegistrationOptions({ registrationToken })`
+3. Client: `authClient.createPasskey(options)` — browser WebAuthn
+4. Client: `authClient.verifyRegistration({ registrationToken, credential })`
 
-**OTP recovery is optional.** Apps choose whether to expose it:
+**Recovery** (lost all passkeys):
 
-- Regular apps: expose it — user recovers account and data
-- E2EE apps: don't expose it — OTP can't recover encrypted data anyway
+Same as sign up, but your server function looks up the existing user instead of creating one. For E2EE apps, recovery means losing access to encrypted data — that's the security contract.
 
-### Flow adapters (optional convenience)
-
-For common patterns, we ship flow adapters that compose primitives:
-
-```ts
-import { makeSignUpFlow } from "@starmode/auth/flows";
-
-const signUp = makeSignUpFlow({
-  auth,
-  upsertUser: async (identifier) => db.users.upsert({ email: identifier }),
-});
-
-// Usage — one call instead of multiple
-const { registrationToken } = await signUp(identifier, otp);
-```
-
-Flow adapters are optional. You can always use primitives directly.
-
-### Server-side flows (implementation detail)
-
-```
-OTP verification:
-1. User submits identifier (email or phone)
-2. Server stores OTP, sends via configured channel
-3. User submits OTP
-4. Server verifies OTP (checks OTP table)
-5. Server returns true
-   ← app decides what to do next →
-
-Sign up (app orchestrates):
-1. App calls verifyOtp → valid
-2. App upserts user → userId
-3. App calls createRegistrationToken(userId, identifier)
-4. Continue with passkey registration...
-
-Passkey registration:
-1. Client has registration token
-2. Client calls generateRegistrationOptions(registrationToken)
-3. Server validates token, generates WebAuthn challenge
-4. Client triggers browser WebAuthn (create credential)
-5. Client calls verifyRegistration(registrationToken, credential)
-6. Server stores credential (linked to userId from token)
-7. Server inserts session
-8. Server returns session cookie
-   ← user is now authenticated →
-
-Passkey sign in:
-1. Client requests authentication options
-2. Server generates WebAuthn challenge
-3. Client triggers browser WebAuthn (biometric prompt)
-4. Client sends signed credential to server
-5. Server looks up credential by ID → gets userId + public key
-6. Server verifies signature
-7. Server inserts session
-8. Server returns session cookie
-```
-
-**Implementation notes:**
-
-- Registration token is HMAC-signed containing userId + identifier, short TTL (5 min)
-- `getCredentialById(credentialId)` adapter needed to look up userId during passkey auth
-- User management is app responsibility — library doesn't touch users table
+See `examples/tanstack-start/` for a working implementation.
 
 ### E2EE compatibility
 
@@ -185,97 +131,11 @@ The library provides a REST-based architecture. Server exposes `makeAuthHandler`
 
 ### Server module (`@starmode/auth`)
 
-**Usage:**
-
-```ts
-import {
-  makeAuth,
-  makeCookieAuth,
-  makeMemoryAdapters,
-  makeSessionHmac,
-  makeRegistrationHmac,
-  otpSendConsole,
-} from "@starmode/auth";
-
-const auth = makeAuth({
-  // All persistence adapters
-  storage: makeMemoryAdapters(), // or your own adapters
-
-  // Codecs (token encoding)
-  session: makeSessionHmac({
-    secret: process.env.SESSION_SECRET,
-    ttl: 600, // 10 min
-  }),
-  registration: makeRegistrationHmac({
-    secret: process.env.REGISTRATION_SECRET,
-    ttl: 300, // 5 min
-  }),
-
-  // OTP delivery
-  sendOtp: otpSendConsole,
-
-  // Passkey config
-  webauthn: {
-    rpId: "example.com",
-    rpName: "My App",
-  },
-});
-
-// Wrap with cookie handling (you provide cookie ops)
-const cookieAuth = makeCookieAuth({
-  auth,
-  cookie: {
-    get: () => /* read session cookie */,
-    set: (token) => /* set session cookie */,
-    clear: () => /* clear session cookie */,
-  },
-});
-```
+See `examples/tanstack-start/src/lib/auth.ts` for a working example. Config types are documented in `MakeAuthConfig` in `packages/auth/src/types.ts`.
 
 **Custom storage adapters:**
 
-See `StorageAdapter` type in `packages/auth/src/types.ts` for the full interface. Example:
-
-```ts
-const auth = makeAuth({
-  storage: {
-    otp: {
-      store: async (identifier, otp, expiresAt) => {
-        /* your ORM */
-      },
-      verify: async (identifier, otp) => {
-        /* your ORM */
-      },
-    },
-    session: {
-      store: async (sessionId, userId, expiresAt) => {
-        /* your ORM */
-      },
-      get: async (sessionId) => {
-        /* your ORM */
-      },
-      delete: async (sessionId) => {
-        /* your ORM */
-      },
-    },
-    credential: {
-      store: async (userId, credential) => {
-        /* your ORM */
-      },
-      get: async (userId) => {
-        /* your ORM */
-      },
-      getById: async (credentialId) => {
-        /* your ORM */
-      },
-      updateCounter: async (credentialId, counter) => {
-        /* your ORM */
-      },
-    },
-  },
-  // ... other config
-});
-```
+See `StorageAdapter` type in `packages/auth/src/types.ts` — it's self-documenting.
 
 **Why no database drivers?**
 
@@ -300,8 +160,10 @@ OTP delivery:
 ✓ otpTransportConsole          — logs OTP to console (dev)
 
 Session transport:
-✓ sessionTransportCookie()     — cookie-based session transport
+✓ sessionTransportCookie()     — generic cookie-based session transport
 ✓ sessionTransportHeader()     — header-based session transport
+✓ sessionTransportMemory()     — in-memory (testing)
+✓ sessionTransportTanstack()   — TanStack Start cookie transport (@starmode/auth/tanstack)
 
 Handler:
 ✓ makeAuthHandler()            — REST handler for auth API
@@ -310,23 +172,14 @@ Client:
 ✓ makeAuthClient()             — unified client (HTTP + WebAuthn)
 ```
 
-**Flow adapters (`@starmode/auth/flows`):**
-
-Optional convenience adapters that compose primitives for common patterns:
-
-```
-✓ makeSignUpFlow()           — verifyOtp + upsertUser + createRegistrationToken
-○ makeEmailChangeFlow()      — verifyOtp + update user email callback
-○ makeAddEmailFlow()         — verifyOtp + add email callback
-```
-
 **Planned:**
 
 ```
-○ otpFormatBranded()         — branded OTP message format
-○ otpSendResend()            — send via Resend API
-○ otpSendSendgrid()          — send via SendGrid API
-○ makePostgresAdapters(pool) — PostgreSQL persistence adapters
+○ Flow adapters               — makeSignUpFlow(), makeEmailChangeFlow() (compose primitives)
+○ otpFormatBranded()          — branded OTP message format
+○ otpSendResend()             — send via Resend API
+○ otpSendSendgrid()           — send via SendGrid API
+○ makePostgresAdapters(pool)  — PostgreSQL persistence adapters
 ```
 
 **Race-safe user upsert:**
@@ -335,43 +188,12 @@ User management is app responsibility, but the sign-up flow has potential for ra
 
 ### Client module (`@starmode/auth/client`)
 
-**Usage:**
-
-```ts
-import { makeAuthClient } from "@starmode/auth/client";
-
-const authClient = makeAuthClient("/api/auth");
-
-// Sign up flow
-await authClient.requestOtp("user@example.com");
-// signUp is app-specific (verifyOtp + upsertUser + createRegistrationToken)
-const { registrationToken } = await signUp("user@example.com", "123456");
-
-// Continue with passkey registration (unified API)
-const { options } =
-  await authClient.generateRegistrationOptions(registrationToken);
-const credential = await authClient.createPasskey(options); // Browser WebAuthn
-await authClient.verifyRegistration(registrationToken, credential);
-// Now user has a session
-
-// Sign in flow: passkey only (unified API)
-const { options: authOptions } =
-  await authClient.generateAuthenticationOptions();
-const authCredential = await authClient.getPasskey(authOptions); // Browser WebAuthn
-await authClient.verifyAuthentication(authCredential);
-// Now user has a session
-
-await authClient.signOut();
-```
-
-The client combines HTTP mutations with browser WebAuthn helpers:
+See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. The client combines:
 
 - **HTTP mutations:** `requestOtp`, `verifyOtp`, `generateRegistrationOptions`, `verifyRegistration`, `generateAuthenticationOptions`, `verifyAuthentication`, `signOut`
 - **Browser WebAuthn:** `createPasskey`, `getPasskey`
 
-**Note:** `getSession` is server-only. Apps decide how to expose auth status to the client (e.g., SSR loader, `/api/me` endpoint).
-
-See `AuthClient` type in `packages/auth/src/types.ts` for the full client interface.
+**Note:** `getSession` is server-only. Apps decide how to expose auth status to the client (e.g., SSR loader, server function).
 
 ### Session management
 
@@ -384,8 +206,8 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full client interf
 
 **Token format via codec:**
 
-- `makeSessionHmac({ secret, ttl })` — HMAC-signed JSON. Stateless validation for non-expired tokens, validates against DB when expired.
-- `makeSessionOpaque()` — Opaque (random string). Always validates against DB.
+- `sessionHmac({ secret, ttl })` — HMAC-signed JSON. Stateless validation for non-expired tokens, validates against DB when expired.
+- `sessionOpaque()` — Opaque (random string). Always validates against DB.
 
 **Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).
 
@@ -412,112 +234,22 @@ The session cookie is sent automatically. Your `/api/me` endpoint validates the 
 
 We could add a `getViewer()` utility with optional client-side session decoding:
 
-| Server                | Client                 | `getViewer()`          |
-| --------------------- | ---------------------- | ---------------------- |
-| `makeSessionHmac()`   | `sessionDecoderHmac()` | Instant (local decode) |
-| `makeSessionOpaque()` | (none)                 | Server call            |
+| Server            | Client                 | `getViewer()`          |
+| ----------------- | ---------------------- | ---------------------- |
+| `sessionHmac()`   | `sessionDecoderHmac()` | Instant (local decode) |
+| `sessionOpaque()` | (none)                 | Server call            |
 
 For now, we keep it minimal — auth only, viewer fetching is your responsibility.
 
 ### Framework examples
 
-**Server setup (any framework):**
+See `examples/tanstack-start/` for a complete working example:
 
-```ts
-// lib/auth.ts
-import {
-  makeAuth,
-  storageMemory,
-  sessionHmac,
-  registrationHmac,
-  otpTransportConsole,
-} from "@starmode/auth";
-import { sessionTransportCookie } from "@starmode/auth/cookie";
-
-export const auth = makeAuth({
-  storage: storageMemory(),
-  sessionCodec: sessionHmac({ secret: process.env.SESSION_SECRET!, ttl: 600 }),
-  registrationCodec: registrationHmac({ secret: process.env.REG_SECRET!, ttl: 300 }),
-  otpTransport: otpTransportConsole,
-  sessionTransport: sessionTransportCookie({ ... }),
-  webAuthn: { rpId: "example.com", rpName: "My App" },
-});
-```
-
-**REST API route:**
-
-Use `makeAuthHandler` to expose auth primitives via REST.
-
-```ts
-// api/auth/route.ts (Next.js)
-import { makeAuthHandler } from "@starmode/auth";
-import { auth } from "@/lib/auth";
-
-const { POST } = makeAuthHandler(auth);
-export { POST };
-```
-
-```ts
-// routes/api.auth/route.ts (TanStack Start)
-import { createFileRoute } from "@tanstack/react-router";
-import { makeAuthHandler } from "@starmode/auth";
-import { auth } from "~/lib/auth";
-
-export const Route = createFileRoute("/api/auth")({
-  server: { handlers: makeAuthHandler(auth) },
-});
-```
-
-**Client usage:**
-
-```ts
-// lib/auth.client.ts
-import { makeAuthClient } from "@starmode/auth/client";
-export const authClient = makeAuthClient("/api/auth");
-```
-
-```tsx
-// Component
-import { authClient } from "@/lib/auth.client";
-
-// Request OTP
-await authClient.requestOtp(email);
-
-// Passkey registration (unified API)
-const { options } = await authClient.generateRegistrationOptions(token);
-const credential = await authClient.createPasskey(options);
-await authClient.verifyRegistration(token, credential);
-
-// Passkey sign-in (unified API)
-const { options } = await authClient.generateAuthenticationOptions();
-const credential = await authClient.getPasskey(options);
-await authClient.verifyAuthentication(credential);
-```
-
-**App-specific flows (server-side):**
-
-The `signUp` flow is app-specific because it needs to upsert the user in your database.
-
-```ts
-// lib/auth.server.ts (TanStack Start)
-import { createServerFn } from "@tanstack/react-start";
-import { auth } from "./auth";
-
-export const signUp = createServerFn({ method: "POST" }).handler(
-  async ({ data }) => {
-    const result = await auth.verifyOtp(data.identifier, data.otp);
-    if (!result.success) return { success: false };
-
-    const { userId } = await db.users.upsert({ email: data.identifier });
-    return auth.createRegistrationToken(userId, data.identifier);
-  },
-);
-
-// For SSR loaders that need session data
-export const getSession = createServerFn({ method: "GET" }).handler(() =>
-  auth.getSession(),
-);
-```
+- `src/lib/auth.ts` — server-side auth setup
+- `src/lib/auth.client.ts` — client setup
+- `src/lib/auth.server.ts` — app-specific flows (signUp, getViewer)
+- `src/routes/api.auth/route.ts` — REST handler
+- `src/routes/index.tsx` — UI with full auth flow
 
 ### React hooks
 
@@ -533,8 +265,8 @@ Only things that need reactive state (loading, error) or depend on other hooks n
 
 ```ts
 // Simple one-shot calls — just call the methods
-await signOut();
-await requestOtp(email);
+await authClient.signOut();
+await authClient.requestOtp({ identifier: email });
 ```
 
 **Note:** No `useViewer()` hook — that's app data, not auth. Use your own data fetching (React Query, SWR, server components, etc.).
@@ -553,7 +285,8 @@ await requestOtp(email);
 - Storage: memory (dev), PostgreSQL (planned)
 - Tokens: HMAC (session + registration), opaque (session)
 - OTP delivery: console (dev), Resend (planned), SendGrid (planned)
-- Flows: `makeSignUpFlow` (optional convenience)
+- Session transport: cookie, header, memory (testing), TanStack
+- Flows: planned (apps compose primitives directly for now)
 
 **Frameworks:**
 
