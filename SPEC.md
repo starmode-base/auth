@@ -329,6 +329,10 @@ Optional convenience adapters that compose primitives for common patterns:
 ○ makePostgresAdapters(pool) — PostgreSQL persistence adapters
 ```
 
+**Race-safe user upsert:**
+
+User management is app responsibility, but the sign-up flow has potential for race conditions: two tabs verify OTP for the same email simultaneously, both see "no user exists", both try to create. Database examples should demonstrate race-safe patterns (e.g., `ON CONFLICT` for PostgreSQL/SQLite, `ON DUPLICATE KEY` for MySQL).
+
 ### Client module (`@starmode/auth/client`)
 
 **Usage:**
