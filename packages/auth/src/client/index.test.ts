@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { httpClient, type AuthClient } from "./index";
+import { makeAuthClient, type AuthClient } from "./index";
 
-describe("httpClient", () => {
+describe("makeAuthClient", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
@@ -16,7 +16,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.requestOtp("user@example.com");
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -36,7 +36,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       const result = await auth.requestOtp("user@example.com");
 
       expect(result).toStrictEqual({ success: true });
@@ -51,7 +51,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.verifyOtp("user@example.com", "123456");
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -72,7 +72,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       const result = await auth.verifyOtp("user@example.com", "123456");
 
       expect(result).toStrictEqual({ valid: true });
@@ -85,7 +85,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       const result = await auth.verifyOtp("user@example.com", "000000");
 
       expect(result).toStrictEqual({ valid: false });
@@ -100,7 +100,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.generateRegistrationOptions("reg-token-123");
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -133,7 +133,7 @@ describe("httpClient", () => {
         clientExtensionResults: {},
       };
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.verifyRegistration("reg-token-123", mockCredential);
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -156,7 +156,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.generateAuthenticationOptions();
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -189,7 +189,7 @@ describe("httpClient", () => {
         clientExtensionResults: {},
       };
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.verifyAuthentication(mockCredential);
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -211,7 +211,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       await auth.signOut();
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
@@ -228,7 +228,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
       const result = await auth.signOut();
 
       expect(result).toBeUndefined();
@@ -244,7 +244,7 @@ describe("httpClient", () => {
       });
       globalThis.fetch = mockFetch;
 
-      const auth = httpClient("/api/auth");
+      const auth = makeAuthClient("/api/auth");
 
       await expect(auth.requestOtp("user@example.com")).rejects.toThrow(
         "Auth request failed: 500 Internal Server Error",
@@ -257,8 +257,8 @@ describe("client types", () => {
   it("exports AuthClient type", async () => {
     // Type-level test: if this compiles, the types are exported correctly
     const _typeCheck = async () => {
-      const { httpClient } = await import("./index");
-      const auth = httpClient("/api/auth");
+      const { makeAuthClient } = await import("./index");
+      const auth = makeAuthClient("/api/auth");
 
       // These should all type-check
       const _r1: { success: boolean } =
@@ -273,10 +273,10 @@ describe("client types", () => {
     expect(true).toBe(true);
   });
 
-  it("AuthClient matches httpClient return type", () => {
-    // Type-level test: AuthClient can be assigned from httpClient
+  it("AuthClient matches makeAuthClient return type", () => {
+    // Type-level test: AuthClient can be assigned from makeAuthClient
     const _typeCheck = () => {
-      const auth: AuthClient = httpClient("/api/auth");
+      const auth: AuthClient = makeAuthClient("/api/auth");
       return auth;
     };
 

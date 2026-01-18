@@ -236,15 +236,16 @@ export type MakeAuthResult = {
 export type MakeAuth = (config: MakeAuthConfig) => MakeAuthResult;
 
 /**
- * Auth client interface — OTP + passkey primitives only.
- * Note: createRegistrationToken is server-side only (needs userId from DB)
+ * Auth client interface — HTTP mutations + browser WebAuthn helpers.
+ *
+ * Note: createRegistrationToken and getSession are server-side only.
  */
 export type AuthClient = {
-  // OTP
+  // HTTP mutations - OTP
   requestOtp: (identifier: string) => Promise<RequestOtpResult>;
   verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
 
-  // Passkey (registrationToken comes from server-side signUp flow)
+  // HTTP mutations - Passkey (registrationToken comes from server-side signUp flow)
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsResult>;
@@ -257,5 +258,14 @@ export type AuthClient = {
     credential: AuthenticationCredential,
   ) => Promise<VerifyAuthenticationResult>;
 
+  // HTTP mutations - Session
   signOut: () => Promise<void>;
+
+  // Browser WebAuthn helpers
+  createPasskey: (
+    options: PublicKeyCredentialCreationOptionsJSON,
+  ) => Promise<RegistrationCredential | null>;
+  getPasskey: (
+    options: PublicKeyCredentialRequestOptionsJSON,
+  ) => Promise<AuthenticationCredential | null>;
 };

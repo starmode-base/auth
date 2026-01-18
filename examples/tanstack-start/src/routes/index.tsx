@@ -1,16 +1,7 @@
-import { createPasskey, getPasskey } from "@starmode/auth/client";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
-import {
-  requestOtp,
-  signUp,
-  generateRegistrationOptions,
-  verifyRegistration,
-  generateAuthenticationOptions,
-  verifyAuthentication,
-  signOut,
-  getSession,
-} from "../lib/auth.server";
+import { authClient } from "../lib/auth.client";
+import { signUp, getSession } from "../lib/auth.server";
 import {
   Input,
   Button,
@@ -223,7 +214,7 @@ function RouteComponent() {
     setLoading(true);
     setError(null);
     try {
-      const result = await requestOtp({ data: email });
+      const result = await authClient.requestOtp(email);
       if (result.success) setStep("otp");
     } catch {
       setError("Failed to send OTP");
@@ -257,18 +248,17 @@ function RouteComponent() {
     setError(null);
     try {
       // Get registration options from server
-      const optionsResult = await generateRegistrationOptions({
-        data: registrationToken,
-      });
+      const optionsResult =
+        await authClient.generateRegistrationOptions(registrationToken);
 
-      if (!optionsResult.success) {
+      if (!optionsResult.success || !optionsResult.options) {
         setError("Failed to get registration options");
         setLoading(false);
         return;
       }
 
       // Create passkey (handles browser ceremony + serialization)
-      const credential = await createPasskey(optionsResult.options);
+      const credential = await authClient.createPasskey(optionsResult.options);
 
       if (!credential) {
         setError("Passkey creation was cancelled");
@@ -277,9 +267,10 @@ function RouteComponent() {
       }
 
       // Verify with server
-      const result = await verifyRegistration({
-        data: { registrationToken, credential },
-      });
+      const result = await authClient.verifyRegistration(
+        registrationToken,
+        credential,
+      );
 
       if (result.success) {
         await router.invalidate();
@@ -298,10 +289,10 @@ function RouteComponent() {
     setError(null);
     try {
       // Get authentication options from server
-      const { options } = await generateAuthenticationOptions();
+      const { options } = await authClient.generateAuthenticationOptions();
 
       // Get passkey (handles browser ceremony + serialization)
-      const credential = await getPasskey(options);
+      const credential = await authClient.getPasskey(options);
 
       if (!credential) {
         setError("Passkey sign-in was cancelled");
@@ -310,7 +301,7 @@ function RouteComponent() {
       }
 
       // Verify with server
-      const result = await verifyAuthentication({ data: credential });
+      const result = await authClient.verifyAuthentication(credential);
 
       if (result.success) {
         await router.invalidate();
@@ -326,7 +317,7 @@ function RouteComponent() {
 
   const handleSignOut = async () => {
     setLoading(true);
-    await signOut();
+    await authClient.signOut();
     await router.invalidate();
     setEmail("");
     setOtp("");

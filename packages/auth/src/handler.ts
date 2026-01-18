@@ -1,8 +1,8 @@
 /**
  * REST handler for auth API
  *
- * Creates route handlers that dispatch based on the `fn` field in the request
- * body. Compatible with TanStack Start server routes.
+ * Creates route handlers that dispatch based on the `method` field in the
+ * request body. Compatible with TanStack Start server routes.
  */
 import type { MakeAuthResult } from "./types";
 import { authBodyValidator } from "./validators";
@@ -33,45 +33,35 @@ export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
 
     // Dispatch to auth method
     try {
-      switch (body.fn) {
+      switch (body.method) {
         case "requestOtp": {
-          return respond(await auth[body.fn](body.identifier));
+          return respond(await auth[body.method](body.identifier));
         }
 
         case "verifyOtp": {
-          return respond(await auth[body.fn](body.identifier, body.otp));
+          return respond(await auth[body.method](body.identifier, body.otp));
         }
 
         case "generateRegistrationOptions": {
-          return respond(await auth[body.fn](body.registrationToken));
+          return respond(await auth[body.method](body.registrationToken));
         }
 
         case "verifyRegistration": {
           return respond(
-            await auth[body.fn](body.registrationToken, body.credential),
+            await auth[body.method](body.registrationToken, body.credential),
           );
         }
 
         case "generateAuthenticationOptions": {
-          return respond(await auth[body.fn]());
+          return respond(await auth[body.method]());
         }
 
         case "verifyAuthentication": {
-          return respond(await auth[body.fn](body.credential));
-        }
-
-        case "getSession": {
-          const session = await auth[body.fn]();
-
-          return respond(
-            session
-              ? { success: true, session }
-              : { success: true, session: null },
-          );
+          return respond(await auth[body.method](body.credential));
         }
 
         case "signOut": {
-          await auth[body.fn]();
+          await auth[body.method]();
           return respond({ success: true });
         }
       }

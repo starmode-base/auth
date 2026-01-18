@@ -46,10 +46,10 @@ This means:
 | `verifyRegistration(token, credential)`       | Verify + store + session             | ✅     |
 | `generateAuthenticationOptions()`             | WebAuthn sign-in options             | ✅     |
 | `verifyAuthentication(credential)`            | Verify + session                     | ✅     |
-| `getSession(token)`                           | Get session data                     | ❌     |
-| `deleteSession(token)`                        | Delete session                       | ❌     |
+| `getSession()`                                | Get session data                     | ❌     |
+| `signOut()`                                   | End session                          | ✅     |
 
-**Client column:** ✅ = exposed via `httpClient` / callable from browser. ❌ = server-side only.
+**Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
 Key design: **OTP never creates a session.** Only webauthn create sessions. `verifyOtp` just verifies the otp — it doesn't upsert users or create tokens. Apps compose the flow they need.
 
@@ -175,13 +175,13 @@ Everything is explicit, never implicit. No nesting, no magic. You provide adapte
 
 ### Framework-agnostic by design
 
-| Layer            | What it does            | Framework-specific?         |
-| ---------------- | ----------------------- | --------------------------- |
-| `makeAuth`       | Pure auth logic         | No                          |
-| `makeCookieAuth` | Wraps auth with cookies | No (you provide cookie ops) |
-| `httpClient`     | HTTP client (fetch)     | No                          |
+| Layer             | What it does              | Framework-specific? |
+| ----------------- | ------------------------- | ------------------- |
+| `makeAuth`        | Server-side auth logic    | No                  |
+| `makeAuthHandler` | REST handler for auth API | No                  |
+| `makeAuthClient`  | Client (HTTP + WebAuthn)  | No                  |
 
-The only framework-specific code is the glue you write: cookie get/set/clear functions for `makeCookieAuth`. For server actions, you export the `cookieAuth` methods directly. For HTTP, you use `httpClient`.
+The library provides a REST-based architecture. Server exposes `makeAuthHandler`, client uses `makeAuthClient`. Session management uses cookies automatically.
 
 ### Server module (`@starmode/auth`)
 
@@ -289,18 +289,25 @@ Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type
 
 ```
 Storage:
-✓ makeMemoryAdapters()         — in-memory persistence (dev/test)
+✓ storageMemory()              — in-memory persistence (dev/test)
 
 Codecs:
-✓ makeSessionHmac()            — HMAC-signed session tokens (stateless)
-✓ makeSessionOpaque()          — opaque session tokens (requires DB lookup)
-✓ makeRegistrationHmac()       — HMAC-signed registration tokens
+✓ sessionHmac()                — HMAC-signed session tokens (stateless)
+✓ sessionOpaque()              — opaque session tokens (requires DB lookup)
+✓ registrationHmac()           — HMAC-signed registration tokens
 
 OTP delivery:
-✓ otpSendConsole               — logs OTP to console (dev)
+✓ otpTransportConsole          — logs OTP to console (dev)
 
-Wrappers:
-✓ makeCookieAuth()             — wraps auth with cookie handling
+Session transport:
+✓ sessionTransportCookie()     — cookie-based session transport
+✓ sessionTransportHeader()     — header-based session transport
+
+Handler:
+✓ makeAuthHandler()            — REST handler for auth API
+
+Client:
+✓ makeAuthClient()             — unified client (HTTP + WebAuthn)
 ```
 
 **Flow adapters (`@starmode/auth/flows`):**
@@ -327,52 +334,38 @@ Optional convenience adapters that compose primitives for common patterns:
 **Usage:**
 
 ```ts
-import { httpClient } from "@starmode/auth/client";
+import { makeAuthClient } from "@starmode/auth/client";
 
-const auth = httpClient("/api/auth");
+const authClient = makeAuthClient("/api/auth");
 
-// Sign up flow: client calls server-side composed flow
-await auth.requestOtp("user@example.com");
-// signUp is a server action that does: verifyOtp + upsertUser + createRegistrationToken
+// Sign up flow
+await authClient.requestOtp("user@example.com");
+// signUp is app-specific (verifyOtp + upsertUser + createRegistrationToken)
 const { registrationToken } = await signUp("user@example.com", "123456");
 
-// Continue with passkey registration
-const { options } = await auth.generateRegistrationOptions(registrationToken);
-const credential = await navigator.credentials.create({ publicKey: options });
-await auth.verifyRegistration(registrationToken, credential);
+// Continue with passkey registration (unified API)
+const { options } =
+  await authClient.generateRegistrationOptions(registrationToken);
+const credential = await authClient.createPasskey(options); // Browser WebAuthn
+await authClient.verifyRegistration(registrationToken, credential);
 // Now user has a session
 
-// Sign in flow: passkey only
-const { options: authOptions } = await auth.generateAuthenticationOptions();
-const authCredential = await navigator.credentials.get({
-  publicKey: authOptions,
-});
-await auth.verifyAuthentication(authCredential);
+// Sign in flow: passkey only (unified API)
+const { options: authOptions } =
+  await authClient.generateAuthenticationOptions();
+const authCredential = await authClient.getPasskey(authOptions); // Browser WebAuthn
+await authClient.verifyAuthentication(authCredential);
 // Now user has a session
 
-await auth.signOut();
+await authClient.signOut();
 ```
 
-**Server-side flow (required for signup):**
+The client combines HTTP mutations with browser WebAuthn helpers:
 
-The `signUp` flow must run server-side because it needs to:
+- **HTTP mutations:** `requestOtp`, `verifyOtp`, `generateRegistrationOptions`, `verifyRegistration`, `generateAuthenticationOptions`, `verifyAuthentication`, `signOut`
+- **Browser WebAuthn:** `createPasskey`, `getPasskey`
 
-1. Verify OTP
-2. Upsert user in your database → get userId
-3. Create registration token with userId
-
-```ts
-// Server-side (Next.js server action, TanStack server function, etc.)
-import { makeSignUpFlow } from "@starmode/auth/flows";
-
-export const signUp = makeSignUpFlow({
-  auth,
-  upsertUser: async (email) => db.users.upsert({ email }),
-});
-
-// Client calls this server action
-const { registrationToken } = await signUp("user@example.com", "123456");
-```
+**Note:** `getSession` is server-only. Apps decide how to expose auth status to the client (e.g., SSR loader, `/api/me` endpoint).
 
 See `AuthClient` type in `packages/auth/src/types.ts` for the full client interface.
 
@@ -424,158 +417,102 @@ For now, we keep it minimal — auth only, viewer fetching is your responsibilit
 
 ### Framework examples
 
-**Next.js — Server actions (primitives):**
-
-Export the `cookieAuth` primitives directly.
+**Server setup (any framework):**
 
 ```ts
-// app/actions/auth.ts
-"use server";
-import { db } from "@/lib/db";
+// lib/auth.ts
+import {
+  makeAuth,
+  storageMemory,
+  sessionHmac,
+  registrationHmac,
+  otpTransportConsole,
+} from "@starmode/auth";
+import { sessionTransportCookie } from "@starmode/auth/cookie";
 
-// Client-callable primitives
-export const requestOtp = cookieAuth.requestOtp;
-export const verifyOtp = cookieAuth.verifyOtp;
-export const generateRegistrationOptions =
-  cookieAuth.generateRegistrationOptions;
-export const verifyRegistration = cookieAuth.verifyRegistration;
-export const generateAuthenticationOptions =
-  cookieAuth.generateAuthenticationOptions;
-export const verifyAuthentication = cookieAuth.verifyAuthentication;
-export const signOut = cookieAuth.signOut;
+export const auth = makeAuth({
+  storage: storageMemory(),
+  sessionCodec: sessionHmac({ secret: process.env.SESSION_SECRET!, ttl: 600 }),
+  registrationCodec: registrationHmac({ secret: process.env.REG_SECRET!, ttl: 300 }),
+  otpTransport: otpTransportConsole,
+  sessionTransport: sessionTransportCookie({ ... }),
+  webAuthn: { rpId: "example.com", rpName: "My App" },
+});
+```
 
-// Composed flow — this is what clients call for signup
-// (createRegistrationToken is used internally, not exposed directly)
-export async function signUp(email: string, otp: string) {
-  const { valid } = await cookieAuth.verifyOtp(email, otp);
-  if (!valid) return { valid: false };
+**REST API route:**
 
-  const { userId } = await db.users.upsert({ email });
-  return cookieAuth.createRegistrationToken(userId, email);
-}
+Use `makeAuthHandler` to expose auth primitives via REST.
+
+```ts
+// api/auth/route.ts (Next.js)
+import { makeAuthHandler } from "@starmode/auth";
+import { auth } from "@/lib/auth";
+
+const { POST } = makeAuthHandler(auth);
+export { POST };
+```
+
+```ts
+// routes/api.auth/route.ts (TanStack Start)
+import { createFileRoute } from "@tanstack/react-router";
+import { makeAuthHandler } from "@starmode/auth";
+import { auth } from "~/lib/auth";
+
+export const Route = createFileRoute("/api/auth")({
+  server: { handlers: makeAuthHandler(auth) },
+});
+```
+
+**Client usage:**
+
+```ts
+// lib/auth.client.ts
+import { makeAuthClient } from "@starmode/auth/client";
+export const authClient = makeAuthClient("/api/auth");
 ```
 
 ```tsx
-// app/page.tsx
-import { requestOtp, signUp, verifyRegistration } from "./actions/auth";
+// Component
+import { authClient } from "@/lib/auth.client";
 
-// Sign up using composed flow
-await requestOtp("user@example.com");
-const { registrationToken } = await signUp("user@example.com", "123456");
-// ... WebAuthn flow, then:
-await verifyRegistration(registrationToken, credential);
-// User now has a session
+// Request OTP
+await authClient.requestOtp(email);
+
+// Passkey registration (unified API)
+const { options } = await authClient.generateRegistrationOptions(token);
+const credential = await authClient.createPasskey(options);
+await authClient.verifyRegistration(token, credential);
+
+// Passkey sign-in (unified API)
+const { options } = await authClient.generateAuthenticationOptions();
+const credential = await authClient.getPasskey(options);
+await authClient.verifyAuthentication(credential);
 ```
 
-**Next.js — API route:**
+**App-specific flows (server-side):**
 
-For HTTP clients, expose primitives with method dispatch.
-
-```ts
-// app/api/auth/route.ts
-import { z } from "zod";
-
-const schema = z.discriminatedUnion("method", [
-  // OTP
-  z.object({ method: z.literal("requestOtp"), identifier: z.string() }),
-  z.object({
-    method: z.literal("verifyOtp"),
-    identifier: z.string(),
-    otp: z.string(),
-  }),
-  // Passkey (createRegistrationToken is NOT exposed — use signUp server action)
-  z.object({
-    method: z.literal("generateRegistrationOptions"),
-    registrationToken: z.string(),
-  }),
-  z.object({
-    method: z.literal("verifyRegistration"),
-    registrationToken: z.string(),
-    credential: z.any(),
-  }),
-  z.object({ method: z.literal("generateAuthenticationOptions") }),
-  z.object({ method: z.literal("verifyAuthentication"), credential: z.any() }),
-  // Session
-  z.object({ method: z.literal("signOut") }),
-]);
-
-export async function POST(req: Request) {
-  const body = schema.parse(await req.json());
-  switch (body.method) {
-    case "requestOtp":
-      return Response.json(await cookieAuth.requestOtp(body.identifier));
-    case "verifyOtp":
-      return Response.json(
-        await cookieAuth.verifyOtp(body.identifier, body.otp),
-      );
-    case "generateRegistrationOptions":
-      return Response.json(
-        await cookieAuth.generateRegistrationOptions(body.registrationToken),
-      );
-    case "verifyRegistration":
-      return Response.json(
-        await cookieAuth.verifyRegistration(
-          body.registrationToken,
-          body.credential,
-        ),
-      );
-    case "generateAuthenticationOptions":
-      return Response.json(await cookieAuth.generateAuthenticationOptions());
-    case "verifyAuthentication":
-      return Response.json(
-        await cookieAuth.verifyAuthentication(body.credential),
-      );
-    case "signOut":
-      await cookieAuth.signOut();
-      return new Response(null, { status: 204 });
-  }
-}
-```
-
-**TanStack Start — Server functions:**
-
-Export server functions that wrap primitives.
+The `signUp` flow is app-specific because it needs to upsert the user in your database.
 
 ```ts
-// lib/auth.server.ts
+// lib/auth.server.ts (TanStack Start)
 import { createServerFn } from "@tanstack/react-start";
-import { db } from "./db";
+import { auth } from "./auth";
 
-// Primitives
-export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator((identifier: string) => identifier)
-  .handler(({ data: identifier }) => cookieAuth.requestOtp(identifier));
-
-export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator((input: { identifier: string; otp: string }) => input)
-  .handler(({ data }) => cookieAuth.verifyOtp(data.identifier, data.otp));
-
-// Composed flow
-export const signUp = createServerFn({ method: "POST" })
-  .inputValidator((input: { identifier: string; otp: string }) => input)
-  .handler(async ({ data }) => {
-    const { valid } = await cookieAuth.verifyOtp(data.identifier, data.otp);
-    if (!valid) return { valid: false };
+export const signUp = createServerFn({ method: "POST" }).handler(
+  async ({ data }) => {
+    const result = await auth.verifyOtp(data.identifier, data.otp);
+    if (!result.success) return { success: false };
 
     const { userId } = await db.users.upsert({ email: data.identifier });
-    return cookieAuth.createRegistrationToken(userId, data.identifier);
-  });
+    return auth.createRegistrationToken(userId, data.identifier);
+  },
+);
 
-// ... other primitives
-```
-
-```tsx
-// routes/index.tsx
-import { requestOtp, signUp, verifyRegistration } from "../lib/auth.server";
-
-// Sign up using composed flow
-await requestOtp("user@example.com");
-const { registrationToken } = await signUp({
-  identifier: "user@example.com",
-  otp: "123456",
-});
-// ... WebAuthn flow, then:
-await verifyRegistration({ registrationToken, credential });
+// For SSR loaders that need session data
+export const getSession = createServerFn({ method: "GET" }).handler(() =>
+  auth.getSession(),
+);
 ```
 
 ### React hooks
@@ -605,7 +542,7 @@ await requestOtp(email);
 - OTP: `requestOtp`, `verifyOtp`
 - Registration token: `createRegistrationToken`, `validateRegistrationToken`
 - Passkeys: `generateRegistrationOptions`, `verifyRegistration`, `generateAuthenticationOptions`, `verifyAuthentication`
-- Session: `getSession`, `deleteSession`
+- Session: `getSession` (server-only), `signOut` (client-callable)
 
 **Adapters:**
 

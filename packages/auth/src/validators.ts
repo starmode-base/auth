@@ -53,8 +53,8 @@ export const authValidators = {
   credential: authenticationCredential,
 };
 
-/** Auth handler request body validator (discriminated union by fn) */
-export const authBodyValidator = p.tagged("fn", {
+/** Auth handler request body validator (discriminated union by method) */
+export const authBodyValidator = p.tagged("method", {
   requestOtp: p.obj({ identifier: p.str() }),
   verifyOtp: p.obj({ identifier: p.str(), otp: p.str() }),
   generateRegistrationOptions: p.obj({ registrationToken: p.str() }),
@@ -64,6 +64,5 @@ export const authBodyValidator = p.tagged("fn", {
   }),
   generateAuthenticationOptions: p.obj({}),
   verifyAuthentication: p.obj({ credential: authenticationCredential }),
-  getSession: p.obj({}),
   signOut: p.obj({}),
 });

@@ -124,13 +124,12 @@ export async function getPasskey(
 }
 
 /**
- * HTTP client factory — creates a method-based auth client.
+ * Auth client factory — creates a unified auth client.
  *
- * Sends JSON-RPC style requests to the given endpoint. Each method is
- * POSTed as `{ method, ...params }`. Pair with `createPasskey`/`getPasskey`
- * to handle the browser-side WebAuthn ceremonies.
+ * Combines HTTP methods for server calls with browser WebAuthn helpers.
+ * Each HTTP method is POSTed as `{ method, ...params }` to the given endpoint.
  */
-export const httpClient = (endpoint: string): AuthClient => {
+export const makeAuthClient = (endpoint: string): AuthClient => {
   const call = async (method: string, params: Record<string, unknown> = {}) => {
     const response = await fetch(endpoint, {
       method: "POST",
@@ -150,11 +149,11 @@ export const httpClient = (endpoint: string): AuthClient => {
   };
 
   return {
-    // OTP
+    // HTTP mutations - OTP
     requestOtp: (identifier) => call("requestOtp", { identifier }),
     verifyOtp: (identifier, otp) => call("verifyOtp", { identifier, otp }),
 
-    // Passkey
+    // HTTP mutations - Passkey
     generateRegistrationOptions: (registrationToken) =>
       call("generateRegistrationOptions", { registrationToken }),
     verifyRegistration: (registrationToken, credential) =>
@@ -163,7 +162,11 @@ export const httpClient = (endpoint: string): AuthClient => {
     verifyAuthentication: (credential) =>
       call("verifyAuthentication", { credential }),
 
-    // Session
+    // HTTP mutations - Session
     signOut: () => call("signOut"),
+
+    // Browser WebAuthn helpers
+    createPasskey,
+    getPasskey,
   };
 };
