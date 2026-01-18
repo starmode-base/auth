@@ -77,4 +77,41 @@ function record(): Parser<Record<string, unknown>> {
   };
 }
 
-export const p = { str, obj, optional, array, literal, record };
+function tagged<
+  TTag extends string,
+  TVariants extends Record<string, Parser<object>>,
+>(
+  tag: TTag,
+  variants: TVariants,
+): Parser<
+  {
+    [K in keyof TVariants]: { [P in TTag]: K } & ReturnType<TVariants[K]>;
+  }[keyof TVariants]
+> {
+  const validTags = Object.keys(variants);
+
+  return (v) => {
+    if (typeof v !== "object" || v === null) throw new Error("expected object");
+
+    const input = v as Record<string, unknown>;
+    const tagValue = input[tag];
+
+    if (typeof tagValue !== "string") {
+      throw new Error(`expected "${tag}" to be a string`);
+    }
+
+    const parser = variants[tagValue];
+    if (!parser) {
+      throw new Error(
+        `expected "${tag}" to be one of: ${validTags.join(", ")}`,
+      );
+    }
+
+    const parsed = parser(v);
+    return { ...parsed, [tag]: tagValue } as {
+      [K in keyof TVariants]: { [P in TTag]: K } & ReturnType<TVariants[K]>;
+    }[keyof TVariants];
+  };
+}
+
+export const p = { str, obj, optional, array, literal, record, tagged };

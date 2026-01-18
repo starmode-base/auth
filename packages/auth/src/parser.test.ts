@@ -159,6 +159,42 @@ describe("p.record", () => {
   });
 });
 
+describe("p.tagged", () => {
+  const parse = p.tagged("type", {
+    add: p.obj({ value: p.str() }),
+    remove: p.obj({ id: p.str() }),
+  });
+
+  it("parses valid variant", () => {
+    expect(parse({ type: "add", value: "hello" })).toStrictEqual({
+      type: "add",
+      value: "hello",
+    });
+    expect(parse({ type: "remove", id: "123" })).toStrictEqual({
+      type: "remove",
+      id: "123",
+    });
+  });
+
+  it("throws on invalid tag value", () => {
+    expect(() => parse({ type: "unknown" })).toThrow(
+      'expected "type" to be one of: add, remove',
+    );
+  });
+
+  it("throws on missing tag", () => {
+    expect(() => parse({ value: "hello" })).toThrow(
+      'expected "type" to be a string',
+    );
+  });
+
+  it("throws on invalid body for valid tag", () => {
+    expect(() => parse({ type: "add", value: 123 })).toThrow(
+      '"value": expected string',
+    );
+  });
+});
+
 describe("nested schemas", () => {
   const parse = p.obj({
     id: p.str(),

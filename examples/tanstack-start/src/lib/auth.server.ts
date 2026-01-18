@@ -1,50 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
-import { p } from "@starmode/auth";
+import { authValidators as validate } from "@starmode/auth";
 import { auth } from "./auth";
-
-const registrationCredential = p.obj({
-  id: p.str(),
-  rawId: p.str(),
-  type: p.literal(["public-key"]),
-  response: p.obj({
-    clientDataJSON: p.str(),
-    attestationObject: p.str(),
-    transports: p.optional(
-      p.array(p.literal(["usb", "nfc", "ble", "internal", "hybrid"])),
-    ),
-  }),
-  authenticatorAttachment: p.optional(
-    p.literal(["platform", "cross-platform"]),
-  ),
-  clientExtensionResults: p.record(),
-});
-
-const authenticationCredential = p.obj({
-  id: p.str(),
-  rawId: p.str(),
-  type: p.literal(["public-key"]),
-  response: p.obj({
-    clientDataJSON: p.str(),
-    authenticatorData: p.str(),
-    signature: p.str(),
-    userHandle: p.optional(p.str()),
-  }),
-  authenticatorAttachment: p.optional(
-    p.literal(["platform", "cross-platform"]),
-  ),
-  clientExtensionResults: p.record(),
-});
-
-const validate = {
-  identifier: p.str(),
-  verifyOtp: p.obj({ identifier: p.str(), otp: p.str() }),
-  registrationToken: p.str(),
-  verifyRegistration: p.obj({
-    registrationToken: p.str(),
-    credential: registrationCredential,
-  }),
-  credential: authenticationCredential,
-};
 
 /**
  * In-memory user store
@@ -52,7 +8,8 @@ const validate = {
  * Simple in-memory user store for demonstration purposes. In a real app this
  * would be replaced with a database. Returns whether the user was newly created
  * so the caller can distinguish sign-up from sign-in.
- */ const users = new Map<string, { userId: string; email: string }>();
+ */
+const users = new Map<string, { userId: string; email: string }>();
 let userIdCounter = 0;
 
 function upsertUser(email: string): { userId: string; isNew: boolean } {

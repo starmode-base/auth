@@ -105,7 +105,9 @@ export type AuthErrorCode =
   | "challenge_expired"
   | "user_mismatch"
   | "credential_not_found"
-  | "verification_failed";
+  | "verification_failed"
+  | "invalid_request"
+  | "internal_error";
 
 /** Generic result type for failable operations */
 export type Result<T = object> =

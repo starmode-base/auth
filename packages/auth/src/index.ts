@@ -1,5 +1,6 @@
 // Core
 export { makeAuth } from "./make-auth";
+export { makeAuthHandler } from "./handler";
 
 // Presets - Storage
 export { storageMemory } from "./presets/storage-memory";
@@ -22,6 +23,9 @@ export { sessionTransportMemory } from "./presets/session-transport-memory";
 
 // Parser
 export { p } from "./parser";
+
+// Validators
+export { authValidators } from "./validators";
 
 // Types
 export type * from "./types";
