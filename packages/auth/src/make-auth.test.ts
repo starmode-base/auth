@@ -26,7 +26,7 @@ describe("makeAuth", () => {
   });
 
   it("requestOtp returns success", async () => {
-    const result = await auth.requestOtp("test@example.com");
+    const result = await auth.requestOtp({ identifier: "test@example.com" });
     expect(result).toStrictEqual({ success: true });
   });
 
@@ -38,29 +38,37 @@ describe("makeAuth", () => {
       new Date(Date.now() + 60000),
     );
 
-    const result = await auth.verifyOtp("test@example.com", "123456");
+    const result = await auth.verifyOtp({
+      identifier: "test@example.com",
+      otp: "123456",
+    });
     expect(result).toStrictEqual({ success: true });
   });
 
   it("verifyOtp returns failure for wrong otp", async () => {
-    const result = await auth.verifyOtp("test@example.com", "000000");
+    const result = await auth.verifyOtp({
+      identifier: "test@example.com",
+      otp: "000000",
+    });
     expect(result).toStrictEqual({ success: false, error: "invalid_otp" });
   });
 
   it("createRegistrationToken returns token", async () => {
-    const result = await auth.createRegistrationToken(
-      "user_1",
-      "test@example.com",
-    );
+    const result = await auth.createRegistrationToken({
+      userId: "user_1",
+      identifier: "test@example.com",
+    });
     expect(result.registrationToken).toBeDefined();
   });
 
   it("validateRegistrationToken returns userId and identifier", async () => {
-    const { registrationToken } = await auth.createRegistrationToken(
-      "user_1",
-      "test@example.com",
-    );
-    const result = await auth.validateRegistrationToken(registrationToken);
+    const { registrationToken } = await auth.createRegistrationToken({
+      userId: "user_1",
+      identifier: "test@example.com",
+    });
+    const result = await auth.validateRegistrationToken({
+      token: registrationToken,
+    });
     expect(result).toStrictEqual({
       userId: "user_1",
       identifier: "test@example.com",
@@ -69,7 +77,9 @@ describe("makeAuth", () => {
   });
 
   it("validateRegistrationToken returns failure for bad token", async () => {
-    const result = await auth.validateRegistrationToken("invalid-token");
+    const result = await auth.validateRegistrationToken({
+      token: "invalid-token",
+    });
     expect(result.success).toBe(false);
   });
 

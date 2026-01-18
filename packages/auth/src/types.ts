@@ -208,7 +208,7 @@ export type MakeAuthResult = {
    * The OTP is valid for a short window and must be verified before the user
    * can proceed.
    */
-  requestOtp: (identifier: string) => Promise<RequestOtpResult>;
+  requestOtp: (args: { identifier: string }) => Promise<RequestOtpResult>;
 
   /**
    * Verify the OTP matches what was sent to the identifier
@@ -216,7 +216,10 @@ export type MakeAuthResult = {
    * Returns success if valid, allowing the client to proceed with sign-up or
    * sign-in.
    */
-  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
+  verifyOtp: (args: {
+    identifier: string;
+    otp: string;
+  }) => Promise<VerifyOtpResult>;
 
   /**
    * Create a short-lived registration token
@@ -224,19 +227,19 @@ export type MakeAuthResult = {
    * Authorizes the client to register a passkey for this user without needing
    * to re-verify identifier ownership.
    */
-  createRegistrationToken: (
-    userId: string,
-    identifier: string,
-  ) => Promise<CreateRegistrationTokenResult>;
+  createRegistrationToken: (args: {
+    userId: string;
+    identifier: string;
+  }) => Promise<CreateRegistrationTokenResult>;
 
   /**
    * Validate a registration token
    *
    * Returns the userId and identifier encoded in the token if valid.
    */
-  validateRegistrationToken: (
-    token: string,
-  ) => Promise<ValidateRegistrationTokenResult>;
+  validateRegistrationToken: (args: {
+    token: string;
+  }) => Promise<ValidateRegistrationTokenResult>;
 
   /**
    * Generate WebAuthn registration options for the browser
@@ -244,9 +247,9 @@ export type MakeAuthResult = {
    * The registration token ties this request to a verified user without
    * exposing the user ID to the client.
    */
-  generateRegistrationOptions: (
-    registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsResult>;
+  generateRegistrationOptions: (args: {
+    registrationToken: string;
+  }) => Promise<GenerateRegistrationOptionsResult>;
 
   /**
    * Verify passkey registration and store the credential
@@ -255,10 +258,10 @@ export type MakeAuthResult = {
    * passkey. On success, creates a session so the user is immediately signed
    * in.
    */
-  verifyRegistration: (
-    registrationToken: string,
-    credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationResult>;
+  verifyRegistration: (args: {
+    registrationToken: string;
+    credential: RegistrationCredential;
+  }) => Promise<VerifyRegistrationResult>;
 
   /**
    * Generate WebAuthn authentication options for the browser
@@ -275,9 +278,9 @@ export type MakeAuthResult = {
    * passkey. On success, creates a session to establish the authenticated
    * session.
    */
-  verifyAuthentication: (
-    credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationResult>;
+  verifyAuthentication: (args: {
+    credential: AuthenticationCredential;
+  }) => Promise<VerifyAuthenticationResult>;
 
   /**
    * Get the current session
@@ -309,7 +312,7 @@ export type AuthClient = {
    * The OTP is valid for a short window and must be verified before the user
    * can proceed.
    */
-  requestOtp: (identifier: string) => Promise<RequestOtpResult>;
+  requestOtp: (args: { identifier: string }) => Promise<RequestOtpResult>;
 
   /**
    * Verify the OTP matches what was sent to the identifier
@@ -317,7 +320,10 @@ export type AuthClient = {
    * Returns success if valid, allowing the client to proceed with sign-up or
    * sign-in.
    */
-  verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
+  verifyOtp: (args: {
+    identifier: string;
+    otp: string;
+  }) => Promise<VerifyOtpResult>;
 
   /**
    * Generate WebAuthn registration options for the browser
@@ -325,9 +331,9 @@ export type AuthClient = {
    * The registration token ties this request to a verified user without
    * exposing the user ID to the client.
    */
-  generateRegistrationOptions: (
-    registrationToken: string,
-  ) => Promise<GenerateRegistrationOptionsResult>;
+  generateRegistrationOptions: (args: {
+    registrationToken: string;
+  }) => Promise<GenerateRegistrationOptionsResult>;
 
   /**
    * Verify passkey registration and store the credential
@@ -336,10 +342,10 @@ export type AuthClient = {
    * passkey. On success, creates a session so the user is immediately signed
    * in.
    */
-  verifyRegistration: (
-    registrationToken: string,
-    credential: RegistrationCredential,
-  ) => Promise<VerifyRegistrationResult>;
+  verifyRegistration: (args: {
+    registrationToken: string;
+    credential: RegistrationCredential;
+  }) => Promise<VerifyRegistrationResult>;
 
   /**
    * Generate WebAuthn authentication options for the browser
@@ -356,9 +362,9 @@ export type AuthClient = {
    * passkey. On success, creates a session to establish the authenticated
    * session.
    */
-  verifyAuthentication: (
-    credential: AuthenticationCredential,
-  ) => Promise<VerifyAuthenticationResult>;
+  verifyAuthentication: (args: {
+    credential: AuthenticationCredential;
+  }) => Promise<VerifyAuthenticationResult>;
 
   /**
    * Sign out and end the current session

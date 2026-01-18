@@ -189,7 +189,7 @@ const server = Bun.serve({
         return new Response("Invalid email", { status: 400 });
       }
 
-      await auth.requestOtp(email);
+      await auth.requestOtp({ identifier: email });
       return new Response(otpPage(email), {
         headers: securityHeaders(),
       });
@@ -209,17 +209,17 @@ const server = Bun.serve({
         return new Response("Invalid OTP", { status: 400 });
       }
 
-      const result = await auth.verifyOtp(email, otp);
+      const result = await auth.verifyOtp({ identifier: email, otp });
 
       if (result.success) {
         // App upserts user
         const { userId } = upsertUser(email);
 
         // Create registration token for passkey registration
-        const { registrationToken } = await auth.createRegistrationToken(
+        const { registrationToken } = await auth.createRegistrationToken({
           userId,
-          email,
-        );
+          identifier: email,
+        });
 
         // In a real app, redirect to passkey registration flow
         return new Response(registerPasskeyPage(registrationToken), {

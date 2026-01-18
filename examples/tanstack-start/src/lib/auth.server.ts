@@ -30,16 +30,19 @@ function upsertUser(email: string): { userId: string; isNew: boolean } {
 export const signUp = createServerFn({ method: "POST" })
   .inputValidator(validate.verifyOtp)
   .handler(async ({ data }) => {
-    const result = await auth.verifyOtp(data.identifier, data.otp);
+    const result = await auth.verifyOtp({
+      identifier: data.identifier,
+      otp: data.otp,
+    });
     if (!result.success) {
       return { success: false, registrationToken: undefined };
     }
 
     const { userId } = upsertUser(data.identifier);
-    const { registrationToken } = await auth.createRegistrationToken(
+    const { registrationToken } = await auth.createRegistrationToken({
       userId,
-      data.identifier,
-    );
+      identifier: data.identifier,
+    });
 
     return { success: true, registrationToken };
   });

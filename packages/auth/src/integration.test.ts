@@ -45,72 +45,89 @@ describe("auth integration", () => {
 
   describe("OTP flow", () => {
     it("sends OTP to identifier", async () => {
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
       expect(sentOtps).toHaveLength(1);
       expect(sentOtps[0]?.identifier).toBe("user@example.com");
       expect(sentOtps[0]?.otp).toMatch(/^\d{6}$/);
     });
 
     it("verifies correct OTP", async () => {
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
       const otp = sentOtps[0]!.otp;
 
-      const result = await auth.verifyOtp("user@example.com", otp);
+      const result = await auth.verifyOtp({
+        identifier: "user@example.com",
+        otp,
+      });
       expect(result.success).toBe(true);
     });
 
     it("rejects wrong OTP", async () => {
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
 
-      const result = await auth.verifyOtp("user@example.com", "000000");
+      const result = await auth.verifyOtp({
+        identifier: "user@example.com",
+        otp: "000000",
+      });
       expect(result.success).toBe(false);
     });
 
     it("rejects OTP for wrong identifier", async () => {
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
       const otp = sentOtps[0]!.otp;
 
-      const result = await auth.verifyOtp("other@example.com", otp);
+      const result = await auth.verifyOtp({
+        identifier: "other@example.com",
+        otp,
+      });
       expect(result.success).toBe(false);
     });
 
     it("OTP can only be used once", async () => {
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
       const otp = sentOtps[0]!.otp;
 
-      const first = await auth.verifyOtp("user@example.com", otp);
+      const first = await auth.verifyOtp({
+        identifier: "user@example.com",
+        otp,
+      });
       expect(first.success).toBe(true);
 
-      const second = await auth.verifyOtp("user@example.com", otp);
+      const second = await auth.verifyOtp({
+        identifier: "user@example.com",
+        otp,
+      });
       expect(second.success).toBe(false);
     });
   });
 
   describe("registration token flow", () => {
     it("creates registration token after OTP verify", async () => {
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
       const otp = sentOtps[0]!.otp;
 
-      const { success: success } = await auth.verifyOtp(
-        "user@example.com",
+      const { success: success } = await auth.verifyOtp({
+        identifier: "user@example.com",
         otp,
-      );
+      });
       expect(success).toBe(true);
 
       // App would upsert user here, then:
-      const { registrationToken } = await auth.createRegistrationToken(
-        "user_1",
-        "user@example.com",
-      );
+      const { registrationToken } = await auth.createRegistrationToken({
+        userId: "user_1",
+        identifier: "user@example.com",
+      });
       expect(registrationToken).toBeDefined();
     });
 
     it("validates registration token", async () => {
-      const { registrationToken } = await auth.createRegistrationToken(
-        "user_1",
-        "user@example.com",
-      );
-      const result = await auth.validateRegistrationToken(registrationToken);
+      const { registrationToken } = await auth.createRegistrationToken({
+        userId: "user_1",
+        identifier: "user@example.com",
+      });
+      const result = await auth.validateRegistrationToken({
+        token: registrationToken,
+      });
 
       expect(result).toStrictEqual({
         success: true,
@@ -175,29 +192,30 @@ describe("auth integration", () => {
   describe("full OTP + registration token flow", () => {
     it("request OTP → verify → create registration token", async () => {
       // Request OTP
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
       const otp = sentOtps[0]!.otp;
 
       // Verify OTP
-      const { success: success } = await auth.verifyOtp(
-        "user@example.com",
+      const { success: success } = await auth.verifyOtp({
+        identifier: "user@example.com",
         otp,
-      );
+      });
       expect(success).toBe(true);
 
       // App upserts user (simulated)
       const userId = "user_1";
 
       // Create registration token
-      const { registrationToken } = await auth.createRegistrationToken(
+      const { registrationToken } = await auth.createRegistrationToken({
         userId,
-        "user@example.com",
-      );
+        identifier: "user@example.com",
+      });
       expect(registrationToken).toBeDefined();
 
       // Validate it
-      const validation =
-        await auth.validateRegistrationToken(registrationToken);
+      const validation = await auth.validateRegistrationToken({
+        token: registrationToken,
+      });
 
       expect(validation).toStrictEqual({
         success: true,

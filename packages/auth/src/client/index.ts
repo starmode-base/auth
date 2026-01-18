@@ -127,14 +127,14 @@ export async function getPasskey(
  * Auth client factory — creates a unified auth client.
  *
  * Combines HTTP methods for server calls with browser WebAuthn helpers.
- * Each HTTP method is POSTed as `{ method, ...params }` to the given endpoint.
+ * Each HTTP method is POSTed as `{ method, args }` to the given endpoint.
  */
 export const makeAuthClient = (endpoint: string): AuthClient => {
-  const call = async (method: string, params: Record<string, unknown> = {}) => {
+  const call = async (method: string, args?: Record<string, unknown>) => {
     const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ method, ...params }),
+      body: JSON.stringify(args ? { method, args } : { method }),
     });
 
     if (!response.ok) {
@@ -150,17 +150,15 @@ export const makeAuthClient = (endpoint: string): AuthClient => {
 
   return {
     // HTTP mutations - OTP
-    requestOtp: (identifier) => call("requestOtp", { identifier }),
-    verifyOtp: (identifier, otp) => call("verifyOtp", { identifier, otp }),
+    requestOtp: (args) => call("requestOtp", args),
+    verifyOtp: (args) => call("verifyOtp", args),
 
     // HTTP mutations - Passkey
-    generateRegistrationOptions: (registrationToken) =>
-      call("generateRegistrationOptions", { registrationToken }),
-    verifyRegistration: (registrationToken, credential) =>
-      call("verifyRegistration", { registrationToken, credential }),
+    generateRegistrationOptions: (args) =>
+      call("generateRegistrationOptions", args),
+    verifyRegistration: (args) => call("verifyRegistration", args),
     generateAuthenticationOptions: () => call("generateAuthenticationOptions"),
-    verifyAuthentication: (credential) =>
-      call("verifyAuthentication", { credential }),
+    verifyAuthentication: (args) => call("verifyAuthentication", args),
 
     // HTTP mutations - Session
     signOut: () => call("signOut"),

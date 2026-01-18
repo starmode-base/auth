@@ -214,7 +214,7 @@ function RouteComponent() {
     setLoading(true);
     setError(null);
     try {
-      const result = await authClient.requestOtp(email);
+      const result = await authClient.requestOtp({ identifier: email });
       if (result.success) setStep("otp");
     } catch {
       setError("Failed to send OTP");
@@ -248,8 +248,9 @@ function RouteComponent() {
     setError(null);
     try {
       // Get registration options from server
-      const optionsResult =
-        await authClient.generateRegistrationOptions(registrationToken);
+      const optionsResult = await authClient.generateRegistrationOptions({
+        registrationToken,
+      });
 
       if (!optionsResult.success || !optionsResult.options) {
         setError("Failed to get registration options");
@@ -267,10 +268,10 @@ function RouteComponent() {
       }
 
       // Verify with server
-      const result = await authClient.verifyRegistration(
+      const result = await authClient.verifyRegistration({
         registrationToken,
         credential,
-      );
+      });
 
       if (result.success) {
         await router.invalidate();
@@ -301,7 +302,7 @@ function RouteComponent() {
       }
 
       // Verify with server
-      const result = await authClient.verifyAuthentication(credential);
+      const result = await authClient.verifyAuthentication({ credential });
 
       if (result.success) {
         await router.invalidate();

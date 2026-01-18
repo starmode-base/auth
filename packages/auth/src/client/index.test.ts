@@ -17,14 +17,14 @@ describe("makeAuthClient", () => {
       globalThis.fetch = mockFetch;
 
       const auth = makeAuthClient("/api/auth");
-      await auth.requestOtp("user@example.com");
+      await auth.requestOtp({ identifier: "user@example.com" });
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "requestOtp",
-          identifier: "user@example.com",
+          args: { identifier: "user@example.com" },
         }),
       });
     });
@@ -37,7 +37,7 @@ describe("makeAuthClient", () => {
       globalThis.fetch = mockFetch;
 
       const auth = makeAuthClient("/api/auth");
-      const result = await auth.requestOtp("user@example.com");
+      const result = await auth.requestOtp({ identifier: "user@example.com" });
 
       expect(result).toStrictEqual({ success: true });
     });
@@ -52,15 +52,14 @@ describe("makeAuthClient", () => {
       globalThis.fetch = mockFetch;
 
       const auth = makeAuthClient("/api/auth");
-      await auth.verifyOtp("user@example.com", "123456");
+      await auth.verifyOtp({ identifier: "user@example.com", otp: "123456" });
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "verifyOtp",
-          identifier: "user@example.com",
-          otp: "123456",
+          args: { identifier: "user@example.com", otp: "123456" },
         }),
       });
     });
@@ -73,7 +72,10 @@ describe("makeAuthClient", () => {
       globalThis.fetch = mockFetch;
 
       const auth = makeAuthClient("/api/auth");
-      const result = await auth.verifyOtp("user@example.com", "123456");
+      const result = await auth.verifyOtp({
+        identifier: "user@example.com",
+        otp: "123456",
+      });
 
       expect(result).toStrictEqual({ valid: true });
     });
@@ -86,7 +88,10 @@ describe("makeAuthClient", () => {
       globalThis.fetch = mockFetch;
 
       const auth = makeAuthClient("/api/auth");
-      const result = await auth.verifyOtp("user@example.com", "000000");
+      const result = await auth.verifyOtp({
+        identifier: "user@example.com",
+        otp: "000000",
+      });
 
       expect(result).toStrictEqual({ valid: false });
     });
@@ -101,14 +106,16 @@ describe("makeAuthClient", () => {
       globalThis.fetch = mockFetch;
 
       const auth = makeAuthClient("/api/auth");
-      await auth.generateRegistrationOptions("reg-token-123");
+      await auth.generateRegistrationOptions({
+        registrationToken: "reg-token-123",
+      });
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "generateRegistrationOptions",
-          registrationToken: "reg-token-123",
+          args: { registrationToken: "reg-token-123" },
         }),
       });
     });
@@ -134,15 +141,20 @@ describe("makeAuthClient", () => {
       };
 
       const auth = makeAuthClient("/api/auth");
-      await auth.verifyRegistration("reg-token-123", mockCredential);
+      await auth.verifyRegistration({
+        registrationToken: "reg-token-123",
+        credential: mockCredential,
+      });
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "verifyRegistration",
-          registrationToken: "reg-token-123",
-          credential: mockCredential,
+          args: {
+            registrationToken: "reg-token-123",
+            credential: mockCredential,
+          },
         }),
       });
     });
@@ -190,14 +202,14 @@ describe("makeAuthClient", () => {
       };
 
       const auth = makeAuthClient("/api/auth");
-      await auth.verifyAuthentication(mockCredential);
+      await auth.verifyAuthentication({ credential: mockCredential });
 
       expect(mockFetch).toHaveBeenCalledWith("/api/auth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           method: "verifyAuthentication",
-          credential: mockCredential,
+          args: { credential: mockCredential },
         }),
       });
     });
@@ -246,9 +258,9 @@ describe("makeAuthClient", () => {
 
       const auth = makeAuthClient("/api/auth");
 
-      await expect(auth.requestOtp("user@example.com")).rejects.toThrow(
-        "Auth request failed: 500 Internal Server Error",
-      );
+      await expect(
+        auth.requestOtp({ identifier: "user@example.com" }),
+      ).rejects.toThrow("Auth request failed: 500 Internal Server Error");
     });
   });
 });
@@ -261,12 +273,13 @@ describe("client types", () => {
       const auth = makeAuthClient("/api/auth");
 
       // These should all type-check
-      const _r1: { success: boolean } =
-        await auth.requestOtp("test@example.com");
-      const _r2: { success: boolean } = await auth.verifyOtp(
-        "test@example.com",
-        "123456",
-      );
+      const _r1: { success: boolean } = await auth.requestOtp({
+        identifier: "test@example.com",
+      });
+      const _r2: { success: boolean } = await auth.verifyOtp({
+        identifier: "test@example.com",
+        otp: "123456",
+      });
       const _r3: void = await auth.signOut();
     };
 

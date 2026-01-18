@@ -35,21 +35,19 @@ export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
     try {
       switch (body.method) {
         case "requestOtp": {
-          return respond(await auth[body.method](body.identifier));
+          return respond(await auth[body.method](body.args));
         }
 
         case "verifyOtp": {
-          return respond(await auth[body.method](body.identifier, body.otp));
+          return respond(await auth[body.method](body.args));
         }
 
         case "generateRegistrationOptions": {
-          return respond(await auth[body.method](body.registrationToken));
+          return respond(await auth[body.method](body.args));
         }
 
         case "verifyRegistration": {
-          return respond(
-            await auth[body.method](body.registrationToken, body.credential),
-          );
+          return respond(await auth[body.method](body.args));
         }
 
         case "generateAuthenticationOptions": {
@@ -57,7 +55,7 @@ export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
         }
 
         case "verifyAuthentication": {
-          return respond(await auth[body.method](body.credential));
+          return respond(await auth[body.method](body.args));
         }
 
         case "signOut": {

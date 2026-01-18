@@ -70,7 +70,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
   };
 
   return {
-    async requestOtp(identifier: string) {
+    async requestOtp({ identifier }) {
       const code = generateOtp();
       const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
 
@@ -81,7 +81,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       return result.ok({});
     },
 
-    async verifyOtp(identifier: string, otp: string) {
+    async verifyOtp({ identifier, otp }) {
       const valid = await storage.otp.verify(identifier, otp);
 
       if (!valid) {
@@ -91,12 +91,12 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       return result.ok({});
     },
 
-    async createRegistrationToken(userId: string, identifier: string) {
+    async createRegistrationToken({ userId, identifier }) {
       const token = await registrationCodec.encode({ userId, identifier });
       return { registrationToken: token };
     },
 
-    async validateRegistrationToken(token: string) {
+    async validateRegistrationToken({ token }) {
       const decoded = await registrationCodec.decode(token);
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
@@ -107,9 +107,9 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       });
     },
 
-    async generateRegistrationOptions(regToken: string) {
+    async generateRegistrationOptions({ registrationToken }) {
       // Validate registration token
-      const decoded = await registrationCodec.decode(regToken);
+      const decoded = await registrationCodec.decode(registrationToken);
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
@@ -158,9 +158,9 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       return result.ok({ options });
     },
 
-    async verifyRegistration(regToken: string, credential) {
+    async verifyRegistration({ registrationToken, credential }) {
       // Validate registration token
-      const decoded = await registrationCodec.decode(regToken);
+      const decoded = await registrationCodec.decode(registrationToken);
       if (!decoded || !decoded.valid) {
         return result.fail("invalid_token");
       }
@@ -244,7 +244,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       return { options };
     },
 
-    async verifyAuthentication(credential) {
+    async verifyAuthentication({ credential }) {
       // Look up the credential by ID
       const stored = await storage.credential.getById(credential.id);
       if (!stored) {
