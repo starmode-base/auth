@@ -202,34 +202,96 @@ export type MakeAuthConfig = {
 
 /** All primitives returned by makeAuth */
 export type MakeAuthResult = {
-  // OTP primitives
+  /**
+   * Send OTP to identifier (email or phone)
+   *
+   * The OTP is valid for a short window and must be verified before the user
+   * can proceed.
+   */
   requestOtp: (identifier: string) => Promise<RequestOtpResult>;
+
+  /**
+   * Verify the OTP matches what was sent to the identifier
+   *
+   * Returns success if valid, allowing the client to proceed with sign-up or
+   * sign-in.
+   */
   verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
 
-  // Registration token primitives
+  /**
+   * Create a short-lived registration token
+   *
+   * Authorizes the client to register a passkey for this user without needing
+   * to re-verify identifier ownership.
+   */
   createRegistrationToken: (
     userId: string,
     identifier: string,
   ) => Promise<CreateRegistrationTokenResult>;
+
+  /**
+   * Validate a registration token
+   *
+   * Returns the userId and identifier encoded in the token if valid.
+   */
   validateRegistrationToken: (
     token: string,
   ) => Promise<ValidateRegistrationTokenResult>;
 
-  // Passkey primitives
+  /**
+   * Generate WebAuthn registration options for the browser
+   *
+   * The registration token ties this request to a verified user without
+   * exposing the user ID to the client.
+   */
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsResult>;
+
+  /**
+   * Verify passkey registration and store the credential
+   *
+   * Validates the credential response from the browser and stores the new
+   * passkey. On success, creates a session so the user is immediately signed
+   * in.
+   */
   verifyRegistration: (
     registrationToken: string,
     credential: RegistrationCredential,
   ) => Promise<VerifyRegistrationResult>;
+
+  /**
+   * Generate WebAuthn authentication options for the browser
+   *
+   * The challenge is stored server-side and verified when the credential
+   * response comes back.
+   */
   generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsResult>;
+
+  /**
+   * Verify passkey authentication
+   *
+   * Validates the credential assertion from the browser against a stored
+   * passkey. On success, creates a session to establish the authenticated
+   * session.
+   */
   verifyAuthentication: (
     credential: AuthenticationCredential,
   ) => Promise<VerifyAuthenticationResult>;
 
-  // Session primitives
+  /**
+   * Get the current session
+   *
+   * Returns the session if the user is authenticated, or null otherwise.
+   * Used to check auth state on page load and during navigation.
+   */
   getSession: () => Promise<{ userId: string } | null>;
+
+  /**
+   * Sign out and end the current session
+   *
+   * Invalidates the current session and clears the session cookie.
+   */
   signOut: () => Promise<void>;
 };
 
@@ -241,30 +303,86 @@ export type MakeAuth = (config: MakeAuthConfig) => MakeAuthResult;
  * Note: createRegistrationToken and getSession are server-side only.
  */
 export type AuthClient = {
-  // HTTP mutations - OTP
+  /**
+   * Send OTP to identifier (email or phone)
+   *
+   * The OTP is valid for a short window and must be verified before the user
+   * can proceed.
+   */
   requestOtp: (identifier: string) => Promise<RequestOtpResult>;
+
+  /**
+   * Verify the OTP matches what was sent to the identifier
+   *
+   * Returns success if valid, allowing the client to proceed with sign-up or
+   * sign-in.
+   */
   verifyOtp: (identifier: string, otp: string) => Promise<VerifyOtpResult>;
 
-  // HTTP mutations - Passkey (registrationToken comes from server-side signUp flow)
+  /**
+   * Generate WebAuthn registration options for the browser
+   *
+   * The registration token ties this request to a verified user without
+   * exposing the user ID to the client.
+   */
   generateRegistrationOptions: (
     registrationToken: string,
   ) => Promise<GenerateRegistrationOptionsResult>;
+
+  /**
+   * Verify passkey registration and store the credential
+   *
+   * Validates the credential response from the browser and stores the new
+   * passkey. On success, creates a session so the user is immediately signed
+   * in.
+   */
   verifyRegistration: (
     registrationToken: string,
     credential: RegistrationCredential,
   ) => Promise<VerifyRegistrationResult>;
+
+  /**
+   * Generate WebAuthn authentication options for the browser
+   *
+   * The challenge is stored server-side and verified when the credential
+   * response comes back.
+   */
   generateAuthenticationOptions: () => Promise<GenerateAuthenticationOptionsResult>;
+
+  /**
+   * Verify passkey authentication
+   *
+   * Validates the credential assertion from the browser against a stored
+   * passkey. On success, creates a session to establish the authenticated
+   * session.
+   */
   verifyAuthentication: (
     credential: AuthenticationCredential,
   ) => Promise<VerifyAuthenticationResult>;
 
-  // HTTP mutations - Session
+  /**
+   * Sign out and end the current session
+   *
+   * Invalidates the current session and clears the session cookie.
+   */
   signOut: () => Promise<void>;
 
-  // Browser WebAuthn helpers
+  /**
+   * Create a passkey (WebAuthn registration ceremony)
+   *
+   * Triggers the browser's native credential creation dialog. Returns the
+   * credential for server verification, or null if the user cancels.
+   */
   createPasskey: (
     options: PublicKeyCredentialCreationOptionsJSON,
   ) => Promise<RegistrationCredential | null>;
+
+  /**
+   * Sign in with a passkey (WebAuthn authentication ceremony)
+   *
+   * Triggers the browser's native credential selection dialog. Returns the
+   * credential for server verification, or null if the user cancels.
+   */
   getPasskey: (
     options: PublicKeyCredentialRequestOptionsJSON,
   ) => Promise<AuthenticationCredential | null>;
