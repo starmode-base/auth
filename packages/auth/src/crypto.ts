@@ -110,6 +110,7 @@ export function encodePayload<T extends object>(payload: T): string {
 export function decodePayload<T>(encoded: string): T | null {
   const bytes = base64urlDecode(encoded);
   if (!bytes) return null;
+
   try {
     return JSON.parse(decoder.decode(bytes));
   } catch {

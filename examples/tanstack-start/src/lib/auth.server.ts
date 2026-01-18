@@ -12,12 +12,16 @@ const users = new Map<string, { userId: string; email: string }>();
 let userIdCounter = 0;
 
 function upsertUser(email: string): { userId: string; isNew: boolean } {
-  const existing = Array.from(users.values()).find((u) => u.email === email);
-  if (existing) {
-    return { userId: existing.userId, isNew: false };
+  const exists = Array.from(users.values()).find((u) => u.email === email);
+
+  if (exists) {
+    return { userId: exists.userId, isNew: false };
   }
+
   const userId = `user_${++userIdCounter}`;
+
   users.set(userId, { userId, email });
+
   return { userId, isNew: true };
 }
 
@@ -34,11 +38,13 @@ export const signUp = createServerFn({ method: "POST" })
       identifier: data.identifier,
       otp: data.otp,
     });
+
     if (!result.success) {
-      return { success: false, registrationToken: undefined };
+      return { success: false };
     }
 
     const { userId } = upsertUser(data.identifier);
+
     const { registrationToken } = await auth.createRegistrationToken({
       userId,
       identifier: data.identifier,
@@ -48,10 +54,22 @@ export const signUp = createServerFn({ method: "POST" })
   });
 
 /**
- * Get session
+ * Get viewer
  *
- * Returns the current session if the user is authenticated, or null otherwise.
+ * Returns the current user if authenticated, or null otherwise.
  */
-export const getSession = createServerFn({ method: "GET" }).handler(() =>
-  auth.getSession(),
-);
+export const getViewer = createServerFn().handler(async () => {
+  const session = await auth.getSession();
+
+  if (!session) {
+    return null;
+  }
+
+  const user = users.get(session.userId);
+
+  if (!user) {
+    return null;
+  }
+
+  return user;
+});

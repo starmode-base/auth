@@ -1,7 +1,7 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { authClient } from "../lib/auth.client";
-import { signUp, getSession } from "../lib/auth.server";
+import { signUp, getViewer } from "../lib/auth.server";
 import {
   Input,
   Button,
@@ -15,8 +15,8 @@ import {
 export const Route = createFileRoute("/")({
   component: RouteComponent,
   loader: async () => {
-    const session = await getSession();
-    return { session };
+    const viewer = await getViewer();
+    return { viewer };
   },
 });
 
@@ -199,7 +199,7 @@ type Step = "email" | "otp" | "passkey-register";
 
 function RouteComponent() {
   const router = useRouter();
-  const { session } = Route.useLoaderData();
+  const { viewer } = Route.useLoaderData();
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [registrationToken, setRegistrationToken] = useState<string | null>(
@@ -352,9 +352,9 @@ function RouteComponent() {
         </div>
 
         <div className="bg-white rounded p-8 text-center shadow-xl">
-          {session?.userId ? (
+          {viewer ? (
             <AuthenticatedView
-              userId={session.userId}
+              userId={viewer.userId}
               onSignOut={handleSignOut}
               loading={loading}
             />
