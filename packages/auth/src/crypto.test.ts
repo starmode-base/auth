@@ -17,7 +17,7 @@ describe("base64url encoding/decoding", () => {
     const data = new Uint8Array([0xfb, 0xff]);
     const encoded = base64urlEncode(data);
     expect(encoded).toBe("-_8");
-    expect(base64urlDecode(encoded)).toEqual(data);
+    expect(base64urlDecode(encoded)).toStrictEqual(data);
   });
 
   it("base64urlDecode returns null for invalid base64", () => {

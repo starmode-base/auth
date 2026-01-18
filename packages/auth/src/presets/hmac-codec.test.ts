@@ -30,10 +30,11 @@ describe("makeHmacCodec", () => {
     const token = await codec.encode({ foo: "bar" });
     const result = await codec.decode(token);
 
-    expect(result).toEqual({
+    expect(result).toStrictEqual({
       foo: "bar",
       valid: true,
       expired: false,
+      exp: expect.any(Number),
     });
   });
 
@@ -67,10 +68,11 @@ describe("makeHmacCodec", () => {
     const token = await codec.encode({ foo: "bar" });
     const result = await codec.decode(token);
 
-    expect(result).toEqual({
+    expect(result).toStrictEqual({
       foo: "bar",
       valid: false,
       expired: true,
+      exp: expect.any(Number),
     });
   });
 });
