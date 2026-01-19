@@ -212,7 +212,7 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 
 **Token format via codec:**
 
-- `sessionHmac({ secret, ttl })` — HMAC-signed JSON. Stateless validation for non-expired tokens, validates against DB when expired.
+- `sessionHmac({ secret, ttl })` — HMAC-signed JSON with `{ sessionId, sessionExp, userId, tokenExp }`. Stateless validation for non-expired tokens, validates against DB when `tokenExp` passes. All timestamps in ms. `sessionExp: null` = forever.
 - `sessionOpaque()` — Opaque (random string). Always validates against DB.
 
 **Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).
@@ -221,24 +221,47 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 
 The auth system has five distinct TTLs, each serving a different purpose:
 
-| TTL           | Config                         | Purpose                                      | Typical value                | Sliding refresh      |
-| ------------- | ------------------------------ | -------------------------------------------- | ---------------------------- | -------------------- |
-| Token TTL     | `sessionHmac({ ttl })`         | Revocation window — how long before DB check | 10 min                       | Yes                  |
-| Session TTL   | `makeAuth({ sessionTtl })`     | Inactivity timeout — when to sign out user   | 30 days or `false` (forever) | Yes (on DB fallback) |
-| Cookie TTL    | `sessionCookieDefaults.maxAge` | Browser cookie lifetime — auto-deleted after | 400 days                     | Yes                  |
-| OTP TTL       | `otpTransportConsole({ ttl })` | OTP validity — how long to enter the code    | 10 min                       | No                   |
-| Challenge TTL | `webAuthn: { challengeTtl }`   | WebAuthn challenge validity                  | 5 min                        | No                   |
+| TTL           | Config                         | Purpose                                      | Typical value                   | Sliding refresh |
+| ------------- | ------------------------------ | -------------------------------------------- | ------------------------------- | --------------- |
+| Token TTL     | `sessionHmac({ ttl })`         | Revocation window — how long before DB check | 10 min                          | No              |
+| Session TTL   | `makeAuth({ sessionTtl })`     | Inactivity timeout — when to sign out user   | 30 days or `Infinity` (forever) | Yes             |
+| Cookie TTL    | `sessionCookieDefaults.maxAge` | Browser cookie lifetime — auto-deleted after | 400 days                        | Yes             |
+| OTP TTL       | `otpTransportConsole({ ttl })` | OTP validity — how long to enter the code    | 10 min                          | No              |
+| Challenge TTL | `webAuthn: { challengeTtl }`   | WebAuthn challenge validity                  | 5 min                           | No              |
 
 **Token TTL vs Session TTL:**
 
-- **Token TTL** (short) — When HMAC token expires, `getSession()` checks DB. This is the "revocation window" — how long until sign-out takes effect.
-- **Session TTL** (long or forever) — When to actually sign out the user due to inactivity. Stored as `expiresAt` in DB. `false` means forever.
+- **Token TTL** (short, fixed) — Defines DB check frequency. When token `tokenExp` passes, `getSession()` checks DB. This is the "revocation window" — how long until sign-out/revocation takes effect. Must NOT slide, or revocation breaks.
+- **Session TTL** (long or forever) — When to sign out the user due to inactivity. Tracked as `sessionExp` in token (slides every request) and `expiresAt` in DB (updated on DB fallback). `Infinity` means forever.
 
 **Sliding refresh:**
 
-- **Token:** Every `getSession()` call issues a fresh token (sliding refresh)
-- **Session:** On DB fallback, `expiresAt` is updated to `now + sessionTtl` (sliding refresh for inactivity)
-- **Cookie:** Server mints new cookie with fresh `maxAge` on each response. Browser auto-deletes if not refreshed.
+|                    | Slides? | Why                                                                                                                       |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Token `tokenExp`   | No      | Must be fixed to guarantee DB checks every tokenTtl. Sliding would let active users avoid DB forever → revocation broken. |
+| Token `sessionExp` | Yes     | Slides every request to keep active users signed in. Checked before `tokenExp`.                                           |
+| DB `expiresAt`     | Yes     | Updated on DB fallback. Fallback value if token lost.                                                                     |
+| Cookie `maxAge`    | Yes     | Server mints new cookie each response. Keeps cookie alive for active users.                                               |
+
+**`getSession()` flow:**
+
+1. **Token valid** (`tokenExp` not passed):
+   - Check `sessionExp` — if expired → sign out (inactive too long)
+   - Issue fresh token: same `tokenExp`, new `sessionExp`
+   - Slide cookie `maxAge`
+   - Return `{ userId }`
+   - No DB check
+
+2. **Token expired** (`tokenExp` passed), `sessionExp` valid:
+   - DB check — does session exist? (revocation check)
+   - If not → sign out
+   - Issue fresh token: new `tokenExp`, new `sessionExp`
+   - Update DB `expiresAt`
+   - Slide cookie `maxAge`
+   - Return `{ userId }`
+
+3. **`sessionExp` expired** (regardless of `tokenExp`):
+   - Sign out — user inactive too long
 
 **Cookie TTL vs Session TTL:**
 
@@ -246,7 +269,7 @@ The cookie is just transport — session validity is DB-controlled. Cookie TTL o
 
 - Cookie expires before session → user loses valid session (bad UX, avoid this)
 - Cookie lives longer than session → normal, session check returns null when expired
-- `sessionTtl: false` (forever) + 400-day cookie → inactive 400+ days loses cookie, must re-auth
+- `sessionTtl: Infinity` (forever) + 400-day cookie → inactive 400+ days loses cookie, must re-auth
 
 Rule: Cookie TTL ≥ Session TTL. For forever sessions, sliding refresh keeps the cookie alive for active users.
 
@@ -376,6 +399,7 @@ await authClient.requestOtp({ identifier: email });
 - ❌ Password-based auth
 - ❌ Legacy browser support
 - ❌ SAML / SSO / enterprise features
+- ❌ Rate limiting (infrastructure-layer concern)
 
 **Constraints:**
 

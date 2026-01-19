@@ -29,7 +29,7 @@ describe("auth integration", () => {
 
     auth = makeAuth({
       storage,
-      sessionCodec: sessionHmac({ secret: "test-secret", ttl: 600 }),
+      sessionCodec: sessionHmac({ secret: "test-secret", ttl: 10 * 60 * 1000 }), // 10 min
       registrationCodec: registrationHmac({
         secret: "test-secret",
         ttl: 300,
@@ -41,7 +41,7 @@ describe("auth integration", () => {
         challengeTtl: 5 * 60 * 1000,
       },
       sessionTransport,
-      sessionTtl: false,
+      sessionTtl: Infinity,
       debug: false,
     });
   });
@@ -150,10 +150,11 @@ describe("auth integration", () => {
       });
       const sessionCodec = sessionHmac({
         secret: "test-secret",
-        ttl: 600,
+        ttl: 10 * 60 * 1000, // 10 min
       });
       const token = await sessionCodec.encode({
         sessionId: "session_1",
+        sessionExp: null, // forever for this test
         userId: "user_1",
       });
 
@@ -178,10 +179,11 @@ describe("auth integration", () => {
       });
       const sessionCodec = sessionHmac({
         secret: "test-secret",
-        ttl: 600,
+        ttl: 10 * 60 * 1000, // 10 min
       });
       const token = await sessionCodec.encode({
         sessionId: "session_1",
+        sessionExp: null, // forever for this test
         userId: "user_1",
       });
 

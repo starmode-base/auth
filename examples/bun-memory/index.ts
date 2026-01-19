@@ -54,7 +54,7 @@ function createAuthForRequest(req: Request) {
       },
       options: { ...sessionCookieDefaults, cookieName: SESSION_COOKIE },
     }),
-    sessionTtl: false,
+    sessionTtl: Infinity,
     debug: true,
   });
 }

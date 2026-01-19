@@ -9,10 +9,12 @@ import type { SessionCodec } from "../types";
  * Use this when:
  * - You want the simplest possible token format
  * - You're fine with a DB lookup on every request
- * - You don't need stateless token validation
+ * - You want instant revocation (no token expiry window)
  */
 export const sessionOpaque = (): SessionCodec => {
   return {
+    ttl: 0, // Always hits DB
+
     encode: async (payload) => {
       // Token is just the sessionId
       return payload.sessionId;
@@ -20,11 +22,13 @@ export const sessionOpaque = (): SessionCodec => {
 
     decode: async (token) => {
       // We can't decode anything from an opaque token
-      // The sessionId IS the token, userId must come from storage lookup
+      // The sessionId IS the token, all other fields come from storage lookup
       // Mark as expired to force storage lookup
       return {
         sessionId: token,
+        sessionExp: null, // Must be looked up from storage
         userId: "", // Must be looked up from storage
+        tokenExp: 0, // Not applicable for opaque
         valid: true,
         expired: true, // Forces storage lookup
       };

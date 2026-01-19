@@ -27,7 +27,7 @@ export const auth = makeAuth({
     challengeTtl: 5 * 60 * 1000,
   },
   sessionTransport: sessionTransportTanstack(sessionCookieDefaults),
-  sessionTtl: false,
+  sessionTtl: Infinity,
   debug: true,
 });
 

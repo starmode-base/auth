@@ -53,13 +53,27 @@ export type StorageAdapter = {
   };
 };
 
-/** Session payload */
-export type SessionPayload = { sessionId: string; userId: string };
+/** Session payload for encoding */
+export type SessionPayload = {
+  sessionId: string;
+  /** Session expiry timestamp in ms (null = never expires) */
+  sessionExp: number | null;
+  userId: string;
+  /** Token expiry in ms - if provided, preserves existing; if omitted, generates new */
+  tokenExp?: number;
+};
 
 /** Decoded session result */
-export type SessionDecoded = SessionPayload & {
+export type SessionDecoded = {
+  sessionId: string;
+  /** Session expiry timestamp in ms (null = never expires) */
+  sessionExp: number | null;
+  userId: string;
+  /** Token expiry timestamp in ms */
+  tokenExp: number;
+  /** Signature valid */
   valid: boolean;
-
+  /** Token expired (tokenExp < now) */
   expired: boolean;
 };
 
@@ -67,6 +81,8 @@ export type SessionDecoded = SessionPayload & {
 export type SessionCodec = {
   encode: (payload: SessionPayload) => Promise<string>;
   decode: (token: string) => Promise<SessionDecoded | null>;
+  /** Token TTL in ms */
+  ttl: number;
 };
 
 /** Registration payload */
@@ -216,8 +232,8 @@ export type MakeAuthConfig = {
   otpTransport: OtpTransportAdapter;
   sessionTransport: SessionTransportAdapter;
   webAuthn: WebAuthnConfig;
-  /** Session TTL: number (ms) for inactivity timeout with sliding refresh, false for forever */
-  sessionTtl: number | false;
+  /** Session TTL in ms (Infinity = forever). Inactivity timeout with sliding refresh. */
+  sessionTtl: number;
   /** Enable debug logging for development */
   debug?: boolean;
 };

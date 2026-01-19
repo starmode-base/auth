@@ -14,7 +14,7 @@ describe("makeAuth", () => {
 
   const auth = makeAuth({
     storage,
-    sessionCodec: sessionHmac({ secret: "test", ttl: 600 }),
+    sessionCodec: sessionHmac({ secret: "test", ttl: 10 * 60 * 1000 }), // 10 min
     registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
     otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
     webAuthn: {
@@ -23,7 +23,7 @@ describe("makeAuth", () => {
       challengeTtl: 5 * 60 * 1000,
     },
     sessionTransport,
-    sessionTtl: false,
+    sessionTtl: Infinity,
     debug: false,
   });
 
@@ -92,9 +92,10 @@ describe("makeAuth", () => {
       userId: "user_1",
       expiresAt: new Date(Date.now() + 60000),
     });
-    const sessionCodec = sessionHmac({ secret: "test", ttl: 600 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 10 * 60 * 1000 }); // 10 min
     const token = await sessionCodec.encode({
       sessionId: "session_1",
+      sessionExp: null, // forever for this test
       userId: "user_1",
     });
 
@@ -116,9 +117,10 @@ describe("makeAuth", () => {
       userId: "user_1",
       expiresAt: new Date(Date.now() + 60000),
     });
-    const sessionCodec = sessionHmac({ secret: "test", ttl: 600 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 10 * 60 * 1000 }); // 10 min
     const token = await sessionCodec.encode({
       sessionId: "session_2",
+      sessionExp: null, // forever for this test
       userId: "user_1",
     });
 
@@ -134,7 +136,7 @@ describe("makeAuth sessionTtl", () => {
 
     const auth = makeAuth({
       storage,
-      sessionCodec: sessionHmac({ secret: "test", ttl: 1 }), // 1 second token TTL
+      sessionCodec: sessionHmac({ secret: "test", ttl: 50 }), // 50ms token TTL
       registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
       otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
       webAuthn: {
@@ -143,7 +145,7 @@ describe("makeAuth sessionTtl", () => {
         challengeTtl: 5 * 60 * 1000,
       },
       sessionTransport,
-      sessionTtl: false,
+      sessionTtl: Infinity,
       debug: false,
     });
 
@@ -153,14 +155,15 @@ describe("makeAuth sessionTtl", () => {
       userId: "user_1",
       expiresAt: null,
     });
-    const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 50 }); // 50ms
     const token = await sessionCodec.encode({
       sessionId: "session_forever",
+      sessionExp: null, // forever
       userId: "user_1",
     });
 
-    // Wait for token to expire (need 2+ seconds due to whole-second granularity)
-    await new Promise((r) => setTimeout(r, 2100));
+    // Wait for token to expire
+    await new Promise((r) => setTimeout(r, 100));
 
     sessionTransport.setToken(token);
     const session = await auth.getSession();
@@ -175,7 +178,7 @@ describe("makeAuth sessionTtl", () => {
 
     const auth = makeAuth({
       storage,
-      sessionCodec: sessionHmac({ secret: "test", ttl: 1 }), // 1 second token TTL
+      sessionCodec: sessionHmac({ secret: "test", ttl: 10000 }), // 10s token TTL (won't expire during test)
       registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
       otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
       webAuthn: {
@@ -184,7 +187,7 @@ describe("makeAuth sessionTtl", () => {
         challengeTtl: 5 * 60 * 1000,
       },
       sessionTransport,
-      sessionTtl: 500, // 500ms inactivity timeout
+      sessionTtl: 50, // 50ms inactivity timeout
       debug: false,
     });
 
@@ -192,16 +195,19 @@ describe("makeAuth sessionTtl", () => {
     await storage.session.store({
       sessionId: "session_expiring",
       userId: "user_1",
-      expiresAt: new Date(Date.now() + 500),
+      expiresAt: new Date(Date.now() + 50),
     });
-    const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 10000 });
+    // Set sessionExp to expire in 50ms
+    const sessionExp = Date.now() + 50;
     const token = await sessionCodec.encode({
       sessionId: "session_expiring",
+      sessionExp,
       userId: "user_1",
     });
 
-    // Wait for both token and session to expire (need 2+ seconds for token)
-    await new Promise((r) => setTimeout(r, 2100));
+    // Wait for sessionExp to expire
+    await new Promise((r) => setTimeout(r, 100));
 
     sessionTransport.setToken(token);
     const session = await auth.getSession();
@@ -213,11 +219,11 @@ describe("makeAuth sessionTtl", () => {
   it("sliding refresh updates expiresAt on DB fallback", async () => {
     const storage = storageMemory();
     const sessionTransport = sessionTransportMemory();
-    const sessionTtl = 10000; // 10 second TTL
+    const sessionTtl = 10000; // 10s session TTL
 
     const auth = makeAuth({
       storage,
-      sessionCodec: sessionHmac({ secret: "test", ttl: 1 }), // 1 second token TTL
+      sessionCodec: sessionHmac({ secret: "test", ttl: 50 }), // 50ms token TTL
       registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
       otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
       webAuthn: {
@@ -237,14 +243,17 @@ describe("makeAuth sessionTtl", () => {
       userId: "user_1",
       expiresAt: initialExpiry,
     });
-    const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 50 }); // 50ms
+    // sessionExp is long (10s), tokenExp is short (50ms)
+    const sessionExp = Date.now() + sessionTtl;
     const token = await sessionCodec.encode({
       sessionId: "session_sliding",
+      sessionExp,
       userId: "user_1",
     });
 
-    // Wait for token to expire but not session (need 2+ seconds for token)
-    await new Promise((r) => setTimeout(r, 2100));
+    // Wait for tokenExp to expire but not sessionExp
+    await new Promise((r) => setTimeout(r, 100));
 
     sessionTransport.setToken(token);
     const session = await auth.getSession();
@@ -256,7 +265,7 @@ describe("makeAuth sessionTtl", () => {
     const storedSession = await storage.session.get("session_sliding");
     expect(storedSession).not.toBeNull();
     expect(storedSession!.expiresAt).not.toBeNull();
-    // New expiry should be later than initial (refresh happened after 2.1s)
+    // New expiry should be later than initial (refresh happened after 100ms)
     expect(storedSession!.expiresAt!.getTime()).toBeGreaterThan(
       initialExpiry.getTime(),
     );
