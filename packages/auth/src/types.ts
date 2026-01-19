@@ -44,6 +44,7 @@ export type SessionPayload = { sessionId: string; userId: string };
 /** Decoded session result */
 export type SessionDecoded = SessionPayload & {
   valid: boolean;
+
   expired: boolean;
 };
 

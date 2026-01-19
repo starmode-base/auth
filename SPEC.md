@@ -62,6 +62,7 @@ The library provides primitives. Apps compose flows.
 ```
 Sign up:      requestOtp → verifyOtp → [app: upsertUser] → createRegistrationToken → passkey → session
 Sign in:      passkey → session
+Sign out:     signOut → delete session (HMAC/JWT tokens valid until TTL — use short TTLs if needed)
 Add passkey:  getSession → createRegistrationToken → passkey
 Recovery:     requestOtp → verifyOtp → [app: lookupUser] → createRegistrationToken → passkey → session
 ```
@@ -88,6 +89,10 @@ Below shows where each call runs — `authClient.` runs in the browser, `auth.` 
 2. Client: `authClient.getPasskey(options)` — browser WebAuthn
 3. Client: `authClient.verifyAuthentication({ credential })`
    - Server verifies signature, creates session → user authenticated
+
+**Sign out:**
+
+1. Client: `authClient.signOut()` — deletes session, clears cookie
 
 **Add passkey** (while authenticated):
 
@@ -155,6 +160,7 @@ Codecs:
 ✓ sessionHmac()                — HMAC-signed session tokens (stateless)
 ✓ sessionOpaque()              — opaque session tokens (requires DB lookup)
 ✓ registrationHmac()           — HMAC-signed registration tokens
+  (SessionCodec is a simple interface — use a JWT library if you prefer JWT)
 
 OTP delivery:
 ✓ otpTransportConsole          — logs OTP to console (dev)
@@ -297,14 +303,14 @@ await authClient.requestOtp({ identifier: email });
 **Future:**
 
 - Hosted user dashboard
-- SMS OTP
+- SMS OTP example — demonstrate transport-agnostic design (Twilio, etc.)
 - React Native support
 - E2EE/PRF module — WebAuthn PRF for key derivation
-- Session management utilities — `signOutAll()`, `getSessions()` (users can query DB directly for now)
+- Session management UI — `signOutAll()`, `getSessions()` for "manage devices" (users can query DB directly for now)
 - Passkey management utilities — `getPasskeys()`, `deletePasskey()` (users can query DB directly for now)
 - Multi-email support — add/remove emails per user (not prevented now, users own their schema)
 - LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
-- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (separate project, `SendOtp` adapter ready)
+- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)
 
 **Exclusions:**
 

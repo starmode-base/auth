@@ -317,20 +317,38 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
           return null;
         }
 
+        // Session valid in DB — issue fresh token (sliding refresh)
+        const freshToken = await sessionCodec.encode({
+          sessionId: decoded.sessionId,
+          userId: storedSession.userId,
+        });
+
+        sessionTransport.set(freshToken);
+
         return { userId: storedSession.userId };
       }
+
+      // Token valid and not expired — issue fresh token (sliding refresh)
+      const freshToken = await sessionCodec.encode({
+        sessionId: decoded.sessionId,
+        userId: decoded.userId,
+      });
+      sessionTransport.set(freshToken);
 
       return { userId: decoded.userId };
     },
 
     async signOut() {
       const token = sessionTransport.get();
+
       if (token) {
         const decoded = await sessionCodec.decode(token);
+
         if (decoded) {
           await storage.session.delete(decoded.sessionId);
         }
       }
+
       sessionTransport.clear();
     },
   };

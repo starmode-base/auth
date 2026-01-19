@@ -13,17 +13,20 @@ export const sessionCookieDefaults: SessionCookieOptions = {
 export type SessionTransportCookieConfig = {
   /** Read cookie by name */
   get: (name: string) => string | undefined;
+
   /** Set cookie with name, value, and options */
   set: (
     name: string,
     value: string,
     options: Omit<SessionCookieOptions, "cookieName">,
   ) => void;
+
   /** Clear cookie with name and options */
   clear: (
     name: string,
     options: Omit<SessionCookieOptions, "cookieName">,
   ) => void;
+
   /** Cookie options (use sessionCookieDefaults or spread to override) */
   options: SessionCookieOptions;
 };
