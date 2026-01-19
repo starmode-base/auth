@@ -8,6 +8,7 @@ export type StoredCredential = {
 
 /** OTP DB record */
 export type OtpRecord = {
+  /** Identifier (email address, phone number, etc.) */
   identifier: string;
   otp: string;
   expiresAt: Date;
