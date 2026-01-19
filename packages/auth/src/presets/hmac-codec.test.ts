@@ -68,9 +68,10 @@ describe("makeHmacCodec", () => {
     const token = await codec.encode({ foo: "bar" });
     const result = await codec.decode(token);
 
+    // valid = signature verified, expired = past exp time
     expect(result).toStrictEqual({
       foo: "bar",
-      valid: false,
+      valid: true,
       expired: true,
       exp: expect.any(Number),
     });

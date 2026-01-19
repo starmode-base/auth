@@ -38,10 +38,11 @@ function createAuthForRequest(req: Request) {
       secret: "dev-secret",
       ttl: 300,
     }),
-    otpTransport: otpTransportConsole,
+    otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
     webAuthn: {
       rpId: "localhost",
       rpName: "Bun Memory Example",
+      challengeTtl: 5 * 60 * 1000,
     },
     sessionTransport: sessionTransportCookie({
       get: (name) => getCookieFromRequest(req, name),
@@ -53,6 +54,7 @@ function createAuthForRequest(req: Request) {
       },
       options: { ...sessionCookieDefaults, cookieName: SESSION_COOKIE },
     }),
+    sessionTtl: false,
     debug: true,
   });
 }

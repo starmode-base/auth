@@ -21,11 +21,11 @@ export type StorageAdapter = {
     store: (
       sessionId: string,
       userId: string,
-      expiresAt: Date,
+      expiresAt: Date | null,
     ) => Promise<void>;
     get: (
       sessionId: string,
-    ) => Promise<{ userId: string; expiresAt: Date } | null>;
+    ) => Promise<{ userId: string; expiresAt: Date | null } | null>;
     delete: (sessionId: string) => Promise<void>;
   };
   credential: {
@@ -72,6 +72,8 @@ export type RegistrationCodec = {
 /** OTP transport adapter for code delivery */
 export type OtpTransportAdapter = {
   send: (identifier: string, otp: string) => Promise<void>;
+  /** OTP validity duration in milliseconds */
+  ttl: number;
 };
 
 /** Session transport adapter for token delivery */
@@ -97,6 +99,8 @@ export type SessionCookieOptions = {
 export type WebAuthnConfig = {
   rpId: string;
   rpName: string;
+  /** Challenge validity duration in milliseconds */
+  challengeTtl: number;
 };
 
 /** Error codes for auth failures */
@@ -197,6 +201,8 @@ export type MakeAuthConfig = {
   otpTransport: OtpTransportAdapter;
   sessionTransport: SessionTransportAdapter;
   webAuthn: WebAuthnConfig;
+  /** Session TTL: number (ms) for inactivity timeout with sliding refresh, false for forever */
+  sessionTtl: number | false;
   /** Enable debug logging for development */
   debug?: boolean;
 };

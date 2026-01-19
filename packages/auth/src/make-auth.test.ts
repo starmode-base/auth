@@ -16,12 +16,14 @@ describe("makeAuth", () => {
     storage,
     sessionCodec: sessionHmac({ secret: "test", ttl: 600 }),
     registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
-    otpTransport: otpTransportConsole,
+    otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
     webAuthn: {
       rpId: "localhost",
       rpName: "Test App",
+      challengeTtl: 5 * 60 * 1000,
     },
     sessionTransport,
+    sessionTtl: false,
     debug: false,
   });
 
@@ -122,5 +124,133 @@ describe("makeAuth", () => {
 
     sessionTransport.setToken(token);
     await expect(auth.signOut()).resolves.toBeUndefined();
+  });
+});
+
+describe("makeAuth sessionTtl", () => {
+  it("forever session (null expiresAt) is always valid", async () => {
+    const storage = storageMemory();
+    const sessionTransport = sessionTransportMemory();
+
+    const auth = makeAuth({
+      storage,
+      sessionCodec: sessionHmac({ secret: "test", ttl: 1 }), // 1 second token TTL
+      registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+      otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+      webAuthn: {
+        rpId: "localhost",
+        rpName: "Test App",
+        challengeTtl: 5 * 60 * 1000,
+      },
+      sessionTransport,
+      sessionTtl: false,
+      debug: false,
+    });
+
+    // Create session with null expiresAt (forever)
+    await storage.session.store("session_forever", "user_1", null);
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_forever",
+      userId: "user_1",
+    });
+
+    // Wait for token to expire (need 2+ seconds due to whole-second granularity)
+    await new Promise((r) => setTimeout(r, 2100));
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+
+    // Session should still be valid (forever)
+    expect(session).toStrictEqual({ userId: "user_1" });
+  });
+
+  it("inactivity timeout expires session after TTL", async () => {
+    const storage = storageMemory();
+    const sessionTransport = sessionTransportMemory();
+
+    const auth = makeAuth({
+      storage,
+      sessionCodec: sessionHmac({ secret: "test", ttl: 1 }), // 1 second token TTL
+      registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+      otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+      webAuthn: {
+        rpId: "localhost",
+        rpName: "Test App",
+        challengeTtl: 5 * 60 * 1000,
+      },
+      sessionTransport,
+      sessionTtl: 500, // 500ms inactivity timeout
+      debug: false,
+    });
+
+    // Create session with short expiry
+    await storage.session.store(
+      "session_expiring",
+      "user_1",
+      new Date(Date.now() + 500),
+    );
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_expiring",
+      userId: "user_1",
+    });
+
+    // Wait for both token and session to expire (need 2+ seconds for token)
+    await new Promise((r) => setTimeout(r, 2100));
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+
+    // Session should be null (expired)
+    expect(session).toBeNull();
+  });
+
+  it("sliding refresh updates expiresAt on DB fallback", async () => {
+    const storage = storageMemory();
+    const sessionTransport = sessionTransportMemory();
+    const sessionTtl = 10000; // 10 second TTL
+
+    const auth = makeAuth({
+      storage,
+      sessionCodec: sessionHmac({ secret: "test", ttl: 1 }), // 1 second token TTL
+      registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+      otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+      webAuthn: {
+        rpId: "localhost",
+        rpName: "Test App",
+        challengeTtl: 5 * 60 * 1000,
+      },
+      sessionTransport,
+      sessionTtl,
+      debug: false,
+    });
+
+    // Create session
+    const initialExpiry = new Date(Date.now() + sessionTtl);
+    await storage.session.store("session_sliding", "user_1", initialExpiry);
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_sliding",
+      userId: "user_1",
+    });
+
+    // Wait for token to expire but not session (need 2+ seconds for token)
+    await new Promise((r) => setTimeout(r, 2100));
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+
+    // Session should still be valid
+    expect(session).toStrictEqual({ userId: "user_1" });
+
+    // Check that expiresAt was updated (sliding refresh)
+    const storedSession = await storage.session.get("session_sliding");
+    expect(storedSession).not.toBeNull();
+    expect(storedSession!.expiresAt).not.toBeNull();
+    // New expiry should be later than initial (refresh happened after 2.1s)
+    expect(storedSession!.expiresAt!.getTime()).toBeGreaterThan(
+      initialExpiry.getTime(),
+    );
   });
 });

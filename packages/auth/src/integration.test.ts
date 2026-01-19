@@ -21,6 +21,7 @@ describe("auth integration", () => {
     sessionTransport = sessionTransportMemory();
 
     const otpTransport: OtpTransportAdapter = {
+      ttl: 10 * 60 * 1000,
       send: async (identifier, otp) => {
         sentOtps.push({ identifier, otp });
       },
@@ -37,8 +38,10 @@ describe("auth integration", () => {
       webAuthn: {
         rpId: "localhost",
         rpName: "Test App",
+        challengeTtl: 5 * 60 * 1000,
       },
       sessionTransport,
+      sessionTtl: false,
       debug: false,
     });
   });

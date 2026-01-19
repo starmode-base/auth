@@ -1,7 +1,10 @@
 import type { OtpTransportAdapter } from "../types";
 
-export const otpTransportConsole: OtpTransportAdapter = {
+type Options = { ttl: number };
+
+export const otpTransportConsole = (options: Options): OtpTransportAdapter => ({
+  ttl: options.ttl,
   send: async (identifier, otp) => {
     console.log(`[OTP] ${identifier}: ${otp}`);
   },
-};
+});

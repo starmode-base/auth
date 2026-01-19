@@ -1,7 +1,7 @@
 import type { StorageAdapter, StoredCredential } from "../types";
 
 type OtpRecord = { otp: string; expiresAt: Date };
-type SessionRecord = { userId: string; expiresAt: Date };
+type SessionRecord = { userId: string; expiresAt: Date | null };
 type CredentialRecord = { userId: string; credential: StoredCredential };
 
 type MemoryStorageResult = StorageAdapter & {

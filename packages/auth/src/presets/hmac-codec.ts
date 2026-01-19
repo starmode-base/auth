@@ -41,7 +41,8 @@ export function makeHmacCodec<TPayload extends object>(options: {
         const now = Math.floor(Date.now() / 1000);
         const expired = data.exp < now;
 
-        return { ...data, valid: !expired, expired };
+        // valid = signature verified, expired = past exp time
+        return { ...data, valid: true, expired };
       } catch {
         return null;
       }

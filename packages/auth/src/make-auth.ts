@@ -34,10 +34,6 @@ function generateChallenge(): string {
   return base64urlEncode(array);
 }
 
-const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
-const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const CHALLENGE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
-
 type ChallengeRecord = {
   challenge: string;
   userId?: string; // Only set for registration
@@ -55,6 +51,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
     otpTransport,
     webAuthn,
     sessionTransport,
+    sessionTtl,
     debug,
   } = config;
 
@@ -72,7 +69,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
   return {
     async requestOtp({ identifier }) {
       const code = generateOtp();
-      const expiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+      const expiresAt = new Date(Date.now() + otpTransport.ttl);
 
       await storage.otp.store(identifier, code, expiresAt);
 
@@ -126,7 +123,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       challengeStore.set(challenge, {
         challenge,
         userId,
-        expiresAt: new Date(Date.now() + CHALLENGE_EXPIRY_MS),
+        expiresAt: new Date(Date.now() + webAuthn.challengeTtl),
       });
 
       const options: PublicKeyCredentialCreationOptionsJSON = {
@@ -209,7 +206,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
 
         // Create session
         const sessionId = generateSessionId();
-        const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
+        const expiresAt =
+          sessionTtl === false ? null : new Date(Date.now() + sessionTtl);
 
         await storage.session.store(sessionId, userId, expiresAt);
 
@@ -230,7 +228,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       // Store challenge for verification (keyed by challenge for lookup)
       challengeStore.set(challenge, {
         challenge,
-        expiresAt: new Date(Date.now() + CHALLENGE_EXPIRY_MS),
+        expiresAt: new Date(Date.now() + webAuthn.challengeTtl),
       });
 
       const options: PublicKeyCredentialRequestOptionsJSON = {
@@ -285,7 +283,8 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
 
         // Create session
         const sessionId = generateSessionId();
-        const expiresAt = new Date(Date.now() + SESSION_EXPIRY_MS);
+        const expiresAt =
+          sessionTtl === false ? null : new Date(Date.now() + sessionTtl);
 
         await storage.session.store(sessionId, userId, expiresAt);
 
@@ -304,6 +303,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       if (!token) return null;
 
       const decoded = await sessionCodec.decode(token);
+      // const decoded = await sessionCodec.decode(token, storage.session);
 
       if (!decoded || !decoded.valid) {
         return null;
@@ -313,8 +313,26 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       if (decoded.expired) {
         const storedSession = await storage.session.get(decoded.sessionId);
 
-        if (!storedSession || storedSession.expiresAt < new Date()) {
+        if (!storedSession) {
           return null;
+        }
+
+        // Check expiry (null means forever)
+        const isExpired =
+          storedSession.expiresAt !== null &&
+          storedSession.expiresAt < new Date();
+        if (isExpired) {
+          return null;
+        }
+
+        // Update expiresAt for sliding refresh (if not forever)
+        if (sessionTtl !== false) {
+          const newExpiresAt = new Date(Date.now() + sessionTtl);
+          await storage.session.store(
+            decoded.sessionId,
+            storedSession.userId,
+            newExpiresAt,
+          );
         }
 
         // Session valid in DB — issue fresh token (sliding refresh)
