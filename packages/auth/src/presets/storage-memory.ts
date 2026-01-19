@@ -1,8 +1,10 @@
-import type { StorageAdapter, StoredCredential } from "../types";
-
-type OtpRecord = { otp: string; expiresAt: Date };
-type SessionRecord = { userId: string; expiresAt: Date | null };
-type CredentialRecord = { userId: string; credential: StoredCredential };
+import type {
+  CredentialRecord,
+  OtpRecord,
+  SessionRecord,
+  StorageAdapter,
+  StoredCredential,
+} from "../types";
 
 type MemoryStorageResult = StorageAdapter & {
   // Expose stores for testing
@@ -20,8 +22,8 @@ export const storageMemory = (): MemoryStorageResult => {
 
   return {
     otp: {
-      store: async (identifier, otp, expiresAt) => {
-        otps.set(identifier, { otp, expiresAt });
+      store: async ({ identifier, otp, expiresAt }) => {
+        otps.set(identifier, { identifier, otp, expiresAt });
       },
 
       verify: async (identifier, otp) => {
@@ -38,14 +40,19 @@ export const storageMemory = (): MemoryStorageResult => {
     },
 
     session: {
-      store: async (sessionId, userId, expiresAt) => {
-        sessions.set(sessionId, { userId, expiresAt });
+      store: async ({ sessionId, userId, expiresAt }) => {
+        sessions.set(sessionId, { sessionId, userId, expiresAt });
       },
 
       get: async (sessionId) => {
         const record = sessions.get(sessionId);
         if (!record) return null;
-        return { userId: record.userId, expiresAt: record.expiresAt };
+
+        return {
+          sessionId,
+          userId: record.userId,
+          expiresAt: record.expiresAt,
+        };
       },
 
       delete: async (sessionId) => {
@@ -54,8 +61,8 @@ export const storageMemory = (): MemoryStorageResult => {
     },
 
     credential: {
-      store: async (userId, cred) => {
-        credentials.set(cred.id, { userId, credential: cred });
+      store: async ({ userId, credential }) => {
+        credentials.set(credential.id, { userId, credential });
       },
 
       get: async (userId) => {

@@ -68,12 +68,12 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
 
   return {
     async requestOtp({ identifier }) {
-      const code = generateOtp();
+      const otp = generateOtp();
       const expiresAt = new Date(Date.now() + otpTransport.ttl);
 
-      await storage.otp.store(identifier, code, expiresAt);
+      await storage.otp.store({ identifier, otp, expiresAt });
 
-      await otpTransport.send(identifier, code);
+      await otpTransport.send(identifier, otp);
 
       return result.ok({});
     },
@@ -194,11 +194,14 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         );
 
         // Store the credential
-        await storage.credential.store(userId, {
-          id: verified.credentialId,
-          publicKey: verified.publicKey,
-          counter: verified.counter,
-          transports: verified.transports,
+        await storage.credential.store({
+          userId,
+          credential: {
+            id: verified.credentialId,
+            publicKey: verified.publicKey,
+            counter: verified.counter,
+            transports: verified.transports,
+          },
         });
 
         // Clean up challenge
@@ -209,7 +212,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         const expiresAt =
           sessionTtl === false ? null : new Date(Date.now() + sessionTtl);
 
-        await storage.session.store(sessionId, userId, expiresAt);
+        await storage.session.store({ sessionId, userId, expiresAt });
 
         const token = await sessionCodec.encode({ sessionId, userId });
         const responseToken = sessionTransport.set(token);
@@ -286,7 +289,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         const expiresAt =
           sessionTtl === false ? null : new Date(Date.now() + sessionTtl);
 
-        await storage.session.store(sessionId, userId, expiresAt);
+        await storage.session.store({ sessionId, userId, expiresAt });
 
         const token = await sessionCodec.encode({ sessionId, userId });
         const responseToken = sessionTransport.set(token);
@@ -328,11 +331,11 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         // Update expiresAt for sliding refresh (if not forever)
         if (sessionTtl !== false) {
           const newExpiresAt = new Date(Date.now() + sessionTtl);
-          await storage.session.store(
-            decoded.sessionId,
-            storedSession.userId,
-            newExpiresAt,
-          );
+          await storage.session.store({
+            sessionId: decoded.sessionId,
+            userId: storedSession.userId,
+            expiresAt: newExpiresAt,
+          });
         }
 
         // Session valid in DB — issue fresh token (sliding refresh)

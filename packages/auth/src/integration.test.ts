@@ -143,11 +143,11 @@ describe("auth integration", () => {
   describe("session management", () => {
     it("getSession returns userId from valid token", async () => {
       // Directly create a session for testing
-      await storage.session.store(
-        "session_1",
-        "user_1",
-        new Date(Date.now() + 60000),
-      );
+      await storage.session.store({
+        sessionId: "session_1",
+        userId: "user_1",
+        expiresAt: new Date(Date.now() + 60000),
+      });
       const sessionCodec = sessionHmac({
         secret: "test-secret",
         ttl: 600,
@@ -171,11 +171,11 @@ describe("auth integration", () => {
     });
 
     it("signOut removes session", async () => {
-      await storage.session.store(
-        "session_1",
-        "user_1",
-        new Date(Date.now() + 60000),
-      );
+      await storage.session.store({
+        sessionId: "session_1",
+        userId: "user_1",
+        expiresAt: new Date(Date.now() + 60000),
+      });
       const sessionCodec = sessionHmac({
         secret: "test-secret",
         ttl: 600,

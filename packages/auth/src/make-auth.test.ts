@@ -34,11 +34,11 @@ describe("makeAuth", () => {
 
   it("verifyOtp returns success only (no session)", async () => {
     // Pre-populate OTP
-    await storage.otp.store(
-      "test@example.com",
-      "123456",
-      new Date(Date.now() + 60000),
-    );
+    await storage.otp.store({
+      identifier: "test@example.com",
+      otp: "123456",
+      expiresAt: new Date(Date.now() + 60000),
+    });
 
     const result = await auth.verifyOtp({
       identifier: "test@example.com",
@@ -87,11 +87,11 @@ describe("makeAuth", () => {
 
   it("getSession returns userId from token", async () => {
     // Create a session directly
-    await storage.session.store(
-      "session_1",
-      "user_1",
-      new Date(Date.now() + 60000),
-    );
+    await storage.session.store({
+      sessionId: "session_1",
+      userId: "user_1",
+      expiresAt: new Date(Date.now() + 60000),
+    });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 600 });
     const token = await sessionCodec.encode({
       sessionId: "session_1",
@@ -111,11 +111,11 @@ describe("makeAuth", () => {
 
   it("signOut completes without error", async () => {
     // Create a session directly
-    await storage.session.store(
-      "session_2",
-      "user_1",
-      new Date(Date.now() + 60000),
-    );
+    await storage.session.store({
+      sessionId: "session_2",
+      userId: "user_1",
+      expiresAt: new Date(Date.now() + 60000),
+    });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 600 });
     const token = await sessionCodec.encode({
       sessionId: "session_2",
@@ -148,7 +148,11 @@ describe("makeAuth sessionTtl", () => {
     });
 
     // Create session with null expiresAt (forever)
-    await storage.session.store("session_forever", "user_1", null);
+    await storage.session.store({
+      sessionId: "session_forever",
+      userId: "user_1",
+      expiresAt: null,
+    });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
     const token = await sessionCodec.encode({
       sessionId: "session_forever",
@@ -185,11 +189,11 @@ describe("makeAuth sessionTtl", () => {
     });
 
     // Create session with short expiry
-    await storage.session.store(
-      "session_expiring",
-      "user_1",
-      new Date(Date.now() + 500),
-    );
+    await storage.session.store({
+      sessionId: "session_expiring",
+      userId: "user_1",
+      expiresAt: new Date(Date.now() + 500),
+    });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
     const token = await sessionCodec.encode({
       sessionId: "session_expiring",
@@ -228,7 +232,11 @@ describe("makeAuth sessionTtl", () => {
 
     // Create session
     const initialExpiry = new Date(Date.now() + sessionTtl);
-    await storage.session.store("session_sliding", "user_1", initialExpiry);
+    await storage.session.store({
+      sessionId: "session_sliding",
+      userId: "user_1",
+      expiresAt: initialExpiry,
+    });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 1 });
     const token = await sessionCodec.encode({
       sessionId: "session_sliding",

@@ -6,6 +6,26 @@ export type StoredCredential = {
   transports?: AuthenticatorTransport[];
 };
 
+/** OTP DB record */
+export type OtpRecord = {
+  identifier: string;
+  otp: string;
+  expiresAt: Date;
+};
+
+/** Session DB record */
+export type SessionRecord = {
+  sessionId: string;
+  userId: string;
+  expiresAt: Date | null;
+};
+
+/** Credential DB record */
+export type CredentialRecord = {
+  userId: string;
+  credential: StoredCredential;
+};
+
 /**
  * Storage adapter (persistence)
  *
@@ -14,22 +34,16 @@ export type StoredCredential = {
  */
 export type StorageAdapter = {
   otp: {
-    store: (identifier: string, otp: string, expiresAt: Date) => Promise<void>;
+    store: (record: OtpRecord) => Promise<void>;
     verify: (identifier: string, otp: string) => Promise<boolean>;
   };
   session: {
-    store: (
-      sessionId: string,
-      userId: string,
-      expiresAt: Date | null,
-    ) => Promise<void>;
-    get: (
-      sessionId: string,
-    ) => Promise<{ userId: string; expiresAt: Date | null } | null>;
+    store: (record: SessionRecord) => Promise<void>;
+    get: (sessionId: string) => Promise<SessionRecord | null>;
     delete: (sessionId: string) => Promise<void>;
   };
   credential: {
-    store: (userId: string, credential: StoredCredential) => Promise<void>;
+    store: (record: CredentialRecord) => Promise<void>;
     get: (userId: string) => Promise<StoredCredential[]>;
     getById: (
       credentialId: string,
