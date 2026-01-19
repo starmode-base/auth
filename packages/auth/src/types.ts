@@ -56,21 +56,21 @@ export type StorageAdapter = {
 /** Session payload for encoding */
 export type SessionPayload = {
   sessionId: string;
-  /** Session expiry timestamp in ms (null = never expires) */
-  sessionExp: number | null;
+  /** Session expiry (null = never expires) */
+  sessionExp: Date | null;
   userId: string;
-  /** Token expiry in ms - if provided, preserves existing; if omitted, generates new */
-  tokenExp?: number;
+  /** Token expiry — if provided, preserves existing; if omitted, generates new */
+  tokenExp?: Date;
 };
 
 /** Decoded session result */
 export type SessionDecoded = {
   sessionId: string;
-  /** Session expiry timestamp in ms (null = never expires) */
-  sessionExp: number | null;
+  /** Session expiry (null = never expires) */
+  sessionExp: Date | null;
   userId: string;
-  /** Token expiry timestamp in ms */
-  tokenExp: number;
+  /** Token expiry */
+  tokenExp: Date;
   /** Signature valid */
   valid: boolean;
   /** Token expired (tokenExp < now) */

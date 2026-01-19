@@ -192,14 +192,13 @@ describe("makeAuth sessionTtl", () => {
     });
 
     // Create session with short expiry
+    const sessionExp = new Date(Date.now() + 50);
     await storage.session.store({
       sessionId: "session_expiring",
       userId: "user_1",
-      expiresAt: new Date(Date.now() + 50),
+      expiresAt: sessionExp,
     });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 10000 });
-    // Set sessionExp to expire in 50ms
-    const sessionExp = Date.now() + 50;
     const token = await sessionCodec.encode({
       sessionId: "session_expiring",
       sessionExp,
@@ -237,15 +236,14 @@ describe("makeAuth sessionTtl", () => {
     });
 
     // Create session
-    const initialExpiry = new Date(Date.now() + sessionTtl);
+    const sessionExp = new Date(Date.now() + sessionTtl);
     await storage.session.store({
       sessionId: "session_sliding",
       userId: "user_1",
-      expiresAt: initialExpiry,
+      expiresAt: sessionExp,
     });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 50 }); // 50ms
     // sessionExp is long (10s), tokenExp is short (50ms)
-    const sessionExp = Date.now() + sessionTtl;
     const token = await sessionCodec.encode({
       sessionId: "session_sliding",
       sessionExp,
@@ -267,7 +265,7 @@ describe("makeAuth sessionTtl", () => {
     expect(storedSession!.expiresAt).not.toBeNull();
     // New expiry should be later than initial (refresh happened after 100ms)
     expect(storedSession!.expiresAt!.getTime()).toBeGreaterThan(
-      initialExpiry.getTime(),
+      sessionExp.getTime(),
     );
   });
 });

@@ -212,7 +212,7 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 
 **Token format via codec:**
 
-- `sessionHmac({ secret, ttl })` — HMAC-signed JSON with `{ sessionId, sessionExp, userId, tokenExp }`. Stateless validation for non-expired tokens, validates against DB when `tokenExp` passes. All timestamps in ms. `sessionExp: null` = forever.
+- `sessionHmac({ secret, ttl })` — HMAC-signed JSON with `{ sessionId, sessionExp, userId, tokenExp }`. Stateless validation for non-expired tokens, validates against DB when `tokenExp` passes. Types use `Date` (wire format is ms). `sessionExp: null` = forever.
 - `sessionOpaque()` — Opaque (random string). Always validates against DB.
 
 **Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).

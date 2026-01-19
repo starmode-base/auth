@@ -7,7 +7,7 @@ type Options = {
   ttl: number;
 };
 
-// Token payload (null = never expires)
+// JSON payload for wire format (ms timestamps, null = never expires)
 type TokenPayload = {
   sessionId: string;
   sessionExp: number | null;
@@ -21,7 +21,7 @@ type TokenPayload = {
  * Token format: base64url(payload).base64url(signature)
  * Payload includes: { sessionId, sessionExp, userId, tokenExp }
  *
- * - tokenExp: Fixed until DB fallback (revocation window), in ms
+ * - tokenExp: Fixed until DB fallback (revocation window)
  * - sessionExp: Slides every request (inactivity timeout), null = never expires
  *
  * Use this when:
@@ -36,12 +36,13 @@ export const sessionHmac = (options: Options): SessionCodec => {
     ttl,
 
     encode: async (payload: SessionPayload): Promise<string> => {
-      // Use provided tokenExp or generate new (ms timestamp)
-      const tokenExp = payload.tokenExp ?? Date.now() + ttl;
+      // Use provided tokenExp or generate new
+      const tokenExp = payload.tokenExp?.getTime() ?? Date.now() + ttl;
 
+      // Convert Date → number for JSON
       const tokenPayload: TokenPayload = {
         sessionId: payload.sessionId,
-        sessionExp: payload.sessionExp,
+        sessionExp: payload.sessionExp?.getTime() ?? null,
         userId: payload.userId,
         tokenExp,
       };
@@ -67,14 +68,16 @@ export const sessionHmac = (options: Options): SessionCodec => {
         const data = decodePayload<TokenPayload>(encoded);
         if (!data) return null;
 
-        const now = Date.now();
-        const expired = data.tokenExp < now;
+        const now = new Date();
+        const tokenExpDate = new Date(data.tokenExp);
+        const expired = tokenExpDate < now;
 
+        // Convert number → Date
         return {
           sessionId: data.sessionId,
-          sessionExp: data.sessionExp,
+          sessionExp: data.sessionExp !== null ? new Date(data.sessionExp) : null,
           userId: data.userId,
-          tokenExp: data.tokenExp,
+          tokenExp: tokenExpDate,
           valid: true,
           expired,
         };

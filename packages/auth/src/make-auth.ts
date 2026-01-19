@@ -210,10 +210,9 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         // Create session
         const sessionId = generateSessionId();
         const isForever = sessionTtl === Infinity;
-        const expiresAt = isForever ? null : new Date(Date.now() + sessionTtl);
-        const sessionExp = isForever ? null : Date.now() + sessionTtl;
+        const sessionExp = isForever ? null : new Date(Date.now() + sessionTtl);
 
-        await storage.session.store({ sessionId, userId, expiresAt });
+        await storage.session.store({ sessionId, userId, expiresAt: sessionExp });
 
         const token = await sessionCodec.encode({
           sessionId,
@@ -292,10 +291,9 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         // Create session
         const sessionId = generateSessionId();
         const isForever = sessionTtl === Infinity;
-        const expiresAt = isForever ? null : new Date(Date.now() + sessionTtl);
-        const sessionExp = isForever ? null : Date.now() + sessionTtl;
+        const sessionExp = isForever ? null : new Date(Date.now() + sessionTtl);
 
-        await storage.session.store({ sessionId, userId, expiresAt });
+        await storage.session.store({ sessionId, userId, expiresAt: sessionExp });
 
         const token = await sessionCodec.encode({
           sessionId,
@@ -323,7 +321,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         return null;
       }
 
-      const now = Date.now();
+      const now = new Date();
 
       // Check sessionExp first (null = forever, never expires)
       const sessionExpired =
@@ -345,16 +343,15 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         }
 
         // Update DB expiresAt for sliding refresh (if not forever)
-        const newExpiresAt = isForever
+        const newSessionExp = isForever
           ? null
           : new Date(Date.now() + sessionTtl);
-        const newSessionExp = isForever ? null : Date.now() + sessionTtl;
 
         if (!isForever) {
           await storage.session.store({
             sessionId: decoded.sessionId,
             userId: storedSession.userId,
-            expiresAt: newExpiresAt,
+            expiresAt: newSessionExp,
           });
         }
 
@@ -372,7 +369,9 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       }
 
       // Token valid — issue fresh token with SAME tokenExp, NEW sessionExp
-      const newSessionExp = isForever ? null : Date.now() + sessionTtl;
+      const newSessionExp = isForever
+        ? null
+        : new Date(Date.now() + sessionTtl);
 
       const freshToken = await sessionCodec.encode({
         sessionId: decoded.sessionId,
