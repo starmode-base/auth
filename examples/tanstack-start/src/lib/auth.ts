@@ -30,3 +30,25 @@ export const auth = makeAuth({
   sessionTtl: false,
   debug: true,
 });
+
+// TODO: Consider organizing the API:
+// makeAuth({
+//   storage: storageMemory(),
+//   session: {
+//     codec: sessionHmac({ secret, ttl: 600 }),
+//     transport: sessionTransportCookie(options),
+//     ttl: false, // forever
+//   },
+//   registration: {
+//     codec: registrationHmac({ secret, ttl: 300 }),
+//   },
+//   otp: {
+//     transport: otpTransportConsole,
+//     ttl: 10 * 60 * 1000,
+//   },
+//   webAuthn: {
+//     rpId: "localhost",
+//     rpName: "My App",
+//     challengeTtl: 5 * 60 * 1000,
+//   },
+// });
