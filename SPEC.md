@@ -380,17 +380,52 @@ await authClient.requestOtp({ identifier: email });
 - Client: Vanilla JS core + React hooks
 - Tested with: Next.js (App Router), TanStack Start
 
-**Future:**
+**Roadmap:**
 
-- Hosted user dashboard
-- SMS OTP example — demonstrate transport-agnostic design (Twilio, etc.)
-- React Native support
-- E2EE/PRF module — WebAuthn PRF for key derivation
-- Session management UI — `signOutAll()`, `getSessions()` for "manage devices" (users can query DB directly for now)
-- Passkey management utilities — `getPasskeys()`, `deletePasskey()` (users can query DB directly for now)
-- Multi-email support — add/remove emails per user (not prevented now, users own their schema)
-- LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
-- Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)
+_Next: TanStack Start full example_
+
+Build out the TanStack Start example as a reference app with common auth features. This drives library improvements — examples validate the design.
+
+Example features:
+
+- [x] Sign up
+- [x] Sign in
+- [x] Sign out
+- [ ] Recovery flow (OTP → verify existing user → new passkey)
+- [ ] Add passkey (while authenticated)
+- [ ] Sign out all devices
+- [ ] Manage passkeys UI
+- [ ] Manage sessions UI
+- [ ] Add/change email or phone (OTP verification for new identifiers)
+
+Library additions (as needed):
+
+- [ ] `allowCredentials` in `generateAuthenticationOptions()` — filter passkeys by identifier
+- [ ] Flow adapters (`makeSignUpFlow`, `makeRecoveryFlow`) — reduce boilerplate
+- [ ] Session management primitives (`getSessions`, `signOutAll`)
+- [ ] Passkey management primitives (`getPasskeys`, `deletePasskey`)
+
+Suggested order:
+
+1. Recovery flow — tests library flexibility for different composition
+2. Add passkey — tests authenticated registration
+3. `allowCredentials` — better UX for sign-in when identifier is known
+4. Session management (`getSessions`, `signOutAll`) — needs new primitives
+5. Passkey management (`getPasskeys`, `deletePasskey`) — needs new primitives
+6. Flow adapters — DX improvement, refactor sign-up/recovery to use them
+
+_Later: Next.js example_
+
+Port full example to Next.js App Router. Two framework examples prove the library is framework-agnostic.
+
+_Future:_
+
+- Example: SMS OTP example — demonstrate transport-agnostic design (Twilio, etc.)
+- Feature: React Native support
+- Feature: E2EE/PRF module — WebAuthn PRF for key derivation
+- Feature: LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
+- Service: Hosted user dashboard
+- Service: Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)
 
 **Exclusions:**
 

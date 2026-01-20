@@ -95,7 +95,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
 
     async validateRegistrationToken({ token }) {
       const decoded = await registrationCodec.decode(token);
-      if (!decoded || !decoded.valid) {
+      if (!decoded) {
         return result.fail("invalid_token");
       }
       return result.ok({
@@ -107,7 +107,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
     async generateRegistrationOptions({ registrationToken }) {
       // Validate registration token
       const decoded = await registrationCodec.decode(registrationToken);
-      if (!decoded || !decoded.valid) {
+      if (!decoded) {
         return result.fail("invalid_token");
       }
 
@@ -158,7 +158,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
     async verifyRegistration({ registrationToken, credential }) {
       // Validate registration token
       const decoded = await registrationCodec.decode(registrationToken);
-      if (!decoded || !decoded.valid) {
+      if (!decoded) {
         return result.fail("invalid_token");
       }
 
@@ -212,7 +212,11 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         const isForever = sessionTtl === Infinity;
         const sessionExp = isForever ? null : new Date(Date.now() + sessionTtl);
 
-        await storage.session.store({ sessionId, userId, expiresAt: sessionExp });
+        await storage.session.store({
+          sessionId,
+          userId,
+          expiresAt: sessionExp,
+        });
 
         const token = await sessionCodec.encode({
           sessionId,
@@ -293,7 +297,11 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         const isForever = sessionTtl === Infinity;
         const sessionExp = isForever ? null : new Date(Date.now() + sessionTtl);
 
-        await storage.session.store({ sessionId, userId, expiresAt: sessionExp });
+        await storage.session.store({
+          sessionId,
+          userId,
+          expiresAt: sessionExp,
+        });
 
         const token = await sessionCodec.encode({
           sessionId,
@@ -317,7 +325,7 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
       // TODO: Idea:
       // const decoded = await sessionCodec.decode(token, storage.session);
 
-      if (!decoded || !decoded.valid) {
+      if (!decoded) {
         return null;
       }
 
@@ -368,17 +376,19 @@ export const makeAuth: MakeAuth = (config: MakeAuthConfig): MakeAuthResult => {
         return { userId: storedSession.userId };
       }
 
-      // Token valid — issue fresh token with SAME tokenExp, NEW sessionExp
+      // Token valid — issue fresh token with SAME exp, NEW sessionExp
       const newSessionExp = isForever
         ? null
         : new Date(Date.now() + sessionTtl);
 
-      const freshToken = await sessionCodec.encode({
-        sessionId: decoded.sessionId,
-        sessionExp: newSessionExp,
-        userId: decoded.userId,
-        tokenExp: decoded.tokenExp, // preserve existing tokenExp
-      });
+      const freshToken = await sessionCodec.encode(
+        {
+          sessionId: decoded.sessionId,
+          sessionExp: newSessionExp,
+          userId: decoded.userId,
+        },
+        { expiresAt: decoded.exp }, // preserve existing exp
+      );
       sessionTransport.set(freshToken);
 
       return { userId: decoded.userId };

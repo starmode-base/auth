@@ -243,14 +243,14 @@ describe("makeAuth sessionTtl", () => {
       expiresAt: sessionExp,
     });
     const sessionCodec = sessionHmac({ secret: "test", ttl: 50 }); // 50ms
-    // sessionExp is long (10s), tokenExp is short (50ms)
+    // sessionExp is long (10s), exp is short (50ms)
     const token = await sessionCodec.encode({
       sessionId: "session_sliding",
       sessionExp,
       userId: "user_1",
     });
 
-    // Wait for tokenExp to expire but not sessionExp
+    // Wait for exp to expire but not sessionExp
     await new Promise((r) => setTimeout(r, 100));
 
     sessionTransport.setToken(token);

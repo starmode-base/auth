@@ -28,8 +28,7 @@ export const sessionOpaque = (): SessionCodec => {
         sessionId: token,
         sessionExp: null, // Must be looked up from storage
         userId: "", // Must be looked up from storage
-        tokenExp: new Date(0), // Not applicable for opaque
-        valid: true,
+        exp: new Date(0), // Not applicable for opaque
         expired: true, // Forces storage lookup
       };
     },

@@ -1,8 +1,9 @@
 import { makeHmacCodec } from "./hmac-codec";
-import type { RegistrationCodec } from "../types";
+import type { RegistrationCodec, RegistrationPayload } from "../types";
 
 type Options = {
   secret: string;
+  /** Token TTL in ms */
   ttl: number;
 };
 
@@ -13,7 +14,14 @@ type Options = {
  * they authorize passkey registration for a specific userId + identifier.
  *
  * Token format: base64url(payload).base64url(signature)
- * Payload includes: userId, identifier, exp (unix timestamp)
+ * Payload includes: userId, identifier, exp (expiration timestamp)
  */
-export const registrationHmac = (options: Options): RegistrationCodec =>
-  makeHmacCodec<{ userId: string; identifier: string }>(options);
+export const registrationHmac = (options: Options): RegistrationCodec => {
+  const { secret, ttl } = options;
+  const codec = makeHmacCodec<RegistrationPayload>({ secret });
+
+  return {
+    encode: (payload) => codec.encode(payload, { expiresInMs: ttl }),
+    decode: (token) => codec.decode(token),
+  };
+};

@@ -1,4 +1,4 @@
-import { encodePayload, decodePayload, hmacSign, hmacVerify } from "../crypto";
+import { makeHmacCodec } from "./hmac-codec";
 import type { SessionCodec, SessionPayload, SessionDecoded } from "../types";
 
 type Options = {
@@ -7,21 +7,20 @@ type Options = {
   ttl: number;
 };
 
-// JSON payload for wire format (ms timestamps, null = never expires)
-type TokenPayload = {
+// Wire format payload (sessionExp stored as ms timestamp, null = never expires)
+type WirePayload = {
   sessionId: string;
   sessionExp: number | null;
   userId: string;
-  tokenExp: number;
 };
 
 /**
  * HMAC-signed session codec
  *
  * Token format: base64url(payload).base64url(signature)
- * Payload includes: { sessionId, sessionExp, userId, tokenExp }
+ * Payload includes: { sessionId, sessionExp, userId, exp }
  *
- * - tokenExp: Fixed until DB fallback (revocation window)
+ * - exp: Token expiration, fixed until DB fallback (revocation window)
  * - sessionExp: Slides every request (inactivity timeout), null = never expires
  *
  * Use this when:
@@ -32,58 +31,41 @@ type TokenPayload = {
 export const sessionHmac = (options: Options): SessionCodec => {
   const { secret, ttl } = options;
 
+  const codec = makeHmacCodec<WirePayload>({ secret });
+
   return {
     ttl,
 
-    encode: async (payload: SessionPayload): Promise<string> => {
-      // Use provided tokenExp or generate new
-      const tokenExp = payload.tokenExp?.getTime() ?? Date.now() + ttl;
-
-      // Convert Date → number for JSON
-      const tokenPayload: TokenPayload = {
+    encode: async (
+      payload: SessionPayload,
+      encodeOptions?: { expiresAt?: Date },
+    ): Promise<string> => {
+      // Convert Date → number for wire format
+      const wirePayload: WirePayload = {
         sessionId: payload.sessionId,
         sessionExp: payload.sessionExp?.getTime() ?? null,
         userId: payload.userId,
-        tokenExp,
       };
 
-      const encoded = encodePayload(tokenPayload);
-      const signature = await hmacSign(encoded, secret);
-
-      // Invariant: signature must exist for valid HMAC key
-      if (!signature) throw new Error("HMAC signing failed");
-
-      return `${encoded}.${signature}`;
+      // Use provided expiresAt (refresh) or default ttl (new token)
+      return encodeOptions?.expiresAt
+        ? codec.encode(wirePayload, { expiresAt: encodeOptions.expiresAt })
+        : codec.encode(wirePayload, { expiresInMs: ttl });
     },
 
     decode: async (token: string): Promise<SessionDecoded | null> => {
-      try {
-        const [encoded, signature] = token.split(".");
-        if (!encoded || !signature) return null;
+      const result = await codec.decode(token);
+      if (!result) return null;
 
-        // Verify signature (constant-time comparison via Web Crypto)
-        const valid = await hmacVerify(encoded, signature, secret);
-        if (!valid) return null;
-
-        const data = decodePayload<TokenPayload>(encoded);
-        if (!data) return null;
-
-        const now = new Date();
-        const tokenExpDate = new Date(data.tokenExp);
-        const expired = tokenExpDate < now;
-
-        // Convert number → Date
-        return {
-          sessionId: data.sessionId,
-          sessionExp: data.sessionExp !== null ? new Date(data.sessionExp) : null,
-          userId: data.userId,
-          tokenExp: tokenExpDate,
-          valid: true,
-          expired,
-        };
-      } catch {
-        return null;
-      }
+      // Transform: sessionExp number → Date
+      return {
+        sessionId: result.sessionId,
+        sessionExp:
+          result.sessionExp !== null ? new Date(result.sessionExp) : null,
+        userId: result.userId,
+        exp: result.exp,
+        expired: result.expired,
+      };
     },
   };
 };

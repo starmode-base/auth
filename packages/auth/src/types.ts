@@ -53,33 +53,34 @@ export type StorageAdapter = {
   };
 };
 
+/**
+ * Base decoded result for HMAC-signed tokens.
+ * Returned only when signature is valid; invalid signature returns null.
+ */
+export type HmacDecoded<TPayload> = TPayload & {
+  /** Token expiration */
+  exp: Date;
+  /** Token expired (exp < now) */
+  expired: boolean;
+};
+
 /** Session payload for encoding */
 export type SessionPayload = {
   sessionId: string;
   /** Session expiry (null = never expires) */
   sessionExp: Date | null;
   userId: string;
-  /** Token expiry — if provided, preserves existing; if omitted, generates new */
-  tokenExp?: Date;
 };
 
 /** Decoded session result */
-export type SessionDecoded = {
-  sessionId: string;
-  /** Session expiry (null = never expires) */
-  sessionExp: Date | null;
-  userId: string;
-  /** Token expiry */
-  tokenExp: Date;
-  /** Signature valid */
-  valid: boolean;
-  /** Token expired (tokenExp < now) */
-  expired: boolean;
-};
+export type SessionDecoded = HmacDecoded<SessionPayload>;
 
 /** Session codec (encode/decode HMAC, opaque, or JWT) */
 export type SessionCodec = {
-  encode: (payload: SessionPayload) => Promise<string>;
+  encode: (
+    payload: SessionPayload,
+    options?: { expiresAt?: Date },
+  ) => Promise<string>;
   decode: (token: string) => Promise<SessionDecoded | null>;
   /** Token TTL in ms */
   ttl: number;
@@ -89,10 +90,7 @@ export type SessionCodec = {
 export type RegistrationPayload = { userId: string; identifier: string };
 
 /** Decoded registration result */
-export type RegistrationDecoded = RegistrationPayload & {
-  valid: boolean;
-  expired: boolean;
-};
+export type RegistrationDecoded = HmacDecoded<RegistrationPayload>;
 
 /** Registration codec (short-lived token for passkey registration) */
 export type RegistrationCodec = {
