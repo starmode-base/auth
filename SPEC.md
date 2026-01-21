@@ -4,7 +4,7 @@ IMPORTANT: THIS IS A LOOSE SPEC THAT WE _SHOULD_ CHANGE AS WE IMPLEMENT AND FIND
 
 The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
-Passkeys first. OTP for bootstrap. That's it.
+Passkeys + OTP as composable primitives. Apps choose their flow.
 
 ## Core philosophy
 
@@ -32,7 +32,37 @@ This means:
 
 ## Auth model
 
-**Passkey-first.** The library provides primitives. Apps compose flows.
+**Primitives-first.** OTP and passkeys are separate concerns. Apps compose flows.
+
+| Concept                   | Purpose                |
+| ------------------------- | ---------------------- |
+| **Authentication**        | Create sessions        |
+| **Identity verification** | Prove handle ownership |
+| **Identity handle**       | User identifier        |
+
+| Method                       | Authentication | Identity verification | Identity handle |
+| ---------------------------- | -------------- | --------------------- | --------------- |
+| ★ **Passkey**                | ✅             | ❌                    |                 |
+| ★ **OTP (for auth)**         | ✅             | ✅                    | Email/phone     |
+| ★ **OTP (for verification)** | ❌             | ✅                    | Email/phone     |
+| **Username+password**        | ✅             | ❌                    | Username        |
+| **Email+password**           | ✅             | ✅                    | Email           |
+| **Passport verification**    | ❌             | ✅                    | Name            |
+
+★ This library provides **Passkey** (authentication) and **OTP** (identity verification, optionally authentication).
+
+These are independent primitives. Apps decide how to combine them:
+
+| Flow                       | Description                                           | Use case                                           |
+| -------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
+| **Passkeys only**          | Passkey sign-up and sign-in, no OTP                   | Anonymous/pseudonymous apps, maximum privacy       |
+| **OTP only**               | OTP sign-up and sign-in, no passkeys                  | Simple apps, Clerk-like DX                         |
+| **Passkey → OTP**          | Passkey first, OTP to collect email later             | Privacy-first, email optional for communication    |
+| **OTP → Passkey**          | OTP to verify email, then passkey (current default)   | Most apps — verified email + passkey auth          |
+| **OTP → Passkey (strict)** | OTP for initial sign-up only, passkey-only after      | High security — no OTP backdoor for existing users |
+| **OTP for email changes**  | Use OTP to verify new email/phone while authenticated | Common feature — add/change contact info           |
+
+The library provides primitives. Your app composes the flow that fits your security/UX tradeoffs.
 
 ### Primitives
 
@@ -53,37 +83,79 @@ See `MakeAuthResult` and `AuthClient` types in `packages/auth/src/types.ts` for 
 
 **Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
-Key design: **OTP never creates a session.** Only webauthn create sessions. `verifyOtp` just verifies the otp — it doesn't upsert users or create tokens. Apps compose the flow they need.
+**Key design:** `verifyOtp` only verifies — it doesn't create sessions by default. Apps can create sessions after OTP verification if desired (OTP-only auth). `verifyRegistration` and `verifyAuthentication` create sessions. Apps compose the flow they need.
 
 ### Flows
 
-The library provides primitives. Apps compose flows.
+The library provides primitives. Apps compose flows. Below are common patterns.
+
+**Passkeys only** (no OTP):
 
 ```
-Sign up:      requestOtp → verifyOtp → [app: upsertUser] → createRegistrationToken → passkey → session
-Sign in:      passkey → session
-Sign out:     signOut → delete session (HMAC/JWT tokens valid until TTL — use short TTLs if needed)
-Add passkey:  getSession → createRegistrationToken → passkey
-Recovery:     requestOtp → verifyOtp → [app: lookupUser] → createRegistrationToken → passkey → session
+Sign up:    [app: createUser] → createRegistrationToken → passkey → session
+Sign in:    passkey → session
 ```
 
-Below shows where each call runs — `authClient.` runs in the browser, `auth.` runs on your server, and app code (like `signUp()`) is your server function.
+Fastest sign-up — one click, no inbox. Email is optional, collected later if needed.
 
-**Sign up** (OTP + passkey):
+**OTP → Passkey** (default pattern):
+
+```
+Sign up:         requestOtp → verifyOtp → [app: upsertUser] → createRegistrationToken → passkey → session
+Sign in:         passkey → session
+New device:      requestOtp → verifyOtp → [app: lookupUser] → createRegistrationToken → passkey → session
+Add passkey:     getSession → createRegistrationToken → passkey
+Add/change email: getSession → requestOtp → verifyOtp → [app: storeEmail]
+```
+
+**OTP → Passkey (strict)** — disable OTP for existing users:
+
+```
+Sign up:     requestOtp → verifyOtp → [app: createUser] → createRegistrationToken → passkey → session
+Sign in:     passkey → session
+New device:  passkey (syncs via iCloud/Google/1Password) — or QR cross-device auth
+```
+
+In strict mode, once a user has passkeys, OTP is disabled for their account. This eliminates OTP as a perpetual backdoor. Lost all passkeys = contact support (rare, since passkeys sync).
+
+**Passkey → OTP** (email optional):
+
+```
+Sign up:     [app: createUser] → createRegistrationToken → passkey → session
+Add email:   getSession → requestOtp → verifyOtp → [app: storeEmail]
+```
+
+User creates account with just a passkey. Email is collected later (optional, for communication).
+
+### Flow details
+
+Below shows where each call runs — `authClient.` runs in the browser, `auth.` runs on your server.
+
+**Sign up with OTP → passkey:**
 
 1. Client: `authClient.requestOtp({ identifier })` — sends OTP
 2. User receives OTP via email/phone
 3. User submits OTP to app
 4. Client: `signUp({ identifier, otp })` — your server function:
    - `auth.verifyOtp({ identifier, otp })` — validates OTP
-   - App upserts user → `userId`
+   - App creates/gets user → `userId`
    - `auth.createRegistrationToken({ userId, identifier })` → `registrationToken`
 5. Client: `authClient.generateRegistrationOptions({ registrationToken })`
 6. Client: `authClient.createPasskey(options)` — browser WebAuthn
 7. Client: `authClient.verifyRegistration({ registrationToken, credential })`
    - Server stores passkey, creates session → user authenticated
 
-**Sign in** (passkey only):
+**Sign up with passkey only:**
+
+1. Client: `signUp()` — your server function:
+   - App creates user → `userId`
+   - `auth.createRegistrationToken({ userId })` → `registrationToken`
+2. Client: `authClient.generateRegistrationOptions({ registrationToken })`
+3. Client: `authClient.createPasskey(options)` — browser WebAuthn
+4. Client: `authClient.verifyRegistration({ registrationToken, credential })`
+   - Server stores passkey, creates session → user authenticated
+
+**Sign in** (passkey):
 
 1. Client: `authClient.generateAuthenticationOptions()`
 2. Client: `authClient.getPasskey(options)` — browser WebAuthn
@@ -103,9 +175,22 @@ Below shows where each call runs — `authClient.` runs in the browser, `auth.` 
 3. Client: `authClient.createPasskey(options)` — browser WebAuthn
 4. Client: `authClient.verifyRegistration({ registrationToken, credential })`
 
-**Recovery** (lost all passkeys):
+**Add/change email** (while authenticated):
 
-Same as sign up, but your server function looks up the existing user instead of creating one. For E2EE apps, recovery means losing access to encrypted data — that's the security contract.
+1. Client: `authClient.requestOtp({ identifier: newEmail })` — sends OTP to new email
+2. User receives OTP
+3. Client: `verifyEmail({ identifier: newEmail, otp })` — your server function:
+   - `auth.getSession()` → `userId`
+   - `auth.verifyOtp({ identifier: newEmail, otp })` — validates OTP
+   - App stores verified email for user
+
+**New device (OTP flow):**
+
+Same as sign up, but your server function looks up the existing user instead of creating one. Note: this isn't "recovery" — passkeys sync across devices in most cases (iCloud, Google, 1Password). OTP is a fallback for cross-ecosystem scenarios.
+
+**New device (strict mode):**
+
+If OTP is disabled for existing users, use QR cross-device auth (WebAuthn hybrid transport) or ensure passkeys sync via a cross-platform provider like 1Password.
 
 See `examples/tanstack-start/` for a working implementation.
 
@@ -115,8 +200,32 @@ For apps using WebAuthn PRF for key derivation (E2EE):
 
 - Library exposes PRF extension results from passkey operations
 - App derives KEK from PRF, manages DEK encryption
-- OTP recovery = fresh start (new passkey, new KEK, old data unrecoverable)
-- This is the E2EE security contract, not a library limitation
+- Each passkey has unique PRF → unique KEK
+- Adding passkey while authenticated: decrypt DEK with old KEK, re-encrypt with new KEK
+- OTP → new passkey (without existing passkey): new PRF, can't decrypt old data → fresh start
+
+**Recommended flow for E2EE:**
+
+Use **passkey → OTP** or **OTP → passkey (strict)** patterns:
+
+- Passkey = identity and key derivation
+- OTP = optional, for communication only (or disabled entirely after setup)
+- Lost all passkeys = lost data (the E2EE security contract)
+
+**Adding passkey on new device (E2EE):**
+
+1. Authenticate with existing passkey (QR cross-device or synced passkey)
+2. Create new passkey → new PRF → new KEK
+3. Decrypt DEK with old KEK, re-encrypt with new KEK
+4. Both passkeys can now decrypt data
+
+OTP cannot help here — it authenticates but doesn't provide the KEK needed to decrypt.
+
+**Why passkey-first makes sense for E2EE:**
+
+- Passkey IS the cryptographic identity
+- Email is just contact info, not security-relevant
+- Separating them is cleaner than mixing OTP into the key derivation story
 
 Users should register multiple passkeys for redundancy. Each passkey can independently decrypt data (app encrypts DEK with each passkey's PRF-derived KEK).
 
@@ -205,10 +314,12 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 
 **How it works:**
 
-1. User authenticates via passkey (OTP only gives a registration token, not a session)
+1. User authenticates via passkey (`verifyRegistration` or `verifyAuthentication`)
 2. Server creates session → stores in DB → encodes token → sets HttpOnly cookie
 3. Browser automatically sends cookie with every request
 4. Server decodes token → validates → returns userId or null
+
+**Note:** OTP verification (`verifyOtp`) does not create a session — it only proves the user controls an identifier. Sessions are only created by passkey verification.
 
 **Token format via codec:**
 
@@ -388,31 +499,33 @@ Build out the TanStack Start example as a reference app with common auth feature
 
 Example features:
 
-- [x] Sign up
-- [x] Sign in
+- [x] Sign up (OTP → passkey)
+- [x] Sign in (passkey)
 - [x] Sign out
-- [ ] Recovery flow (OTP → verify existing user → new passkey)
+- [ ] Unified "continue with email" flow (handles new + existing users)
 - [ ] Add passkey (while authenticated)
+- [ ] Add/change email or phone (OTP verification for new identifiers)
 - [ ] Sign out all devices
 - [ ] Manage passkeys UI
 - [ ] Manage sessions UI
-- [ ] Add/change email or phone (OTP verification for new identifiers)
+- [ ] Strict mode demo (disable OTP for existing users)
 
 Library additions (as needed):
 
 - [ ] `allowCredentials` in `generateAuthenticationOptions()` — filter passkeys by identifier
-- [ ] Flow adapters (`makeSignUpFlow`, `makeRecoveryFlow`) — reduce boilerplate
+- [ ] Make `identifier` optional in `createRegistrationToken()` — support passkey-only sign-up
 - [ ] Session management primitives (`getSessions`, `signOutAll`)
 - [ ] Passkey management primitives (`getPasskeys`, `deletePasskey`)
 
 Suggested order:
 
-1. Recovery flow — tests library flexibility for different composition
+1. Unified flow — "continue with email" that handles new/existing users with smart messaging
 2. Add passkey — tests authenticated registration
-3. `allowCredentials` — better UX for sign-in when identifier is known
-4. Session management (`getSessions`, `signOutAll`) — needs new primitives
-5. Passkey management (`getPasskeys`, `deletePasskey`) — needs new primitives
-6. Flow adapters — DX improvement, refactor sign-up/recovery to use them
+3. Add/change email — demonstrates OTP for identity verification while authenticated
+4. `allowCredentials` — better UX for sign-in when identifier is known
+5. Session management (`getSessions`, `signOutAll`) — needs new primitives
+6. Passkey management (`getPasskeys`, `deletePasskey`) — needs new primitives
+7. Strict mode — demonstrate disabling OTP for existing users
 
 _Later: Next.js example_
 
@@ -444,7 +557,7 @@ _Future:_
 
 ## Positioning
 
-**@starmode/auth**: Passkeys first. OTP for bootstrap. Primitives you compose.
+**@starmode/auth**: Passkeys + OTP as composable primitives. Your flow, your rules.
 
 Do you want passkeys? Yes → use this. No → this isn't for you.
 
@@ -454,20 +567,35 @@ If you're building a new project and want passkey auth that an LLM can set up in
 
 **Primitives-first design:**
 
-- Core API is low-level primitives (verify OTP, create token, etc.)
-- Apps compose primitives into flows (signup, change email, add email, etc.)
+- Core API is low-level primitives (verify OTP, verify passkey, create token, etc.)
+- OTP and passkey are separate concerns — apps decide how to combine them
+- Supports multiple patterns: passkeys only, OTP only, OTP → passkey, passkey → OTP
+- Apps choose their security/UX tradeoff (permissive vs strict OTP policy)
 - Optional flow adapters for common patterns
-- Easy to contribute new adapters
 
 **Security model:**
 
-- Webauthn is the only sign-in method (phishing-resistant)
-- OTP verifies email ownership (for signup, email change, recovery)
-- No OTP sign-in — eliminates entire class of attacks
+- Passkeys are phishing-resistant (bound to origin, cryptographic proof)
+- OTP primarily verifies identity/email ownership; apps can use it for auth if desired
+- Apps choose their security posture:
+  - Permissive: OTP can create new passkeys anytime (convenient, OTP is perpetual backdoor)
+  - Strict: OTP for initial sign-up only, passkey-only after (OTP backdoor closed)
 - E2EE compatible — PRF extension passthrough for key derivation
 
-**Recovery:**
+**Note on OTP security:**
 
-- Encourage users to register multiple passkeys
-- OTP recovery is optional — apps choose whether to expose it
-- For E2EE apps: losing all passkeys = losing data (that's the security contract)
+OTP is not more secure than passkeys — if an attacker compromises your inbox, they can use OTP to create a new passkey. The security benefit of passkeys is UX (no inbox check, faster) and phishing resistance (can't be phished like OTP). For maximum security, use strict mode (disable OTP for existing users).
+
+**Device transitions:**
+
+- Same ecosystem (Apple→Apple, Google→Google, 1Password→anywhere): passkeys sync automatically
+- Cross ecosystem: QR cross-device auth, or OTP fallback (if enabled)
+- Lost all passkeys: OTP fallback (if enabled), or contact support
+- Passkeys are designed to sync — losing ALL passkeys is rare with modern providers
+
+**For E2EE apps:**
+
+- Passkey = keys (PRF → KEK)
+- Lost passkeys = lost data (this is the security contract, not a bug)
+- OTP cannot recover encrypted data — it just authenticates
+- Encourage multiple passkeys for redundancy
