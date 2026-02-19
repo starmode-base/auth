@@ -1,4 +1,6 @@
 {
+  "chat.disableAIFeatures": true,
+  "editor.accessibilitySupport": "off",
   "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "editor.formatOnSave": true,
@@ -8,5 +10,8 @@
   "files.trimTrailingWhitespace": true,
   "npm.packageManager": "bun",
   "npm.scriptRunner": "bun",
-  "search.exclude": { "**/bun.lock": true }
+  "search.exclude": {
+    "**/bun.lock": true,
+    "**/skills/**": true
+  }
 }
