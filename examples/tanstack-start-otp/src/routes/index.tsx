@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { authClient } from "../auth-client";
+import { useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 
 function App() {
+  const [email, setEmail] = useState("");
+
   return (
     <div className="grid min-h-dvh grid-cols-2 gap-4 p-4">
       <div className="m-auto flex w-full max-w-sm flex-col gap-8 p-8">
@@ -14,10 +18,16 @@ function App() {
           type="email"
           placeholder="Email"
           className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
         />
         <button
           type="submit"
           className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
+          onClick={async () => {
+            const result = await authClient.requestOtp({ identifier: email });
+            console.log("result", result);
+          }}
         >
           Continue with email
         </button>

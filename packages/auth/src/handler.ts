@@ -25,6 +25,7 @@ export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
 
     // Parse and validate request body
     let body: ReturnType<typeof authBodyValidator>;
+
     try {
       body = authBodyValidator(await request.json());
     } catch {
