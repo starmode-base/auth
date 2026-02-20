@@ -1,29 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authValidators as validate } from "@starmode/auth";
 import { auth } from "./auth";
-
-/**
- * In-memory user store
- *
- * Simple in-memory user store for demonstration purposes. In a real app this
- * would be replaced with a database.
- */
-const users = new Map<string, { userId: string; email: string }>();
-let userIdCounter = 0;
-
-function upsertUser(email: string): { userId: string; isNew: boolean } {
-  const exists = Array.from(users.values()).find((u) => u.email === email);
-
-  if (exists) {
-    return { userId: exists.userId, isNew: false };
-  }
-
-  const userId = `user_${++userIdCounter}`;
-
-  users.set(userId, { userId, email });
-
-  return { userId, isNew: true };
-}
+import { usersStore } from "./db";
 
 /**
  * Sign up
@@ -43,7 +21,7 @@ export const signUp = createServerFn({ method: "POST" })
       return { success: false };
     }
 
-    const { userId } = upsertUser(data.identifier);
+    const { userId } = usersStore.upsert(data.identifier);
 
     const { registrationToken } = await auth.createRegistrationToken({
       userId,
@@ -65,7 +43,7 @@ export const getViewer = createServerFn().handler(async () => {
     return null;
   }
 
-  const user = users.get(session.userId);
+  const user = usersStore.get(session.userId);
 
   if (!user) {
     return null;
