@@ -96,7 +96,7 @@ Sign up:    [app: createUser] → createRegistrationToken → passkey → sessio
 Sign in:    passkey → session
 ```
 
-Fastest sign-up — one click, no inbox. Email is optional, collected later if needed.
+Fastest sign-up — one click, no inbox. Email is optional, collected later if needed. Note: passkey-only has no built-in defense against mass account creation — passkeys are privacy-preserving by design (no shared device identifier, no way to correlate accounts). If abuse matters, an identity layer provides the scarcity: verified email, verified phone, payment, or invite. The `verify` primitive doubles as the abuse gate.
 
 **OTP → Passkey** (default pattern):
 
@@ -204,12 +204,17 @@ For apps using WebAuthn PRF for key derivation (E2EE):
 - Adding passkey while authenticated: decrypt DEK with old KEK, re-encrypt with new KEK
 - OTP → new passkey (without existing passkey): new PRF, can't decrypt old data → fresh start
 
-**Recommended flow for E2EE:**
+**E2EE vs regular apps:**
 
-Use **passkey → OTP** or **OTP → passkey (strict)** patterns:
+| App type    | Auth          | Identity/verification   | Why                                                              |
+| ----------- | ------------- | ----------------------- | ---------------------------------------------------------------- |
+| **E2EE**    | Passkey only  | OTP verify (no session) | OTP can't derive KEK — an OTP session without the key is useless |
+| **Regular** | Passkey + OTP | OTP does both           | Convenience — either method works on any device                  |
 
-- Passkey = identity and key derivation
-- OTP = optional, for communication only (or disabled entirely after setup)
+For E2EE, use **passkey → OTP** or **OTP → passkey (strict)** patterns:
+
+- Passkey = authentication and key derivation
+- OTP = identity verification only, never auth (or disabled entirely after setup)
 - Lost all passkeys = lost data (the E2EE security contract)
 
 **Adding passkey on new device (E2EE):**
@@ -536,6 +541,8 @@ _Future:_
 - Example: SMS OTP example — demonstrate transport-agnostic design (Twilio, etc.)
 - Feature: React Native support
 - Feature: E2EE/PRF module — WebAuthn PRF for key derivation
+- Feature: Recovery codes — generate/verify with KDF (80-bit entropy, e.g. `7KF3-M9PN-2XLT-8HVQ`). For regular apps: code → session. For E2EE: code → recovery key → unwrap DEK client-side, then create new passkey
+- Feature: Cross-ecosystem add-device — QR code flow with ephemeral key exchange. Device A (signed in) displays QR, device B scans and creates passkey. For E2EE: securely transfers KEK so device A can wrap DEK for the new credential. Same flow works for regular apps (ignore the KEK)
 - Feature: LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
 - Service: Hosted user dashboard
 - Service: Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)
@@ -543,7 +550,7 @@ _Future:_
 **Exclusions:**
 
 - ❌ OAuth / social login
-- ❌ Magic links
+- ❌ Magic links — link preview bots and SMS OG card fetchers invalidate links before the user clicks, and the "which device gets signed in?" confusion (the device that clicked vs the device that initiated) creates poor UX. OTP is unambiguous: you sign in where you type the code
 - ❌ Password-based auth
 - ❌ Legacy browser support
 - ❌ SAML / SSO / enterprise features
@@ -564,6 +571,12 @@ Do you want passkeys? Yes → use this. No → this isn't for you.
 If you need OAuth, SAML, legacy browser support, or enterprise SSO—use Auth0, Clerk or Okta.
 
 If you're building a new project and want passkey auth that an LLM can set up in one prompt, this is it.
+
+**Why passkey-first:**
+
+With passwords, email was inseparable from auth — you needed it for resets, recovery, and as the login identifier itself. Passkeys break this coupling. Auth becomes cryptographic, and email becomes optional infrastructure: useful for identity verification, communication, and recovery, but no longer a prerequisite for creating an account or signing in.
+
+OTP can be both auth and identity verification. Passkeys can only be auth. For regular apps, this makes OTP a complete fallback — lost your passkey? OTP verifies your identity, gives you a session, and you're back in. For E2EE apps, a session alone is worthless without the decryption keys that only passkeys (or recovery codes) can provide. This is why regular apps can freely use OTP as an auth fallback, while E2EE apps should treat passkeys as the sole authority.
 
 **Primitives-first design:**
 
