@@ -56,6 +56,12 @@
         "neon-testing": "^2.5.0",
         "typescript-eslint": "^8.56.0",
       },
+      "peerDependencies": {
+        "@tanstack/react-start": "^1.161.1",
+      },
+      "optionalPeers": [
+        "@tanstack/react-start",
+      ],
     },
   },
   "packages": {
