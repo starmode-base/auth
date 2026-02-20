@@ -51,7 +51,7 @@ export function Button({
   return (
     <button
       className={cn(
-        "px-6 py-3 rounded transition-colors disabled:opacity-50",
+        "rounded px-6 py-3 transition-colors disabled:opacity-50",
         buttonVariants[variant],
         className,
       )}
@@ -67,7 +67,7 @@ export function Input({
   return (
     <input
       className={cn(
-        "px-6 py-3 bg-gray-700 rounded text-white placeholder-gray-500",
+        "rounded bg-gray-700 px-6 py-3 text-white placeholder-gray-500",
         className,
       )}
       {...props}

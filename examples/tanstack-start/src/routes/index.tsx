@@ -106,7 +106,7 @@ function OtpForm({
             placeholder="123456"
             required
             maxLength={6}
-            className="text-2xl tracking-widest text-center"
+            className="text-center text-2xl tracking-widest"
             data-1p-ignore
           />
           {error && <ErrorText>{error}</ErrorText>}
@@ -339,8 +339,8 @@ function RouteComponent() {
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center p-8">
-      <div className="w-full max-w-md flex flex-col gap-8">
+    <div className="flex min-h-dvh items-center justify-center p-8">
+      <div className="flex w-full max-w-md flex-col gap-8">
         <div className="flex flex-col gap-2 text-center">
           <h1 className="text-4xl font-bold">
             <span className="text-gray-300">STΛR MODΞ</span>{" "}
@@ -351,7 +351,7 @@ function RouteComponent() {
           <Text>Passkey authentication demo</Text>
         </div>
 
-        <div className="bg-white rounded p-8 text-center shadow-xl">
+        <div className="rounded bg-white p-8 text-center shadow-xl">
           {viewer ? (
             <AuthenticatedView
               userId={viewer.userId}
