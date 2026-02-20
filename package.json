@@ -3,8 +3,7 @@
   "private": true,
   "packageManager": "bun@1.3.4",
   "workspaces": [
-    "packages/*",
-    "examples/*"
+    "packages/*"
   ],
   "scripts": {
     "format": "prettier --write .",
