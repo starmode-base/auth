@@ -524,7 +524,7 @@ Library additions (as needed):
 
 Suggested order:
 
-1. Unified flow — "continue with email" that handles new/existing users with smart messaging
+1. Unified flow — "continue with email" that handles new/existing users with smart messaging. The app's upsert function returns `isNew` to distinguish sign-up from sign-in (for analytics, onboarding, etc.) — see `upsertUser` in `examples/tanstack-start/src/lib/auth.server.ts`
 2. Add passkey — tests authenticated registration
 3. Add/change email — demonstrates OTP for identity verification while authenticated
 4. `allowCredentials` — better UX for sign-in when identifier is known
