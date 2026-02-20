@@ -10,10 +10,6 @@
     "skipLibCheck": true,
     "target": "ES2022",
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
-    "paths": {
-      "~/*": ["./src/*"]
-    },
     "noEmit": true,
     "noUncheckedIndexedAccess": true,
     "verbatimModuleSyntax": true,
