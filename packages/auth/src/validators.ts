@@ -44,6 +44,7 @@ const authenticationCredential = p.obj({
 /** Auth API input validators */
 export const authValidators = {
   identifier: p.str(),
+  requestOtp: p.obj({ identifier: p.str() }),
   verifyOtp: p.obj({ identifier: p.str(), otp: p.str() }),
   registrationToken: p.str(),
   verifyRegistration: p.obj({
