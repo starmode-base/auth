@@ -4,106 +4,123 @@ import { useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 
-type Step = "request-otp" | "verify-otp";
-
-function RequestOtpStep(props: { onContinue: (email: string) => void }) {
-  const [email, setEmail] = useState("");
+function Step(props: {
+  onSubmit: (email: string) => void;
+  placeholder: string;
+  label: string;
+  error: string | null;
+  title: string;
+  description: string;
+}) {
+  const [value, setValue] = useState("");
 
   return (
     <>
-      <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-3xl font-semibold">Welcome!</h1>
-        <div className="text-gray-500">Let's get you signed in.</div>
+      <div className="flex flex-col gap-2">
+        <div className="text-3xl font-semibold">{props.title}</div>
+        <div className="text-gray-500">{props.description}</div>
       </div>
-      <input
-        type="email"
-        placeholder="Email address"
-        className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
+      <div className="flex flex-col gap-2">
+        <input
+          type="email"
+          placeholder={props.placeholder}
+          className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+        {props.error !== null ? (
+          <div className="text-red-500">{props.error}</div>
+        ) : null}
+      </div>
       <button
         type="submit"
         className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
         onClick={() => {
-          props.onContinue(email);
+          props.onSubmit(value);
         }}
       >
-        Send one-time password
+        {props.label}
       </button>
     </>
   );
 }
 
-function VerifyOtpStep(props: { onContinue: (otp: string) => void }) {
-  const [otp, setOtp] = useState("");
-
+function RequestOtpStep(props: {
+  onSubmit: (email: string) => void;
+  error: string | null;
+}) {
   return (
-    <>
-      <div className="flex flex-col gap-2 text-center">
-        <h1 className="text-3xl font-semibold">Check your email</h1>
-        <div className="text-gray-500">Enter your one-time password.</div>
-      </div>
-      <input
-        type="text"
-        placeholder="One-time password"
-        className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
-        value={otp}
-        onChange={(e) => setOtp(e.target.value)}
-      />
-      <button
-        type="submit"
-        className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
-        onClick={() => {
-          props.onContinue(otp);
-        }}
-      >
-        Continue
-      </button>
-    </>
+    <Step
+      onSubmit={props.onSubmit}
+      placeholder="Email address"
+      label="Send one-time password"
+      error={props.error}
+      title="Welcome!"
+      description="Let's get you signed in."
+    />
+  );
+}
+
+function VerifyOtpStep(props: {
+  onSubmit: (otp: string) => void;
+  error: string | null;
+}) {
+  return (
+    <Step
+      onSubmit={props.onSubmit}
+      placeholder="One-time password"
+      label="Continue"
+      error={props.error}
+      title="Check your email"
+      description="Enter your one-time password."
+    />
   );
 }
 
 function App() {
-  const [step, setStep] = useState<Step>("request-otp");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="grid min-h-dvh grid-cols-2 gap-4 p-4">
+    <div className="grid min-h-dvh grid-cols-2 gap-4 p-4 text-gray-950">
       <div className="m-auto flex w-full max-w-sm flex-col gap-8 p-8">
-        {step === "request-otp" ? (
+        {email === null ? (
           <RequestOtpStep
-            onContinue={async (email) => {
+            onSubmit={async (email) => {
               const result = await authClient.requestOtp({ identifier: email });
+
               if (result.success) {
-                setStep("verify-otp");
                 setEmail(email);
+                setError(null);
               } else {
-                // setError("Failed to send OTP");
+                setError("Failed to send OTP");
               }
             }}
+            error={error}
           />
-        ) : step === "verify-otp" ? (
+        ) : (
           <VerifyOtpStep
-            onContinue={async (otp) => {
+            onSubmit={async (otp) => {
               const result = await authClient.verifyOtp({
                 identifier: email,
                 otp,
               });
 
-              console.log("result", result);
               if (result.success) {
-                setStep("request-otp");
+                setEmail(null);
+                setError(null);
               } else {
-                // setError("Invalid OTP");
+                setError("Invalid OTP");
               }
             }}
+            error={error}
           />
-        ) : null}
+        )}
+        {/* {error && <div className="text-red-500">{error}</div>} */}
       </div>
       <div className="flex gap-8 rounded-xl bg-pink-500 p-8">
         <div className="m-auto text-center">
-          <h1 className="text-3xl font-bold">STΛR MODΞ</h1>
+          <div className="text-3xl font-bold">STΛR MODΞ</div>
           <p>One-time password demo</p>
         </div>
       </div>
