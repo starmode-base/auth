@@ -4,12 +4,13 @@ import { auth } from "./auth";
 import { usersStore } from "./db";
 
 /**
- * Sign up
+ * Continue with email
  *
  * App-specific server function that combines OTP verification with user
- * creation. Returns a registration token for passkey registration.
+ * upsert and session creation. Returns isNew to distinguish sign-up from
+ * sign-in (for analytics, onboarding, etc.).
  */
-export const signUp = createServerFn({ method: "POST" })
+export const continueWithEmail = createServerFn({ method: "POST" })
   .inputValidator(validate.verifyOtp)
   .handler(async ({ data }) => {
     const result = await auth.verifyOtp({
@@ -18,17 +19,18 @@ export const signUp = createServerFn({ method: "POST" })
     });
 
     if (!result.success) {
-      return { success: false };
+      return { success: false as const };
     }
 
-    const { userId } = usersStore.upsert(data.identifier);
+    const { userId, isNew } = usersStore.upsert(data.identifier);
 
-    const { registrationToken } = await auth.createRegistrationToken({
-      userId,
-      identifier: data.identifier,
-    });
+    const session = await auth.createSession({ userId });
 
-    return { success: true, registrationToken };
+    if (!session.success) {
+      return { success: false as const };
+    }
+
+    return { success: true as const, isNew };
   });
 
 /**

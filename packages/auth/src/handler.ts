@@ -4,7 +4,7 @@
  * Creates route handlers that dispatch based on the `method` field in the
  * request body. Compatible with TanStack Start server routes.
  */
-import type { MakeAuthResult } from "./types";
+import type { OtpAuthResult, PasskeyAuthResult, MakeAuthResult } from "./types";
 import { authBodyValidator } from "./validators";
 
 /** TanStack Start route handler signature */
@@ -13,8 +13,11 @@ type RouteHandler = (ctx: { request: Request }) => Promise<Response>;
 /** Route handlers object for TanStack Start */
 type RouteHandlers = { POST: RouteHandler };
 
+/** Accepts any valid auth variant returned by makeOtpAuth, makePasskeyAuth, or makeAuth */
+type HandlerAuth = OtpAuthResult | PasskeyAuthResult | MakeAuthResult;
+
 /** Create route handlers for auth API */
-export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
+export const makeAuthHandler = (auth: HandlerAuth): RouteHandlers => {
   const handler: RouteHandler = async ({ request }) => {
     // Helper to build JSON response
     const respond = (data: unknown, status = 200) =>
@@ -22,6 +25,9 @@ export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
         status,
         headers: { "Content-Type": "application/json" },
       });
+
+    const notConfigured = () =>
+      respond({ success: false, error: "invalid_request" }, 400);
 
     // Parse and validate request body
     let body: ReturnType<typeof authBodyValidator>;
@@ -36,31 +42,38 @@ export const makeAuthHandler = (auth: MakeAuthResult): RouteHandlers => {
     try {
       switch (body.method) {
         case "requestOtp": {
-          return respond(await auth[body.method](body.args));
+          if (!("requestOtp" in auth)) return notConfigured();
+          return respond(await auth.requestOtp(body.args));
         }
 
         case "verifyOtp": {
-          return respond(await auth[body.method](body.args));
+          if (!("verifyOtp" in auth)) return notConfigured();
+          return respond(await auth.verifyOtp(body.args));
         }
 
         case "generateRegistrationOptions": {
-          return respond(await auth[body.method](body.args));
+          if (!("generateRegistrationOptions" in auth)) return notConfigured();
+          return respond(await auth.generateRegistrationOptions(body.args));
         }
 
         case "verifyRegistration": {
-          return respond(await auth[body.method](body.args));
+          if (!("verifyRegistration" in auth)) return notConfigured();
+          return respond(await auth.verifyRegistration(body.args));
         }
 
         case "generateAuthenticationOptions": {
-          return respond(await auth[body.method]());
+          if (!("generateAuthenticationOptions" in auth))
+            return notConfigured();
+          return respond(await auth.generateAuthenticationOptions());
         }
 
         case "verifyAuthentication": {
-          return respond(await auth[body.method](body.args));
+          if (!("verifyAuthentication" in auth)) return notConfigured();
+          return respond(await auth.verifyAuthentication(body.args));
         }
 
         case "signOut": {
-          await auth[body.method]();
+          await auth.signOut();
           return respond({ success: true });
         }
       }
