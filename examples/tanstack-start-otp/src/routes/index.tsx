@@ -82,7 +82,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="grid min-h-dvh grid-cols-2 gap-4 p-4 text-gray-950">
+    <div className="grid min-h-dvh gap-4 p-4 text-gray-950 md:grid-cols-2">
       <div className="m-auto flex w-full max-w-sm flex-col gap-8 p-8">
         {email === null ? (
           <RequestOtpStep
