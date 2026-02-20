@@ -1,4 +1,5 @@
 {
+  "name": "@auth/monorepo",
   "private": true,
   "packageManager": "bun@1.3.4",
   "workspaces": [
@@ -10,14 +11,14 @@
     "check": "echo '📦 packages/auth' && (cd packages/auth && tsc); for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && tsc); done",
     "test": "vitest run",
     "test:watch": "vitest",
-    "outdated": "echo '📦 Root' && bun outdated; for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && bun outdated); done",
+    "outdated": "bun outdated --recursive",
     "update": "echo '📦 Root' && bun update; for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && bun update); done",
     "clean:soft": "rm -rf node_modules examples/*/{node_modules,.output,tsconfig.tsbuildinfo} packages/*/node_modules && bun install",
     "clean:hard": "rm -rf node_modules examples/*/{node_modules,.output,tsconfig.tsbuildinfo} packages/*/node_modules bun.lock && bun install"
   },
   "devDependencies": {
-    "prettier": "^3.8.0",
+    "prettier": "^3.8.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.18"
   }
 }
