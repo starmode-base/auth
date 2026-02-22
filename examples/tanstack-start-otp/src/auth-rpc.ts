@@ -19,14 +19,14 @@ export const verifyOtpSchema = z.object({
 });
 
 /**
- * Send OTP to identifier
+ * Send OTP to identifier server function
  */
 export const requestOtp = createServerFn({ method: "POST" })
   .inputValidator(requestOtpSchema)
   .handler(({ data }) => auth.requestOtp(data));
 
 /**
- * Verify OTP
+ * Verify OTP server function
  *
  * Verifies OTP, upserts user, creates session. Returns isNew to distinguish
  * sign-up from sign-in (for analytics, onboarding, etc.).
@@ -49,7 +49,7 @@ export const verifyOtp = createServerFn({ method: "POST" })
   });
 
 /**
- * Sign out
+ * Sign out server function
  *
  * Invalidates the current session and clears the session cookie.
  */
@@ -58,7 +58,7 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
 });
 
 /**
- * Get viewer
+ * Get viewer server function
  *
  * Returns the current user if authenticated, or undefined otherwise.
  */
