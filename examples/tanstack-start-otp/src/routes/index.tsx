@@ -13,8 +13,23 @@ function Step(props: {
   error: string | null;
   title: string;
   description: string;
+  inputType: "email" | "otp";
 }) {
   const [value, setValue] = useState("");
+
+  const inputProps =
+    props.inputType === "email"
+      ? ({
+          inputMode: "email",
+          autoComplete: "email",
+          autoCapitalize: "none",
+          autoCorrect: "off",
+          spellCheck: false,
+        } as const)
+      : ({
+          inputMode: "numeric",
+          autoComplete: "one-time-code",
+        } as const);
 
   return (
     <>
@@ -29,6 +44,7 @@ function Step(props: {
           className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          {...inputProps}
         />
         {props.error !== null ? (
           <div className="text-red-500">{props.error}</div>
@@ -52,6 +68,8 @@ function AuthFlow(props: { onSignedIn: () => void }) {
   if (email === null) {
     return (
       <Step
+        key="email"
+        inputType="email"
         onSubmit={async (email) => {
           const result = await requestOtp({ data: { identifier: email } });
 
@@ -73,6 +91,8 @@ function AuthFlow(props: { onSignedIn: () => void }) {
 
   return (
     <Step
+      key="otp"
+      inputType="otp"
       onSubmit={async (otp) => {
         const result = await verifyOtp({
           data: { identifier: email, otp },
