@@ -141,9 +141,9 @@ function App() {
           <AuthFlow onSignedIn={fetchViewer} />
         )}
       </div>
-      <div className="flex gap-8 rounded-xl bg-pink-500 p-8">
+      <div className="flex gap-8 rounded-xl bg-[#F400A1]/25 p-8 text-black">
         <div className="m-auto text-center">
-          <div className="text-3xl font-bold">STΛR MODΞ</div>
+          <div className="text-3xl font-bold">ΛUTH</div>
           <p>One-time password demo</p>
         </div>
       </div>
