@@ -6,7 +6,7 @@ import {
   getViewer,
   requestOtpSchema,
   verifyOtpSchema,
-} from "../auth-server";
+} from "../auth-rpc";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
