@@ -32,7 +32,13 @@ function Step(props: {
         } as const);
 
   return (
-    <>
+    <form
+      className="contents"
+      onSubmit={(e) => {
+        e.preventDefault();
+        props.onSubmit(value);
+      }}
+    >
       <div className="flex flex-col gap-2">
         <div className="text-3xl font-semibold">{props.title}</div>
         <div className="text-gray-500">{props.description}</div>
@@ -53,11 +59,10 @@ function Step(props: {
       <button
         type="submit"
         className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
-        onClick={() => props.onSubmit(value)}
       >
         {props.label}
       </button>
-    </>
+    </form>
   );
 }
 

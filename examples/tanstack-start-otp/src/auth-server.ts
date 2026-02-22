@@ -3,11 +3,20 @@ import { z } from "zod";
 import { usersStore } from "./db";
 import { auth } from "./auth";
 
+export const requestOtpSchema = z.object({
+  identifier: z.email(),
+});
+
+export const verifyOtpSchema = z.object({
+  identifier: z.email(),
+  otp: z.string().length(6),
+});
+
 /**
  * Send OTP to identifier
  */
 export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ identifier: z.string() }))
+  .inputValidator(requestOtpSchema)
   .handler(({ data }) => auth.requestOtp(data));
 
 /**
@@ -16,8 +25,9 @@ export const requestOtp = createServerFn({ method: "POST" })
  * Verifies OTP, upserts user, creates session. Returns isNew to distinguish
  * sign-up from sign-in (for analytics, onboarding, etc.).
  */
+
 export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ identifier: z.string(), otp: z.string() }))
+  .inputValidator(verifyOtpSchema)
   .handler(async ({ data }) => {
     const result = await auth.verifyOtp(data);
 
