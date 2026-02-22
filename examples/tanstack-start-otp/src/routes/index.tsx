@@ -1,42 +1,45 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { requestOtp, verifyOtp, signOut, getViewer } from "../auth-server";
+import {
+  requestOtp,
+  verifyOtp,
+  signOut,
+  getViewer,
+  requestOtpSchema,
+  verifyOtpSchema,
+} from "../auth-server";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 
 type Viewer = { userId: string; email: string };
 
-function Step(props: {
-  onSubmit: (value: string) => void;
-  placeholder: string;
-  label: string;
+type StepProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  valid: boolean;
   error: string | null;
+};
+
+function Step(props: {
   title: string;
   description: string;
-  inputType: "email" | "otp";
+  label: string;
+  placeholder: string;
+  error: string | null;
+  valid: boolean;
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  inputProps?: React.ComponentProps<"input">;
 }) {
-  const [value, setValue] = useState("");
-
-  const inputProps =
-    props.inputType === "email"
-      ? ({
-          inputMode: "email",
-          autoComplete: "email",
-          autoCapitalize: "none",
-          autoCorrect: "off",
-          spellCheck: false,
-        } as const)
-      : ({
-          inputMode: "numeric",
-          autoComplete: "one-time-code",
-        } as const);
-
   return (
     <form
       className="contents"
       onSubmit={(e) => {
         e.preventDefault();
-        props.onSubmit(value);
+        if (!props.valid) return;
+        props.onSubmit();
       }}
     >
       <div className="flex flex-col gap-2">
@@ -48,9 +51,9 @@ function Step(props: {
           type="text"
           placeholder={props.placeholder}
           className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          {...inputProps}
+          value={props.value}
+          onChange={(e) => props.onChange(e.target.value)}
+          {...props.inputProps}
         />
         {props.error !== null ? (
           <div className="text-red-500">{props.error}</div>
@@ -58,7 +61,8 @@ function Step(props: {
       </div>
       <button
         type="submit"
-        className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
+        disabled={!props.valid}
+        className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800 disabled:opacity-40"
       >
         {props.label}
       </button>
@@ -66,41 +70,84 @@ function Step(props: {
   );
 }
 
+function EmailStep(props: StepProps) {
+  return (
+    <Step
+      title="Welcome!"
+      description="Let's get you signed in."
+      label="Send one-time password"
+      placeholder="Email address"
+      inputProps={{
+        inputMode: "email",
+        autoComplete: "email",
+        autoCapitalize: "none",
+        autoCorrect: "off",
+        spellCheck: false,
+      }}
+      {...props}
+    />
+  );
+}
+
+function OtpStep(props: StepProps) {
+  return (
+    <Step
+      title="Check your email"
+      description="Enter your one-time password."
+      label="Continue"
+      placeholder="One-time password"
+      inputProps={{
+        inputMode: "numeric",
+        autoComplete: "one-time-code",
+      }}
+      {...props}
+    />
+  );
+}
+
 function AuthFlow(props: { onSignedIn: () => void }) {
-  const [email, setEmail] = useState<string | null>(null);
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [emailInput, setEmailInput] = useState("");
+  const [otpInput, setOtpInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  if (email === null) {
+  if (step === "email") {
+    const valid =
+      requestOtpSchema.shape.identifier.safeParse(emailInput).success;
+
     return (
-      <Step
-        key="email"
-        inputType="email"
-        onSubmit={async (email) => {
-          const result = await requestOtp({ data: { identifier: email } });
+      <EmailStep
+        value={emailInput}
+        onChange={setEmailInput}
+        valid={valid}
+        error={error}
+        onSubmit={async () => {
+          const result = await requestOtp({
+            data: { identifier: emailInput },
+          });
 
           if (result.success) {
-            setEmail(email);
+            setStep("otp");
             setError(null);
           } else {
             setError("Failed to send one-time password");
           }
         }}
-        placeholder="Email address"
-        label="Send one-time password"
-        error={error}
-        title="Welcome!"
-        description="Let's get you signed in."
       />
     );
   }
 
+  const valid = verifyOtpSchema.shape.otp.safeParse(otpInput).success;
+
   return (
-    <Step
-      key="otp"
-      inputType="otp"
-      onSubmit={async (otp) => {
+    <OtpStep
+      value={otpInput}
+      onChange={setOtpInput}
+      valid={valid}
+      error={error}
+      onSubmit={async () => {
         const result = await verifyOtp({
-          data: { identifier: email, otp },
+          data: { identifier: emailInput, otp: otpInput },
         });
 
         if (result.success) {
@@ -109,11 +156,6 @@ function AuthFlow(props: { onSignedIn: () => void }) {
           setError("Invalid one-time password");
         }
       }}
-      placeholder="One-time password"
-      label="Continue"
-      error={error}
-      title="Check your email"
-      description="Enter your one-time password."
     />
   );
 }
