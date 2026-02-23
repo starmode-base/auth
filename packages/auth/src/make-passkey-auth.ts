@@ -1,7 +1,5 @@
 import type {
-  PasskeyAuthFullConfig,
-  PasskeyAuthResult,
-  StorageAdapter,
+  CredentialStorage,
   RegistrationCodec,
   WebAuthnConfig,
   PasskeyMethods,
@@ -13,11 +11,7 @@ import {
   verifyRegistrationCredential,
   verifyAuthenticationCredential,
 } from "./webauthn";
-import {
-  makeCoreAuth,
-  type ResultHelpers,
-  type StoreSessionFn,
-} from "./make-core-auth";
+import type { ResultHelpers, StoreSessionFn } from "./make-core-auth";
 
 /** Generate a random challenge for WebAuthn */
 function generateChallenge(): string {
@@ -33,7 +27,7 @@ type ChallengeRecord = {
 };
 
 export function makePasskeyMethods(
-  storage: StorageAdapter,
+  storage: CredentialStorage,
   registrationCodec: RegistrationCodec,
   webAuthn: WebAuthnConfig,
   storeSession: StoreSessionFn,
@@ -69,7 +63,7 @@ export function makePasskeyMethods(
       const { userId, identifier } = decoded;
 
       // Get existing credentials to exclude
-      const existingCredentials = await storage.credential.get(userId);
+      const existingCredentials = await storage.get(userId);
 
       // Generate challenge
       const challenge = generateChallenge();
@@ -149,7 +143,7 @@ export function makePasskeyMethods(
         );
 
         // Store the credential
-        await storage.credential.store({
+        await storage.store({
           userId,
           credential: {
             id: verified.credentialId,
@@ -192,7 +186,7 @@ export function makePasskeyMethods(
 
     async verifyAuthentication({ credential }) {
       // Look up the credential by ID
-      const stored = await storage.credential.getById(credential.id);
+      const stored = await storage.getById(credential.id);
       if (!stored) {
         return result.fail("credential_not_found");
       }
@@ -224,7 +218,7 @@ export function makePasskeyMethods(
         );
 
         // Update counter
-        await storage.credential.updateCounter(credential.id, verified.counter);
+        await storage.updateCounter(credential.id, verified.counter);
 
         // Clean up challenge
         challengeStore.delete(challenge);
@@ -236,18 +230,4 @@ export function makePasskeyMethods(
       }
     },
   };
-}
-
-export function makePasskeyAuth(
-  config: PasskeyAuthFullConfig,
-): PasskeyAuthResult {
-  const { methods: core, storeSession, result } = makeCoreAuth(config);
-  const passkey = makePasskeyMethods(
-    config.storage,
-    config.registrationCodec,
-    config.webAuthn,
-    storeSession,
-    result,
-  );
-  return { ...core, ...passkey };
 }

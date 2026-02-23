@@ -13,7 +13,7 @@ type RouteHandler = (ctx: { request: Request }) => Promise<Response>;
 /** Route handlers object for TanStack Start */
 type RouteHandlers = { POST: RouteHandler };
 
-/** Accepts any valid auth variant returned by makeOtpAuth, makePasskeyAuth, or makeAuth */
+/** Accepts any valid auth result returned by makeAuth */
 type HandlerAuth = OtpAuthResult | PasskeyAuthResult | MakeAuthResult;
 
 /** Create route handlers for auth API */

@@ -1,6 +1,7 @@
 import {
-  makeOtpAuth,
-  storageMemory,
+  makeAuth,
+  memoryOtpStorage,
+  memorySessionStorage,
   sessionHmac,
   otpTransportConsole,
 } from "@starmode/auth";
@@ -9,14 +10,19 @@ import {
   sessionCookieDefaults,
 } from "@starmode/auth/tanstack";
 
-export const auth = makeOtpAuth({
-  storage: storageMemory(),
-  sessionCodec: sessionHmac({
-    secret: "dev-secret-do-not-use-in-production",
-    ttl: 600,
-  }),
-  otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
-  sessionTransport: sessionTransportTanstack(sessionCookieDefaults),
-  sessionTtl: Infinity,
+export const auth = makeAuth({
+  session: {
+    storage: memorySessionStorage(),
+    codec: sessionHmac({
+      secret: "dev-secret-do-not-use-in-production",
+      ttl: 600,
+    }),
+    transport: sessionTransportTanstack(sessionCookieDefaults),
+    ttl: Infinity,
+  },
+  otp: {
+    storage: memoryOtpStorage(),
+    transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+  },
   debug: true,
 });

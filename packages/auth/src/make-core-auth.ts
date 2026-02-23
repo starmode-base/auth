@@ -1,5 +1,5 @@
 import type {
-  BaseAuthConfig,
+  SessionConfig,
   AuthErrorCode,
   CreateSessionResult,
   CoreMethods,
@@ -24,8 +24,9 @@ export type ResultHelpers = {
 /** Session creation function shared with passkey methods */
 export type StoreSessionFn = (userId: string) => Promise<CreateSessionResult>;
 
-export function makeCoreAuth(config: BaseAuthConfig) {
-  const { storage, sessionCodec, sessionTransport, sessionTtl, debug } = config;
+export function makeCoreAuth(config: { session: SessionConfig; debug?: boolean }) {
+  const { storage, codec: sessionCodec, transport: sessionTransport, ttl: sessionTtl } = config.session;
+  const { debug } = config;
 
   // Result helpers with optional debug logging
   const result: ResultHelpers = {
@@ -43,7 +44,7 @@ export function makeCoreAuth(config: BaseAuthConfig) {
     const isForever = sessionTtl === Infinity;
     const sessionExp = isForever ? null : new Date(Date.now() + sessionTtl);
 
-    await storage.session.store({ sessionId, userId, expiresAt: sessionExp });
+    await storage.store({ sessionId, userId, expiresAt: sessionExp });
 
     const token = await sessionCodec.encode({ sessionId, sessionExp, userId });
     const responseToken = sessionTransport.set(token);
@@ -62,7 +63,7 @@ export function makeCoreAuth(config: BaseAuthConfig) {
 
       const decoded = await sessionCodec.decode(token);
       // TODO: Idea:
-      // const decoded = await sessionCodec.decode(token, storage.session);
+      // const decoded = await sessionCodec.decode(token, storage);
 
       if (!decoded) {
         return null;
@@ -82,7 +83,7 @@ export function makeCoreAuth(config: BaseAuthConfig) {
 
       // Token expired (tokenExp passed) — DB fallback for revocation check
       if (decoded.expired) {
-        const storedSession = await storage.session.get(decoded.sessionId);
+        const storedSession = await storage.get(decoded.sessionId);
 
         if (!storedSession) {
           // Session revoked — sign out
@@ -95,7 +96,7 @@ export function makeCoreAuth(config: BaseAuthConfig) {
           : new Date(Date.now() + sessionTtl);
 
         if (!isForever) {
-          await storage.session.store({
+          await storage.store({
             sessionId: decoded.sessionId,
             userId: storedSession.userId,
             expiresAt: newSessionExp,
@@ -140,7 +141,7 @@ export function makeCoreAuth(config: BaseAuthConfig) {
         const decoded = await sessionCodec.decode(token);
 
         if (decoded) {
-          await storage.session.delete(decoded.sessionId);
+          await storage.delete(decoded.sessionId);
         }
       }
 

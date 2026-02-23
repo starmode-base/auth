@@ -1,22 +1,27 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   makeAuth,
-  storageMemory,
+  memoryOtpStorage,
+  memorySessionStorage,
+  memoryCredentialStorage,
   sessionHmac,
   registrationHmac,
   sessionTransportMemory,
 } from "./index";
 import type { OtpTransportAdapter } from "./types";
+import type { MemoryOtpStorage, MemorySessionStorage } from "./presets/storage-memory";
 import type { SessionTransportMemoryAdapter } from "./presets/session-transport-memory";
 
 describe("auth integration", () => {
-  let storage: ReturnType<typeof storageMemory>;
+  let otpStorage: MemoryOtpStorage;
+  let sessionStorage: MemorySessionStorage;
   let sentOtps: { identifier: string; otp: string }[];
-  let auth: ReturnType<typeof makeAuth>;
+  let auth: ReturnType<typeof makeAuth<import("./types").FullAuthConfig>>;
   let sessionTransport: SessionTransportMemoryAdapter;
 
   beforeEach(() => {
-    storage = storageMemory();
+    otpStorage = memoryOtpStorage();
+    sessionStorage = memorySessionStorage();
     sentOtps = [];
     sessionTransport = sessionTransportMemory();
 
@@ -28,20 +33,28 @@ describe("auth integration", () => {
     };
 
     auth = makeAuth({
-      storage,
-      sessionCodec: sessionHmac({ secret: "test-secret", ttl: 10 * 60 * 1000 }), // 10 min
-      registrationCodec: registrationHmac({
-        secret: "test-secret",
-        ttl: 300,
-      }),
-      otpTransport,
-      webAuthn: {
-        rpId: "localhost",
-        rpName: "Test App",
-        challengeTtl: 5 * 60 * 1000,
+      session: {
+        storage: sessionStorage,
+        codec: sessionHmac({ secret: "test-secret", ttl: 10 * 60 * 1000 }),
+        transport: sessionTransport,
+        ttl: Infinity,
       },
-      sessionTransport,
-      sessionTtl: Infinity,
+      otp: {
+        storage: otpStorage,
+        transport: otpTransport,
+      },
+      passkey: {
+        storage: memoryCredentialStorage(),
+        registrationCodec: registrationHmac({
+          secret: "test-secret",
+          ttl: 300,
+        }),
+        webAuthn: {
+          rpId: "localhost",
+          rpName: "Test App",
+          challengeTtl: 5 * 60 * 1000,
+        },
+      },
       debug: false,
     });
   });
@@ -142,23 +155,21 @@ describe("auth integration", () => {
 
   describe("session management", () => {
     it("getSession returns userId from valid token", async () => {
-      // Directly create a session for testing
-      await storage.session.store({
+      await sessionStorage.store({
         sessionId: "session_1",
         userId: "user_1",
         expiresAt: new Date(Date.now() + 60000),
       });
       const sessionCodec = sessionHmac({
         secret: "test-secret",
-        ttl: 10 * 60 * 1000, // 10 min
+        ttl: 10 * 60 * 1000,
       });
       const token = await sessionCodec.encode({
         sessionId: "session_1",
-        sessionExp: null, // forever for this test
+        sessionExp: null,
         userId: "user_1",
       });
 
-      // Set token in transport
       sessionTransport.setToken(token);
 
       const session = await auth.getSession();
@@ -172,52 +183,47 @@ describe("auth integration", () => {
     });
 
     it("signOut removes session", async () => {
-      await storage.session.store({
+      await sessionStorage.store({
         sessionId: "session_1",
         userId: "user_1",
         expiresAt: new Date(Date.now() + 60000),
       });
       const sessionCodec = sessionHmac({
         secret: "test-secret",
-        ttl: 10 * 60 * 1000, // 10 min
+        ttl: 10 * 60 * 1000,
       });
       const token = await sessionCodec.encode({
         sessionId: "session_1",
-        sessionExp: null, // forever for this test
+        sessionExp: null,
         userId: "user_1",
       });
 
       sessionTransport.setToken(token);
       await auth.signOut();
 
-      expect(storage._stores.sessions.size).toBe(0);
+      expect(sessionStorage._store.size).toBe(0);
     });
   });
 
   describe("full OTP + registration token flow", () => {
     it("request OTP → verify → create registration token", async () => {
-      // Request OTP
       await auth.requestOtp({ identifier: "user@example.com" });
       const otp = sentOtps[0]!.otp;
 
-      // Verify OTP
       const { success: success } = await auth.verifyOtp({
         identifier: "user@example.com",
         otp,
       });
       expect(success).toBe(true);
 
-      // App upserts user (simulated)
       const userId = "user_1";
 
-      // Create registration token
       const { registrationToken } = await auth.createRegistrationToken({
         userId,
         identifier: "user@example.com",
       });
       expect(registrationToken).toBeDefined();
 
-      // Validate it
       const validation = await auth.validateRegistrationToken({
         token: registrationToken,
       });

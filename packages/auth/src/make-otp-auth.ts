@@ -1,11 +1,5 @@
-import type {
-  OtpAuthFullConfig,
-  OtpAuthResult,
-  StorageAdapter,
-  OtpTransportAdapter,
-  OtpMethods,
-} from "./types";
-import { makeCoreAuth, type ResultHelpers } from "./make-core-auth";
+import type { OtpStorage, OtpTransportAdapter, OtpMethods } from "./types";
+import type { ResultHelpers } from "./make-core-auth";
 
 /** Generate a random 6-digit OTP */
 function generateOtp(): string {
@@ -16,24 +10,24 @@ function generateOtp(): string {
 }
 
 export function makeOtpMethods(
-  storage: StorageAdapter,
-  otpTransport: OtpTransportAdapter,
+  storage: OtpStorage,
+  transport: OtpTransportAdapter,
   result: ResultHelpers,
 ): OtpMethods {
   return {
     async requestOtp({ identifier }) {
       const otp = generateOtp();
-      const expiresAt = new Date(Date.now() + otpTransport.ttl);
+      const expiresAt = new Date(Date.now() + transport.ttl);
 
-      await storage.otp.store({ identifier, otp, expiresAt });
+      await storage.store({ identifier, otp, expiresAt });
 
-      await otpTransport.send(identifier, otp);
+      await transport.send(identifier, otp);
 
       return result.ok({});
     },
 
     async verifyOtp({ identifier, otp }) {
-      const valid = await storage.otp.verify(identifier, otp);
+      const valid = await storage.verify(identifier, otp);
 
       if (!valid) {
         return result.fail("invalid_otp");
@@ -42,10 +36,4 @@ export function makeOtpMethods(
       return result.ok({});
     },
   };
-}
-
-export function makeOtpAuth(config: OtpAuthFullConfig): OtpAuthResult {
-  const { methods: core, result } = makeCoreAuth(config);
-  const otp = makeOtpMethods(config.storage, config.otpTransport, result);
-  return { ...core, ...otp };
 }

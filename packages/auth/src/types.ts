@@ -27,30 +27,27 @@ export type CredentialRecord = {
   credential: StoredCredential;
 };
 
-/**
- * Storage adapter (persistence)
- *
- * Implements storage for OTPs, sessions, and passkey credentials.
- * You can implement this as a single class or object wrapping your database.
- */
-export type StorageAdapter = {
-  otp: {
-    store: (record: OtpRecord) => Promise<void>;
-    verify: (identifier: string, otp: string) => Promise<boolean>;
-  };
-  session: {
-    store: (record: SessionRecord) => Promise<void>;
-    get: (sessionId: string) => Promise<SessionRecord | null>;
-    delete: (sessionId: string) => Promise<void>;
-  };
-  credential: {
-    store: (record: CredentialRecord) => Promise<void>;
-    get: (userId: string) => Promise<StoredCredential[]>;
-    getById: (
-      credentialId: string,
-    ) => Promise<{ userId: string; credential: StoredCredential } | null>;
-    updateCounter: (credentialId: string, counter: number) => Promise<void>;
-  };
+/** OTP storage adapter */
+export type OtpStorage = {
+  store: (record: OtpRecord) => Promise<void>;
+  verify: (identifier: string, otp: string) => Promise<boolean>;
+};
+
+/** Session storage adapter */
+export type SessionStorage = {
+  store: (record: SessionRecord) => Promise<void>;
+  get: (sessionId: string) => Promise<SessionRecord | null>;
+  delete: (sessionId: string) => Promise<void>;
+};
+
+/** Credential (passkey) storage adapter */
+export type CredentialStorage = {
+  store: (record: CredentialRecord) => Promise<void>;
+  get: (userId: string) => Promise<StoredCredential[]>;
+  getById: (
+    credentialId: string,
+  ) => Promise<{ userId: string; credential: StoredCredential } | null>;
+  updateCounter: (credentialId: string, counter: number) => Promise<void>;
 };
 
 /**
@@ -227,34 +224,57 @@ export type VerifyAuthenticationResult = Result<{
   session: { token: string; userId: string };
 }>;
 
-/** Config shared by all auth variants */
-export type BaseAuthConfig = {
-  storage: StorageAdapter;
-  sessionCodec: SessionCodec;
-  sessionTransport: SessionTransportAdapter;
+/** Session config — always required */
+export type SessionConfig = {
+  storage: SessionStorage;
+  codec: SessionCodec;
+  transport: SessionTransportAdapter;
   /** Session TTL in ms (Infinity = forever). Inactivity timeout with sliding refresh. */
-  sessionTtl: number;
-  /** Enable debug logging for development */
-  debug?: boolean;
+  ttl: number;
 };
 
-/** OTP config — required when using OTP methods */
-export type OtpAuthConfig = { otpTransport: OtpTransportAdapter };
+/** OTP config — presence enables OTP methods */
+export type OtpConfig = {
+  storage: OtpStorage;
+  transport: OtpTransportAdapter;
+};
 
-/** Passkey config — required when using passkey methods */
-export type PasskeyAuthConfig = {
+/** Passkey config — presence enables passkey methods */
+export type PasskeyConfig = {
+  storage: CredentialStorage;
   registrationCodec: RegistrationCodec;
   webAuthn: WebAuthnConfig;
 };
 
-/** Full config for makeOtpAuth */
-export type OtpAuthFullConfig = BaseAuthConfig & OtpAuthConfig;
+/** makeAuth config: OTP only */
+export type OtpOnlyAuthConfig = {
+  session: SessionConfig;
+  otp: OtpConfig;
+  passkey?: never;
+  debug: boolean;
+};
 
-/** Full config for makePasskeyAuth */
-export type PasskeyAuthFullConfig = BaseAuthConfig & PasskeyAuthConfig;
+/** makeAuth config: passkeys only */
+export type PasskeyOnlyAuthConfig = {
+  session: SessionConfig;
+  passkey: PasskeyConfig;
+  otp?: never;
+  debug: boolean;
+};
 
-/** Full config for makeAuth (all methods) */
-export type FullAuthConfig = BaseAuthConfig & OtpAuthConfig & PasskeyAuthConfig;
+/** makeAuth config: OTP + passkeys */
+export type FullAuthConfig = {
+  session: SessionConfig;
+  otp: OtpConfig;
+  passkey: PasskeyConfig;
+  debug: boolean;
+};
+
+/** Union of all valid makeAuth configs */
+export type AuthConfig =
+  | OtpOnlyAuthConfig
+  | PasskeyOnlyAuthConfig
+  | FullAuthConfig;
 
 /** Core methods — always available regardless of auth config */
 export type CoreMethods = {
@@ -368,13 +388,13 @@ export type PasskeyMethods = {
   }) => Promise<VerifyAuthenticationResult>;
 };
 
-/** Result of makeOtpAuth */
+/** makeAuth result when only OTP is configured */
 export type OtpAuthResult = CoreMethods & OtpMethods;
 
-/** Result of makePasskeyAuth */
+/** makeAuth result when only passkeys are configured */
 export type PasskeyAuthResult = CoreMethods & PasskeyMethods;
 
-/** Result of makeAuth (all methods) */
+/** makeAuth result when both OTP and passkeys are configured */
 export type MakeAuthResult = CoreMethods & OtpMethods & PasskeyMethods;
 
 /**

@@ -1,11 +1,13 @@
 // Core
 export { makeAuth } from "./make-auth";
-export { makeOtpAuth } from "./make-otp-auth";
-export { makePasskeyAuth } from "./make-passkey-auth";
 export { makeAuthHandler } from "./handler";
 
 // Presets - Storage
-export { storageMemory } from "./presets/storage-memory";
+export {
+  memoryOtpStorage,
+  memorySessionStorage,
+  memoryCredentialStorage,
+} from "./presets/storage-memory";
 
 // Presets - Codecs
 export { sessionOpaque } from "./presets/session-opaque";
