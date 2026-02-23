@@ -246,35 +246,27 @@ export type PasskeyConfig = {
   webAuthn: WebAuthnConfig;
 };
 
-/** makeAuth config: OTP only */
-export type OtpOnlyAuthConfig = {
+/** Config for makeOtpAuth */
+export type OtpAuthConfig = {
   session: SessionConfig;
   otp: OtpConfig;
-  passkey?: never;
   debug: boolean;
 };
 
-/** makeAuth config: passkeys only */
-export type PasskeyOnlyAuthConfig = {
+/** Config for makePasskeyAuth */
+export type PasskeyAuthConfig = {
   session: SessionConfig;
   passkey: PasskeyConfig;
-  otp?: never;
   debug: boolean;
 };
 
-/** makeAuth config: OTP + passkeys */
+/** Config for makeAuth (OTP + passkeys) */
 export type FullAuthConfig = {
   session: SessionConfig;
   otp: OtpConfig;
   passkey: PasskeyConfig;
   debug: boolean;
 };
-
-/** Union of all valid makeAuth configs */
-export type AuthConfig =
-  | OtpOnlyAuthConfig
-  | PasskeyOnlyAuthConfig
-  | FullAuthConfig;
 
 /** Core methods — always available regardless of auth config */
 export type CoreMethods = {

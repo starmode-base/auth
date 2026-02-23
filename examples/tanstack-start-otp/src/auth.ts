@@ -1,5 +1,5 @@
 import {
-  makeAuth,
+  makeOtpAuth,
   memoryOtpStorage,
   memorySessionStorage,
   sessionHmac,
@@ -10,7 +10,7 @@ import {
   sessionCookieDefaults,
 } from "@starmode/auth/tanstack";
 
-export const auth = makeAuth({
+export const auth = makeOtpAuth({
   session: {
     storage: memorySessionStorage(),
     codec: sessionHmac({

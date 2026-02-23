@@ -1,5 +1,11 @@
-import type { OtpStorage, OtpTransportAdapter, OtpMethods } from "./types";
-import type { ResultHelpers } from "./make-core-auth";
+import type {
+  OtpStorage,
+  OtpTransportAdapter,
+  OtpMethods,
+  OtpAuthConfig,
+  OtpAuthResult,
+} from "./types";
+import { makeCoreAuth, type ResultHelpers } from "./make-core-auth";
 
 /** Generate a random 6-digit OTP */
 function generateOtp(): string {
@@ -36,4 +42,10 @@ export function makeOtpMethods(
       return result.ok({});
     },
   };
+}
+
+export function makeOtpAuth(config: OtpAuthConfig): OtpAuthResult {
+  const { methods: core, result } = makeCoreAuth(config);
+  const otp = makeOtpMethods(config.otp.storage, config.otp.transport, result);
+  return { ...core, ...otp };
 }

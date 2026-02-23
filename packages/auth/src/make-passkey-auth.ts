@@ -3,6 +3,8 @@ import type {
   RegistrationCodec,
   WebAuthnConfig,
   PasskeyMethods,
+  PasskeyAuthConfig,
+  PasskeyAuthResult,
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "./types";
@@ -11,7 +13,11 @@ import {
   verifyRegistrationCredential,
   verifyAuthenticationCredential,
 } from "./webauthn";
-import type { ResultHelpers, StoreSessionFn } from "./make-core-auth";
+import {
+  makeCoreAuth,
+  type ResultHelpers,
+  type StoreSessionFn,
+} from "./make-core-auth";
 
 /** Generate a random challenge for WebAuthn */
 function generateChallenge(): string {
@@ -230,4 +236,16 @@ export function makePasskeyMethods(
       }
     },
   };
+}
+
+export function makePasskeyAuth(config: PasskeyAuthConfig): PasskeyAuthResult {
+  const { methods: core, storeSession, result } = makeCoreAuth(config);
+  const passkey = makePasskeyMethods(
+    config.passkey.storage,
+    config.passkey.registrationCodec,
+    config.passkey.webAuthn,
+    storeSession,
+    result,
+  );
+  return { ...core, ...passkey };
 }

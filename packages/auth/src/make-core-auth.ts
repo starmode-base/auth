@@ -24,7 +24,7 @@ export type ResultHelpers = {
 /** Session creation function shared with passkey methods */
 export type StoreSessionFn = (userId: string) => Promise<CreateSessionResult>;
 
-export function makeCoreAuth(config: { session: SessionConfig; debug?: boolean }) {
+export function makeCoreAuth(config: { session: SessionConfig; debug: boolean }) {
   const { storage, codec: sessionCodec, transport: sessionTransport, ttl: sessionTtl } = config.session;
   const { debug } = config;
 

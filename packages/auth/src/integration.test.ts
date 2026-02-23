@@ -9,14 +9,17 @@ import {
   sessionTransportMemory,
 } from "./index";
 import type { OtpTransportAdapter } from "./types";
-import type { MemoryOtpStorage, MemorySessionStorage } from "./presets/storage-memory";
+import type {
+  MemoryOtpStorage,
+  MemorySessionStorage,
+} from "./presets/storage-memory";
 import type { SessionTransportMemoryAdapter } from "./presets/session-transport-memory";
 
 describe("auth integration", () => {
   let otpStorage: MemoryOtpStorage;
   let sessionStorage: MemorySessionStorage;
   let sentOtps: { identifier: string; otp: string }[];
-  let auth: ReturnType<typeof makeAuth<import("./types").FullAuthConfig>>;
+  let auth: ReturnType<typeof makeAuth>;
   let sessionTransport: SessionTransportMemoryAdapter;
 
   beforeEach(() => {

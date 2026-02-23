@@ -1,4 +1,6 @@
 // Core
+export { makeOtpAuth } from "./make-otp-auth";
+export { makePasskeyAuth } from "./make-passkey-auth";
 export { makeAuth } from "./make-auth";
 export { makeAuthHandler } from "./handler";
 
