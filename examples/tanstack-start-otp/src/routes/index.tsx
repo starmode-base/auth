@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   requestOtp,
   verifyOtp,
+  changeEmail,
   signOut,
   getViewer,
   requestOtpSchema,
@@ -160,7 +161,120 @@ function AuthFlow(props: { onSignedIn: () => void }) {
   );
 }
 
-function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
+function ChangeEmailFlow(props: {
+  onChanged: (viewer: Viewer) => void;
+  onCancel: () => void;
+}) {
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [emailInput, setEmailInput] = useState("");
+  const [otpInput, setOtpInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  if (step === "email") {
+    const valid =
+      requestOtpSchema.shape.identifier.safeParse(emailInput).success;
+
+    return (
+      <>
+        <Step
+          title="Change email"
+          description="Enter your new email address."
+          label="Send one-time password"
+          placeholder="New email address"
+          inputProps={{
+            inputMode: "email",
+            autoComplete: "email",
+            autoCapitalize: "none",
+            autoCorrect: "off",
+            spellCheck: false,
+          }}
+          value={emailInput}
+          onChange={setEmailInput}
+          valid={valid}
+          error={error}
+          onSubmit={async () => {
+            const result = await requestOtp({
+              data: { identifier: emailInput },
+            });
+
+            if (result.success) {
+              setStep("otp");
+              setError(null);
+            } else {
+              setError("Failed to send one-time password");
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="text-gray-500 hover:text-gray-700"
+          onClick={props.onCancel}
+        >
+          Cancel
+        </button>
+      </>
+    );
+  }
+
+  const valid = verifyOtpSchema.shape.otp.safeParse(otpInput).success;
+
+  return (
+    <>
+      <Step
+        title="Verify new email"
+        description="Enter the one-time password sent to your new email."
+        label="Change email"
+        placeholder="One-time password"
+        inputProps={{
+          inputMode: "numeric",
+          autoComplete: "one-time-code",
+        }}
+        value={otpInput}
+        onChange={setOtpInput}
+        valid={valid}
+        error={error}
+        onSubmit={async () => {
+          const result = await changeEmail({
+            data: { identifier: emailInput, otp: otpInput },
+          });
+
+          if (result.success) {
+            props.onChanged(result.viewer);
+          } else {
+            setError("Invalid one-time password");
+          }
+        }}
+      />
+      <button
+        type="button"
+        className="text-gray-500 hover:text-gray-700"
+        onClick={props.onCancel}
+      >
+        Cancel
+      </button>
+    </>
+  );
+}
+
+function Authenticated(props: {
+  viewer: Viewer;
+  onViewerChanged: (viewer: Viewer) => void;
+  onSignedOut: () => void;
+}) {
+  const [changingEmail, setChangingEmail] = useState(false);
+
+  if (changingEmail) {
+    return (
+      <ChangeEmailFlow
+        onChanged={(viewer) => {
+          props.onViewerChanged(viewer);
+          setChangingEmail(false);
+        }}
+        onCancel={() => setChangingEmail(false)}
+      />
+    );
+  }
+
   return (
     <>
       <div className="flex flex-col gap-2">
@@ -169,6 +283,12 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
       </div>
       <button
         className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
+        onClick={() => setChangingEmail(true)}
+      >
+        Change email
+      </button>
+      <button
+        className="text-gray-500 hover:text-gray-700"
         onClick={async () => {
           await signOut();
           props.onSignedOut();
@@ -202,6 +322,7 @@ function App() {
         {viewer ? (
           <Authenticated
             viewer={viewer}
+            onViewerChanged={setViewer}
             onSignedOut={() => setViewer(undefined)}
           />
         ) : (

@@ -49,6 +49,27 @@ export const verifyOtp = createServerFn({ method: "POST" })
   });
 
 /**
+ * Change email server function
+ *
+ * Verifies OTP for the new email, then swaps it on the authenticated user.
+ * Requires an active session — the OTP proves ownership of the new address.
+ */
+export const changeEmail = createServerFn({ method: "POST" })
+  .inputValidator(verifyOtpSchema)
+  .handler(async ({ data }) => {
+    const session = await auth.getSession();
+    if (!session) return { success: false };
+
+    const result = await auth.verifyOtp(data);
+    if (!result.success) return { success: false };
+
+    const user = usersStore.updateEmail(session.userId, data.identifier);
+    if (!user) return { success: false };
+
+    return { success: true, viewer: user };
+  });
+
+/**
  * Sign out server function
  *
  * Invalidates the current session and clears the session cookie.
