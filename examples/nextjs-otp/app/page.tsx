@@ -8,7 +8,7 @@ import {
   signOut,
   getViewer,
 } from "./actions";
-import { requestOtpSchema, verifyOtpSchema } from "./schemas";
+import { requestOtpSchema, verifyOtpSchema } from "./schema";
 
 type Viewer = { userId: string; email: string };
 

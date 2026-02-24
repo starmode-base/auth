@@ -1,6 +1,6 @@
 "use server";
 
-import { requestOtpSchema, verifyOtpSchema } from "./schemas";
+import { requestOtpSchema, verifyOtpSchema } from "./schema";
 import { usersStore } from "./db";
 import { getAuth } from "./auth";
 
