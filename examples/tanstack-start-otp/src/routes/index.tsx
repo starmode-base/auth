@@ -36,7 +36,7 @@ function Step(props: {
 }) {
   return (
     <form
-      className="contents"
+      className="m-auto flex w-full max-w-sm flex-col gap-8 p-8"
       onSubmit={(e) => {
         e.preventDefault();
         if (!props.valid) return;
@@ -263,40 +263,55 @@ function Authenticated(props: {
 }) {
   const [changingEmail, setChangingEmail] = useState(false);
 
-  if (changingEmail) {
-    return (
-      <ChangeEmailFlow
-        onChanged={(viewer) => {
-          props.onViewerChanged(viewer);
-          setChangingEmail(false);
-        }}
-        onCancel={() => setChangingEmail(false)}
-      />
-    );
-  }
+  const initials = props.viewer.email.slice(0, 2).toUpperCase();
 
   return (
-    <>
-      <div className="flex flex-col gap-2">
-        <div className="text-3xl font-semibold">Signed in</div>
-        <div className="text-gray-500">{props.viewer.email}</div>
+    <div className="flex flex-col">
+      <div className="flex items-center gap-4">
+        <div className="flex size-10 items-center justify-center rounded-full bg-gray-900 text-white">
+          {initials}
+        </div>
+        <div>{props.viewer.email}</div>
       </div>
-      <button
-        className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800"
-        onClick={() => setChangingEmail(true)}
-      >
-        Change email
-      </button>
-      <button
-        className="text-gray-500 hover:text-gray-700"
-        onClick={async () => {
-          await signOut();
-          props.onSignedOut();
-        }}
-      >
-        Sign out
-      </button>
-    </>
+
+      <div className="m-auto flex w-full max-w-sm flex-col gap-8">
+        {changingEmail ? (
+          <ChangeEmailFlow
+            onChanged={(viewer) => {
+              props.onViewerChanged(viewer);
+              setChangingEmail(false);
+            }}
+            onCancel={() => setChangingEmail(false)}
+          />
+        ) : (
+          <>
+            <div className="flex flex-col gap-2">
+              <div className="text-3xl font-semibold">Welcome {initials}</div>
+              <div className="text-gray-500">{props.viewer?.email}</div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="rounded-full bg-gray-900 px-4 py-2 text-white"
+                onClick={() => {
+                  setChangingEmail(true);
+                }}
+              >
+                Change email
+              </button>
+              <button
+                className="rounded-full bg-gray-900 px-4 py-2 text-white"
+                onClick={async () => {
+                  await signOut();
+                  props.onSignedOut();
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -305,8 +320,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   const fetchViewer = async () => {
-    const v = await getViewer();
-    setViewer(v);
+    setViewer(await getViewer());
     setLoading(false);
   };
 
@@ -318,17 +332,15 @@ function App() {
 
   return (
     <div className="grid min-h-dvh gap-4 p-4 text-gray-950 md:grid-cols-2">
-      <div className="m-auto flex w-full max-w-sm flex-col gap-8 p-8">
-        {viewer ? (
-          <Authenticated
-            viewer={viewer}
-            onViewerChanged={setViewer}
-            onSignedOut={() => setViewer(undefined)}
-          />
-        ) : (
-          <AuthFlow onSignedIn={fetchViewer} />
-        )}
-      </div>
+      {viewer ? (
+        <Authenticated
+          viewer={viewer}
+          onViewerChanged={setViewer}
+          onSignedOut={() => setViewer(undefined)}
+        />
+      ) : (
+        <AuthFlow onSignedIn={fetchViewer} />
+      )}
       <div className="flex gap-8 rounded-xl bg-[#F400A1]/25 p-8 text-black">
         <div className="m-auto text-center">
           <div className="text-3xl font-bold">ΛUTH</div>
