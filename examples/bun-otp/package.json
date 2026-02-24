@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot src/index.ts",
+    "dev": "bun --hot src/index.ts --port 3101",
     "start": "NODE_ENV=production bun src/index.ts",
     "build": "bun run build.ts"
   },

@@ -1,41 +1,96 @@
 import { serve } from "bun";
 import index from "./index.html";
+import { makeRequestAuth } from "./auth";
+import { usersStore } from "./db";
 
 const server = serve({
   routes: {
     // Serve index.html for all unmatched routes.
     "/*": index,
 
-    "/api/hello": {
-      async GET(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "GET",
-        });
-      },
-      async PUT(req) {
-        return Response.json({
-          message: "Hello, world!",
-          method: "PUT",
-        });
+    "/api/request-otp": {
+      async POST(req) {
+        const resHeaders = new Headers();
+        const auth = makeRequestAuth(req, resHeaders);
+        const data = await req.json();
+        const result = await auth.requestOtp(data);
+        return Response.json(result, { headers: resHeaders });
       },
     },
 
-    "/api/hello/:name": async (req) => {
-      const name = req.params.name;
-      return Response.json({
-        message: `Hello, ${name}!`,
-      });
+    "/api/verify-otp": {
+      async POST(req) {
+        const resHeaders = new Headers();
+        const auth = makeRequestAuth(req, resHeaders);
+        const data = await req.json();
+
+        const result = await auth.verifyOtp(data);
+        if (!result.success) {
+          return Response.json({ success: false }, { headers: resHeaders });
+        }
+
+        const { userId, isNew } = usersStore.upsert(data.identifier);
+        const session = await auth.createSession({ userId });
+        if (!session.success) {
+          return Response.json({ success: false }, { headers: resHeaders });
+        }
+
+        return Response.json({ success: true, isNew }, { headers: resHeaders });
+      },
+    },
+
+    "/api/change-email": {
+      async POST(req) {
+        const resHeaders = new Headers();
+        const auth = makeRequestAuth(req, resHeaders);
+        const data = await req.json();
+
+        const session = await auth.getSession();
+        if (!session) {
+          return Response.json({ success: false }, { headers: resHeaders });
+        }
+
+        const result = await auth.verifyOtp(data);
+        if (!result.success) {
+          return Response.json({ success: false }, { headers: resHeaders });
+        }
+
+        const user = usersStore.updateEmail(session.userId, data.identifier);
+        if (!user) {
+          return Response.json({ success: false }, { headers: resHeaders });
+        }
+
+        return Response.json(
+          { success: true, viewer: user },
+          { headers: resHeaders },
+        );
+      },
+    },
+
+    "/api/sign-out": {
+      async POST(req) {
+        const resHeaders = new Headers();
+        const auth = makeRequestAuth(req, resHeaders);
+        await auth.signOut();
+        return Response.json({ success: true }, { headers: resHeaders });
+      },
+    },
+
+    "/api/viewer": {
+      async GET(req) {
+        const resHeaders = new Headers();
+        const auth = makeRequestAuth(req, resHeaders);
+        const session = await auth.getSession();
+        const viewer = session ? usersStore.get(session.userId) : undefined;
+        return Response.json(viewer ?? null, { headers: resHeaders });
+      },
     },
   },
 
   development: process.env.NODE_ENV !== "production" && {
-    // Enable browser hot reloading in development
     hmr: true,
-
-    // Echo console logs from the browser to the server
     console: true,
   },
 });
 
-console.log(`🚀 Server running at ${server.url}`);
+console.log(`Server running at ${server.url}`);

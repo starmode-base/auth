@@ -122,9 +122,7 @@ function AuthFlow(props: { onSignedIn: () => void }) {
         valid={valid}
         error={error}
         onSubmit={async () => {
-          const result = await requestOtp({
-            data: { identifier: emailInput },
-          });
+          const result = await requestOtp({ identifier: emailInput });
 
           if (result.success) {
             setStep("otp");
@@ -147,7 +145,8 @@ function AuthFlow(props: { onSignedIn: () => void }) {
       error={error}
       onSubmit={async () => {
         const result = await verifyOtp({
-          data: { identifier: emailInput, otp: otpInput },
+          identifier: emailInput,
+          otp: otpInput,
         });
 
         if (result.success) {
@@ -192,9 +191,7 @@ function ChangeEmailFlow(props: {
           valid={valid}
           error={error}
           onSubmit={async () => {
-            const result = await requestOtp({
-              data: { identifier: emailInput },
-            });
+            const result = await requestOtp({ identifier: emailInput });
 
             if (result.success) {
               setStep("otp");
@@ -234,7 +231,8 @@ function ChangeEmailFlow(props: {
         error={error}
         onSubmit={async () => {
           const result = await changeEmail({
-            data: { identifier: emailInput, otp: otpInput },
+            identifier: emailInput,
+            otp: otpInput,
           });
 
           if (result.success) {
