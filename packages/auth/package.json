@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./tanstack": "./src/presets/session-transport-tanstack.ts"
+    "./tanstack": "./src/presets/session-transport-tanstack.ts",
+    "./nextjs": "./src/presets/session-transport-nextjs.ts"
   },
   "files": [
     "src/"
@@ -15,10 +16,14 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@tanstack/react-start": "^1.161.1"
+    "@tanstack/react-start": "^1.161.1",
+    "next": "^16.1.6"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-start": {
+      "optional": true
+    },
+    "next": {
       "optional": true
     }
   },
