@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "format": "prettier --write .",
-    "check": "echo '📦 packages/auth' && (cd packages/auth && tsc); for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && tsc); done",
+    "check": "for dir in packages/*/; do echo \"📦 $dir\" && (cd \"$dir\" && tsc); done; for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && tsc); done",
     "test": "vitest run",
     "test:watch": "vitest",
     "outdated": "bun outdated --recursive",
