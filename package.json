@@ -12,7 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "outdated": "bun outdated --recursive",
-    "update": "echo '📦 Root' && bun update; for dir in examples/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && bun update); done",
+    "update": "echo '📦 Root' && bun update; for dir in examples/*/ packages/*/; do echo '' && echo \"📦 $dir\" && (cd \"$dir\" && bun update); done",
     "clean:soft": "rm -rf node_modules examples/*/{node_modules,.output,tsconfig.tsbuildinfo} packages/*/node_modules && bun install",
     "clean:hard": "rm -rf node_modules examples/*/{node_modules,.output,tsconfig.tsbuildinfo} packages/*/node_modules bun.lock && bun install"
   },
