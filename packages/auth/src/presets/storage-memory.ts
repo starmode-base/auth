@@ -67,6 +67,17 @@ export const memorySessionStorage = (): MemorySessionStorage => {
       store.delete(sessionId);
     },
 
+    deleteAll: async (sessionId) => {
+      const target = store.get(sessionId);
+      if (!target) return;
+
+      for (const [id, record] of store) {
+        if (record.userId === target.userId) {
+          store.delete(id);
+        }
+      }
+    },
+
     _store: store,
   };
 };
@@ -100,6 +111,10 @@ export const memoryCredentialStorage = (): MemoryCredentialStorage => {
       if (record) {
         record.credential.counter = counter;
       }
+    },
+
+    delete: async (credentialId) => {
+      store.delete(credentialId);
     },
 
     _store: store,

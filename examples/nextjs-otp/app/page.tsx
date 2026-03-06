@@ -6,6 +6,7 @@ import {
   verifyOtp,
   changeEmail,
   signOut,
+  signOutAll,
   getViewer,
 } from "./actions";
 import { requestOtpSchema, verifyOtpSchema } from "./schema";
@@ -191,6 +192,15 @@ function Authenticated(props: {
                 }}
               >
                 Sign out
+              </button>
+              <button
+                className="rounded-full border border-gray-300 px-4 py-2 text-gray-900 hover:bg-gray-100"
+                onClick={async () => {
+                  await signOutAll();
+                  props.onSignedOut();
+                }}
+              >
+                Sign out all devices
               </button>
             </div>
           </>

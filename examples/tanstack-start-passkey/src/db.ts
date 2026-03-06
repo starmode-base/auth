@@ -1,27 +1,23 @@
+import { memoryCredentialStorage } from "@starmode/auth";
+
 /**
- * In-memory user store
+ * In-memory database
  *
- * Simple in-memory user store for demonstration purposes. In a real app this
- * would be replaced with a database.
+ * Simple in-memory stores for demonstration purposes. In a real app these
+ * would be replaced with database queries.
  */
+
 const users = new Map<string, { userId: string }>();
 let userIdCounter = 0;
 
-/**
- * In-memory user store
- */
-export const usersStore = {
-  /**
-   * Create a new user with auto-generated ID
-   */
-  create: () => {
-    const userId = `user_${++userIdCounter}`;
-    users.set(userId, { userId });
-    return { userId };
+export const db = {
+  users: {
+    create: () => {
+      const userId = `user_${++userIdCounter}`;
+      users.set(userId, { userId });
+      return { userId };
+    },
+    get: (userId: string) => users.get(userId),
   },
-
-  /**
-   * Get user by ID
-   */
-  get: (userId: string) => users.get(userId),
+  credentials: memoryCredentialStorage(),
 };

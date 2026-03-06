@@ -38,6 +38,8 @@ export type SessionStorage = {
   store: (record: SessionRecord) => Promise<void>;
   get: (sessionId: string) => Promise<SessionRecord | null>;
   delete: (sessionId: string) => Promise<void>;
+  /** Delete all sessions belonging to the same user as this session */
+  deleteAll: (sessionId: string) => Promise<void>;
 };
 
 /** Credential (passkey) storage adapter */
@@ -48,6 +50,7 @@ export type CredentialStorage = {
     credentialId: string,
   ) => Promise<{ userId: string; credential: StoredCredential } | null>;
   updateCounter: (credentialId: string, counter: number) => Promise<void>;
+  delete: (credentialId: string) => Promise<void>;
 };
 
 /**
@@ -292,6 +295,14 @@ export type CoreMethods = {
    * Invalidates the current session and clears the session cookie.
    */
   signOut: () => Promise<void>;
+
+  /**
+   * Sign out all sessions for the current user
+   *
+   * Deletes every session for the authenticated user (including the current
+   * one) and clears the session cookie.
+   */
+  signOutAll: () => Promise<void>;
 };
 
 /** OTP methods — available when otpTransport is configured */

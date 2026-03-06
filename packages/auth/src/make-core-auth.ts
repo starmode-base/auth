@@ -155,6 +155,20 @@ export function makeCoreAuth(config: {
 
       sessionTransport.clear();
     },
+
+    async signOutAll() {
+      const token = sessionTransport.get();
+
+      if (token) {
+        const decoded = await sessionCodec.decode(token);
+
+        if (decoded) {
+          await storage.deleteAll(decoded.sessionId);
+        }
+      }
+
+      sessionTransport.clear();
+    },
   };
 
   return { methods, storeSession, result };

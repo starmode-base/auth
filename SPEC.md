@@ -524,19 +524,19 @@ Example features:
 - [x] Sign in (passkey)
 - [x] Sign out
 - [ ] Unified "continue with email" flow (handles new + existing users)
-- [ ] Add passkey (while authenticated)
-- [ ] Add/change email or phone (OTP verification for new identifiers)
-- [ ] Sign out all devices
-- [ ] Manage passkeys UI
+- [x] Add passkey (while authenticated)
+- [x] Add/change email (OTP verification for new identifier)
+- [x] Sign out all devices
+- [x] Manage passkeys UI
 - [ ] Manage sessions UI
 - [ ] Strict mode demo (disable OTP for existing users)
 
 Library additions (as needed):
 
-- [ ] `allowCredentials` in `generateAuthenticationOptions()` — filter passkeys by identifier
+- [ ] `allowCredentials` in `generateAuthenticationOptions()` — see design notes below
 - [ ] Make `identifier` optional in `createRegistrationToken()` — support passkey-only sign-up
-- [ ] Session management primitives (`getSessions`, `signOutAll`)
-- [ ] Passkey management primitives (`getPasskeys`, `deletePasskey`)
+- [x] Session management: `signOutAll()` on core methods, `deleteByUserId()` on `SessionStorage`
+- [x] Passkey management: `delete()` on `CredentialStorage` — apps call storage directly for list/delete
 
 Suggested order:
 
@@ -547,6 +547,35 @@ Suggested order:
 5. Session management (`getSessions`, `signOutAll`) — needs new primitives
 6. Passkey management (`getPasskeys`, `deletePasskey`) — needs new primitives
 7. Strict mode — demonstrate disabling OTP for existing users
+
+### `allowCredentials` design notes
+
+The `allowCredentials` field on `PublicKeyCredentialRequestOptions` tells the browser which credential IDs the server expects, limiting the passkey picker to only those passkeys.
+
+**Currently:** `generateAuthenticationOptions()` leaves `allowCredentials` empty, which means "discoverable credential" — the browser picks from all passkeys matching the `rpId`. This works for the passkey-only flow because modern passkeys use `residentKey: "preferred"` and are discoverable by default.
+
+**When it matters:**
+
+- **Non-discoverable credentials** (e.g., security keys in non-resident mode): These _require_ `allowCredentials` because the authenticator can't enumerate stored credentials — the server must tell it which credential IDs to look for.
+- **Identifier-first flows** ("enter email, then passkey"): The server looks up credential IDs by email, passes them as `allowCredentials`, and the browser only offers matching passkeys. This is the "continue with email" pattern from the OTP+passkey combined flow.
+- **Shared device clarity**: When multiple people use the same device, filtering avoids showing all accounts in the passkey picker.
+
+**When it doesn't matter:**
+
+- On production domains, the browser already filters passkeys by `rpId` — users only see passkeys for your site. The "too many passkeys" problem is mostly a development issue on `localhost`.
+- For discoverable passkeys (the default), the browser handles selection natively.
+
+**API shape (planned):**
+
+```
+generateAuthenticationOptions()                          // current — discoverable, no filter
+generateAuthenticationOptions({ userId })                // planned — filter by user's stored credentials
+generateAuthenticationOptions({ allowCredentials })      // planned — explicit credential ID list
+```
+
+The `userId` variant would look up credentials via `CredentialStorage.get(userId)` and populate `allowCredentials` automatically. The explicit variant gives apps full control.
+
+**Deferred until:** The combined OTP+passkey example with identifier-first flow, where the user enters their email before authenticating with a passkey.
 
 _Later: Next.js example_
 

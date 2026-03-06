@@ -4,15 +4,21 @@ import {
   verifyRegistration,
   startAuthentication,
   verifyAuthentication,
+  startAddPasskey,
+  listPasskeys,
+  removePasskey,
   signOut,
+  signOutAll,
   getViewer,
 } from "../auth-rpc";
 import { createPasskey, getPasskey } from "@starmode/auth/client";
+import { AuthLayout, useViewer } from "@starmode/auth-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 
 type Viewer = { userId: string };
+type PasskeyEntry = { id: string };
 
 function UnauthenticatedView(props: { onSignedIn: () => void }) {
   const [error, setError] = useState<string | null>(null);
@@ -116,43 +122,162 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
   );
 }
 
+function PasskeyList(props: {
+  passkeys: PasskeyEntry[];
+  onAdd: () => void;
+  onRemove: (id: string) => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-sm font-medium text-gray-500">Passkeys</div>
+      <div className="flex flex-col gap-2">
+        {props.passkeys.map((passkey, i) => (
+          <div
+            key={passkey.id}
+            className="flex items-center justify-between rounded-lg border border-gray-200 px-4 py-3"
+          >
+            <span className="text-sm text-gray-700">Passkey {i + 1}</span>
+            {props.passkeys.length > 1 ? (
+              <button
+                className="text-sm text-red-500 hover:text-red-700"
+                onClick={() => props.onRemove(passkey.id)}
+                disabled={props.loading}
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <button
+        className="rounded-full border border-gray-300 py-2 text-sm text-gray-900 hover:bg-gray-100 disabled:opacity-40"
+        onClick={props.onAdd}
+        disabled={props.loading}
+      >
+        Add a passkey
+      </button>
+    </div>
+  );
+}
+
 function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
+  const [passkeys, setPasskeys] = useState<PasskeyEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPasskeys = async () => {
+    const result = await listPasskeys();
+    setPasskeys(result.passkeys);
+  };
+
+  useEffect(() => {
+    fetchPasskeys();
+  }, []);
+
+  const handleAddPasskey = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const start = await startAddPasskey();
+
+      if (!start.success) {
+        setError("Failed to start passkey registration");
+        setLoading(false);
+        return;
+      }
+
+      const credential = await createPasskey(start.options);
+
+      if (!credential) {
+        setLoading(false);
+        return;
+      }
+
+      const result = await verifyRegistration({
+        data: {
+          registrationToken: start.registrationToken,
+          credential,
+        },
+      });
+
+      if (result.success) {
+        await fetchPasskeys();
+      } else {
+        setError("Failed to register passkey");
+      }
+    } catch {
+      setError("Passkey registration failed");
+    }
+
+    setLoading(false);
+  };
+
+  const handleRemovePasskey = async (credentialId: string) => {
+    setLoading(true);
+    setError(null);
+
+    const result = await removePasskey({ data: { credentialId } });
+
+    if (result.success) {
+      await fetchPasskeys();
+    } else {
+      setError("Failed to remove passkey");
+    }
+
+    setLoading(false);
+  };
+
   return (
     <div className="m-auto flex w-full max-w-sm flex-col gap-8 p-8">
       <div className="flex flex-col gap-2">
         <div className="text-3xl font-semibold">Welcome</div>
         <div className="text-gray-500">{props.viewer.userId}</div>
       </div>
-      <button
-        className="rounded-full bg-gray-900 px-4 py-3 text-white hover:bg-gray-800"
-        onClick={async () => {
-          await signOut();
-          props.onSignedOut();
-        }}
-      >
-        Sign out
-      </button>
+
+      <PasskeyList
+        passkeys={passkeys}
+        onAdd={handleAddPasskey}
+        onRemove={handleRemovePasskey}
+        loading={loading}
+      />
+
+      {error !== null ? (
+        <div className="text-center text-red-500">{error}</div>
+      ) : null}
+
+      <div className="flex gap-2">
+        <button
+          className="rounded-full bg-gray-900 px-4 py-3 text-white hover:bg-gray-800"
+          onClick={async () => {
+            await signOut();
+            props.onSignedOut();
+          }}
+        >
+          Sign out
+        </button>
+        <button
+          className="rounded-full border border-gray-300 px-4 py-3 text-gray-900 hover:bg-gray-100"
+          onClick={async () => {
+            await signOutAll();
+            props.onSignedOut();
+          }}
+        >
+          Sign out all devices
+        </button>
+      </div>
     </div>
   );
 }
 
 function App() {
-  const [viewer, setViewer] = useState<Viewer>();
-  const [loading, setLoading] = useState(true);
-
-  const fetchViewer = async () => {
-    setViewer(await getViewer());
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchViewer();
-  }, []);
+  const { viewer, setViewer, loading, fetchViewer } = useViewer(getViewer);
 
   if (loading) return null;
 
   return (
-    <div className="grid min-h-dvh gap-4 p-4 text-gray-950 md:grid-cols-2">
+    <AuthLayout demo="Passkey demo">
       {viewer ? (
         <Authenticated
           viewer={viewer}
@@ -161,12 +286,6 @@ function App() {
       ) : (
         <UnauthenticatedView onSignedIn={fetchViewer} />
       )}
-      <div className="flex gap-8 rounded-xl bg-[#F400A1]/25 p-8 text-black">
-        <div className="m-auto text-center">
-          <div className="text-3xl font-bold">ΛUTH</div>
-          <p>Passkey demo</p>
-        </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

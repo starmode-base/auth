@@ -1,45 +1,35 @@
 /**
- * In-memory user store
+ * In-memory database
  *
- * Simple in-memory user store for demonstration purposes. In a real app this
- * would be replaced with a database.
+ * Simple in-memory stores for demonstration purposes. In a real app these
+ * would be replaced with database queries.
  */
+
 const users = new Map<string, { userId: string; email: string }>();
 let userIdCounter = 0;
 
-/**
- * In-memory user store
- */
-export const usersStore = {
-  /**
-   * Upsert user
-   */
-  upsert: (email: string) => {
-    const exists = Array.from(users.values()).find((u) => u.email === email);
+export const db = {
+  users: {
+    upsert: (email: string) => {
+      const exists = Array.from(users.values()).find((u) => u.email === email);
 
-    if (exists) {
-      return { userId: exists.userId, isNew: false };
-    }
+      if (exists) {
+        return { userId: exists.userId, isNew: false };
+      }
 
-    const userId = `user_${++userIdCounter}`;
+      const userId = `user_${++userIdCounter}`;
+      users.set(userId, { userId, email });
 
-    users.set(userId, { userId, email });
+      return { userId, isNew: true };
+    },
 
-    return { userId, isNew: true };
-  },
+    get: (userId: string) => users.get(userId),
 
-  /**
-   * Get user by ID
-   */
-  get: (userId: string) => users.get(userId),
-
-  /**
-   * Update user email
-   */
-  updateEmail: (userId: string, email: string) => {
-    const user = users.get(userId);
-    if (!user) return undefined;
-    user.email = email;
-    return user;
+    updateEmail: (userId: string, email: string) => {
+      const user = users.get(userId);
+      if (!user) return undefined;
+      user.email = email;
+      return user;
+    },
   },
 };

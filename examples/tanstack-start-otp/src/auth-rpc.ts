@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { usersStore } from "./db";
+import { db } from "./db";
 import { auth } from "./auth";
 
 /**
@@ -39,7 +39,7 @@ export const verifyOtp = createServerFn({ method: "POST" })
 
     if (!result.success) return { success: false };
 
-    const { userId, isNew } = usersStore.upsert(data.identifier);
+    const { userId, isNew } = db.users.upsert(data.identifier);
 
     const session = await auth.createSession({ userId });
 
@@ -63,7 +63,7 @@ export const changeEmail = createServerFn({ method: "POST" })
     const result = await auth.verifyOtp(data);
     if (!result.success) return { success: false };
 
-    const user = usersStore.updateEmail(session.userId, data.identifier);
+    const user = db.users.updateEmail(session.userId, data.identifier);
     if (!user) return { success: false };
 
     return { success: true, viewer: user };
@@ -79,6 +79,17 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
 });
 
 /**
+ * Sign out all devices
+ *
+ * Deletes every session for the current user and clears the session cookie.
+ */
+export const signOutAll = createServerFn({ method: "POST" }).handler(
+  async () => {
+    await auth.signOutAll();
+  },
+);
+
+/**
  * Get viewer server function
  *
  * Returns the current user if authenticated, or undefined otherwise.
@@ -86,5 +97,5 @@ export const signOut = createServerFn({ method: "POST" }).handler(async () => {
 export const getViewer = createServerFn().handler(async () => {
   const session = await auth.getSession();
 
-  return session ? usersStore.get(session.userId) : undefined;
+  return session ? db.users.get(session.userId) : undefined;
 });

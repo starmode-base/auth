@@ -12,12 +12,14 @@ import type { OtpTransportAdapter } from "./types";
 import type {
   MemoryOtpStorage,
   MemorySessionStorage,
+  MemoryCredentialStorage,
 } from "./presets/storage-memory";
 import type { SessionTransportMemoryAdapter } from "./presets/session-transport-memory";
 
 describe("auth integration", () => {
   let otpStorage: MemoryOtpStorage;
   let sessionStorage: MemorySessionStorage;
+  let credentialStorage: MemoryCredentialStorage;
   let sentOtps: { identifier: string; otp: string }[];
   let auth: ReturnType<typeof makeAuth>;
   let sessionTransport: SessionTransportMemoryAdapter;
@@ -25,6 +27,7 @@ describe("auth integration", () => {
   beforeEach(() => {
     otpStorage = memoryOtpStorage();
     sessionStorage = memorySessionStorage();
+    credentialStorage = memoryCredentialStorage();
     sentOtps = [];
     sessionTransport = sessionTransportMemory();
 
@@ -47,7 +50,7 @@ describe("auth integration", () => {
         transport: otpTransport,
       },
       passkey: {
-        storage: memoryCredentialStorage(),
+        storage: credentialStorage,
         registrationCodec: registrationHmac({
           secret: "test-secret",
           ttl: 300,
@@ -208,6 +211,92 @@ describe("auth integration", () => {
     });
   });
 
+  describe("signOutAll", () => {
+    it("deletes all sessions for the current user", async () => {
+      const codec = sessionHmac({
+        secret: "test-secret",
+        ttl: 10 * 60 * 1000,
+      });
+
+      await sessionStorage.store({
+        sessionId: "session_a",
+        userId: "user_1",
+        expiresAt: null,
+      });
+      await sessionStorage.store({
+        sessionId: "session_b",
+        userId: "user_1",
+        expiresAt: null,
+      });
+
+      const token = await codec.encode({
+        sessionId: "session_a",
+        sessionExp: null,
+        userId: "user_1",
+      });
+
+      sessionTransport.setToken(token);
+      await auth.signOutAll();
+
+      expect(await sessionStorage.get("session_a")).toBeNull();
+      expect(await sessionStorage.get("session_b")).toBeNull();
+    });
+
+    it("does not delete other users' sessions", async () => {
+      const codec = sessionHmac({
+        secret: "test-secret",
+        ttl: 10 * 60 * 1000,
+      });
+
+      await sessionStorage.store({
+        sessionId: "session_user1",
+        userId: "user_1",
+        expiresAt: null,
+      });
+      await sessionStorage.store({
+        sessionId: "session_user2",
+        userId: "user_2",
+        expiresAt: null,
+      });
+
+      const token = await codec.encode({
+        sessionId: "session_user1",
+        sessionExp: null,
+        userId: "user_1",
+      });
+
+      sessionTransport.setToken(token);
+      await auth.signOutAll();
+
+      expect(await sessionStorage.get("session_user1")).toBeNull();
+      expect(await sessionStorage.get("session_user2")).not.toBeNull();
+    });
+
+    it("clears the session cookie", async () => {
+      const codec = sessionHmac({
+        secret: "test-secret",
+        ttl: 10 * 60 * 1000,
+      });
+
+      await sessionStorage.store({
+        sessionId: "session_1",
+        userId: "user_1",
+        expiresAt: null,
+      });
+
+      const token = await codec.encode({
+        sessionId: "session_1",
+        sessionExp: null,
+        userId: "user_1",
+      });
+
+      sessionTransport.setToken(token);
+      await auth.signOutAll();
+
+      expect(sessionTransport.get()).toBeUndefined();
+    });
+  });
+
   describe("full OTP + registration token flow", () => {
     it("request OTP → verify → create registration token", async () => {
       await auth.requestOtp({ identifier: "user@example.com" });
@@ -236,6 +325,71 @@ describe("auth integration", () => {
         userId,
         identifier: "user@example.com",
       });
+    });
+  });
+
+  describe("credential storage delete", () => {
+    it("removes a credential by ID", async () => {
+      await credentialStorage.store({
+        userId: "user_1",
+        credential: {
+          id: "cred_1",
+          publicKey: new Uint8Array(65),
+          counter: 0,
+        },
+      });
+
+      await credentialStorage.delete("cred_1");
+
+      expect(await credentialStorage.getById("cred_1")).toBeNull();
+    });
+
+    it("removes credential from user's list", async () => {
+      await credentialStorage.store({
+        userId: "user_1",
+        credential: {
+          id: "cred_1",
+          publicKey: new Uint8Array(65),
+          counter: 0,
+        },
+      });
+      await credentialStorage.store({
+        userId: "user_1",
+        credential: {
+          id: "cred_2",
+          publicKey: new Uint8Array(65),
+          counter: 0,
+        },
+      });
+
+      await credentialStorage.delete("cred_1");
+
+      const remaining = await credentialStorage.get("user_1");
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.id).toBe("cred_2");
+    });
+
+    it("does not affect other users' credentials", async () => {
+      await credentialStorage.store({
+        userId: "user_1",
+        credential: {
+          id: "cred_1",
+          publicKey: new Uint8Array(65),
+          counter: 0,
+        },
+      });
+      await credentialStorage.store({
+        userId: "user_2",
+        credential: {
+          id: "cred_2",
+          publicKey: new Uint8Array(65),
+          counter: 0,
+        },
+      });
+
+      await credentialStorage.delete("cred_1");
+
+      expect(await credentialStorage.getById("cred_2")).not.toBeNull();
     });
   });
 });

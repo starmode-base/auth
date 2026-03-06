@@ -1,7 +1,7 @@
 "use server";
 
 import { requestOtpSchema, verifyOtpSchema } from "./schema";
-import { usersStore } from "./db";
+import { db } from "./db";
 import { getAuth } from "./auth";
 
 /**
@@ -29,7 +29,7 @@ export async function verifyOtp(data: { identifier: string; otp: string }) {
   const result = await auth.verifyOtp(parsed.data);
   if (!result.success) return { success: false as const };
 
-  const { userId, isNew } = usersStore.upsert(parsed.data.identifier);
+  const { userId, isNew } = db.users.upsert(parsed.data.identifier);
 
   const session = await auth.createSession({ userId });
   if (!session.success) return { success: false as const };
@@ -54,7 +54,7 @@ export async function changeEmail(data: { identifier: string; otp: string }) {
   const result = await auth.verifyOtp(parsed.data);
   if (!result.success) return { success: false as const };
 
-  const user = usersStore.updateEmail(session.userId, parsed.data.identifier);
+  const user = db.users.updateEmail(session.userId, parsed.data.identifier);
   if (!user) return { success: false as const };
 
   return { success: true as const, viewer: user };
@@ -71,6 +71,16 @@ export async function signOut() {
 }
 
 /**
+ * Sign out all devices
+ *
+ * Deletes every session for the current user and clears the session cookie.
+ */
+export async function signOutAll() {
+  const auth = await getAuth();
+  await auth.signOutAll();
+}
+
+/**
  * Get viewer
  *
  * Returns the current user if authenticated, or undefined otherwise.
@@ -79,5 +89,5 @@ export async function getViewer() {
   const auth = await getAuth();
   const session = await auth.getSession();
 
-  return session ? usersStore.get(session.userId) : undefined;
+  return session ? db.users.get(session.userId) : undefined;
 }

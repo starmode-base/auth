@@ -4,6 +4,7 @@ import {
   verifyOtp,
   changeEmail,
   signOut,
+  signOutAll,
   getViewer,
   requestOtpSchema,
   verifyOtpSchema,
@@ -14,8 +15,10 @@ import {
   ChangeEmailStep,
   VerifyEmailStep,
   Toolbar,
+  AuthLayout,
+  useViewer,
 } from "@starmode/auth-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 export const Route = createFileRoute("/")({ component: App });
 
@@ -196,6 +199,15 @@ function Authenticated(props: {
               >
                 Sign out
               </button>
+              <button
+                className="rounded-full border border-gray-300 px-4 py-2 text-gray-900 hover:bg-gray-100"
+                onClick={async () => {
+                  await signOutAll();
+                  props.onSignedOut();
+                }}
+              >
+                Sign out all devices
+              </button>
             </div>
           </>
         )}
@@ -205,22 +217,12 @@ function Authenticated(props: {
 }
 
 function App() {
-  const [viewer, setViewer] = useState<Viewer>();
-  const [loading, setLoading] = useState(true);
-
-  const fetchViewer = async () => {
-    setViewer(await getViewer());
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchViewer();
-  }, []);
+  const { viewer, setViewer, loading, fetchViewer } = useViewer(getViewer);
 
   if (loading) return null;
 
   return (
-    <div className="grid min-h-dvh gap-4 p-4 text-gray-950 md:grid-cols-2">
+    <AuthLayout demo="One-time password demo">
       {viewer ? (
         <Authenticated
           viewer={viewer}
@@ -230,12 +232,6 @@ function App() {
       ) : (
         <AuthFlow onSignedIn={fetchViewer} />
       )}
-      <div className="flex gap-8 rounded-xl bg-[#F400A1]/25 p-8 text-black">
-        <div className="m-auto text-center">
-          <div className="text-3xl font-bold">ΛUTH</div>
-          <p>One-time password demo</p>
-        </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

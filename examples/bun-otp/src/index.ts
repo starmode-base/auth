@@ -1,7 +1,7 @@
 import { serve } from "bun";
 import index from "./index.html";
 import { makeRequestAuth } from "./auth";
-import { usersStore } from "./db";
+import { db } from "./db";
 
 const server = serve({
   routes: {
@@ -29,7 +29,7 @@ const server = serve({
           return Response.json({ success: false }, { headers: resHeaders });
         }
 
-        const { userId, isNew } = usersStore.upsert(data.identifier);
+        const { userId, isNew } = db.users.upsert(data.identifier);
         const session = await auth.createSession({ userId });
         if (!session.success) {
           return Response.json({ success: false }, { headers: resHeaders });
@@ -55,7 +55,7 @@ const server = serve({
           return Response.json({ success: false }, { headers: resHeaders });
         }
 
-        const user = usersStore.updateEmail(session.userId, data.identifier);
+        const user = db.users.updateEmail(session.userId, data.identifier);
         if (!user) {
           return Response.json({ success: false }, { headers: resHeaders });
         }
@@ -81,7 +81,7 @@ const server = serve({
         const resHeaders = new Headers();
         const auth = makeRequestAuth(req, resHeaders);
         const session = await auth.getSession();
-        const viewer = session ? usersStore.get(session.userId) : undefined;
+        const viewer = session ? db.users.get(session.userId) : undefined;
         return Response.json(viewer ?? null, { headers: resHeaders });
       },
     },

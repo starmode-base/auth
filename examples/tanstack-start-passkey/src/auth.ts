@@ -1,6 +1,5 @@
 import {
   makePasskeyAuth,
-  memoryCredentialStorage,
   memorySessionStorage,
   sessionHmac,
   registrationHmac,
@@ -9,6 +8,7 @@ import {
   sessionTransportTanstack,
   sessionCookieDefaults,
 } from "@starmode/auth/tanstack";
+import { db } from "./db";
 
 export const auth = makePasskeyAuth({
   session: {
@@ -21,7 +21,7 @@ export const auth = makePasskeyAuth({
     ttl: Infinity,
   },
   passkey: {
-    storage: memoryCredentialStorage(),
+    storage: db.credentials,
     registrationCodec: registrationHmac({
       secret: "dev-registration-secret",
       ttl: 5 * 60 * 1000,
