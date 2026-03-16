@@ -39,6 +39,8 @@ const server = serve({
       },
     },
 
+    // Advanced: OTP for identity verification while authenticated.
+    // Wire to useOtpFlow on the client to enable email changes.
     "/api/change-email": {
       async POST(req) {
         const resHeaders = new Headers();

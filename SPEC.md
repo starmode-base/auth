@@ -469,15 +469,29 @@ See `examples/tanstack-start/` for a full OTP → passkey example and `examples/
 - `examples/tanstack-start/src/lib/auth.ts` — full auth setup (`makeAuth`)
 - `examples/tanstack-start-otp/src/auth.ts` — OTP-only setup (`makeOtpAuth`)
 
-### React hooks
+### React hooks (`@repo/auth-react`)
 
-Only things that need reactive state (loading, error) or depend on other hooks need a React hook. Everything else can call the auth methods directly.
+A reference implementation package with two layers.
 
-**Hooks (manage async state):**
+Only things that need reactive state (loading, error) or multi-step orchestration need a React hook. Everything else can call the auth methods directly.
 
-- `useOtpFlow()` — manages OTP request/verify with loading/error state
-- `usePasskeyRegister()` — manages WebAuthn registration flow
-- `usePasskeySignIn()` — manages WebAuthn authentication flow
+**Core hooks** — encode correct auth flows, the publishable value:
+
+- `useOtpFlow()` — manages email → OTP state machine with step transitions, validation, and error handling
+- `usePasskeyRegistration()` — orchestrates 3-step WebAuthn registration ceremony (server start → browser createPasskey → server verify)
+- `usePasskeyAuthentication()` — orchestrates 3-step WebAuthn authentication ceremony
+
+**Example infrastructure** — keeps examples focused on auth logic, not styling:
+
+- `useAsync()` — convenience hook for loading asynchronous data (app data, not auth — exists for DRY examples only)
+- UI atoms: `Page`, `Button`, `Toolbar`, `Avatar`, `AuthLayout`
+- Step components: `EmailStep`, `OtpStep`, `ChangeEmailStep`, `VerifyEmailStep`
+- `PasskeyList` — passkey management UI
+
+**Data fetching strategy in examples:**
+
+- Meta-frameworks (Next.js, TanStack Start): use framework-native patterns (server components, route loaders)
+- Plain React (Bun): uses `useAsync` for client-side data loading
 
 **Direct calls (no hook needed):**
 
@@ -487,7 +501,7 @@ await authClient.signOut();
 await authClient.requestOtp({ identifier: email });
 ```
 
-**Note:** No `useViewer()` hook — that's app data, not auth. Use your own data fetching (React Query, SWR, server components, etc.).
+**Note:** No `useViewer()` hook — that's app data, not auth. Use your framework's data fetching (server components, route loaders, React Query, SWR, etc.).
 
 ## Scope
 

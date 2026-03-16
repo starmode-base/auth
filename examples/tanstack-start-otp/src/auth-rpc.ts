@@ -49,10 +49,11 @@ export const verifyOtp = createServerFn({ method: "POST" })
   });
 
 /**
- * Change email server function
+ * Change email (advanced: OTP for identity verification while authenticated)
  *
  * Verifies OTP for the new email, then swaps it on the authenticated user.
  * Requires an active session — the OTP proves ownership of the new address.
+ * Wire to useOtpFlow on the client to enable email changes.
  */
 export const changeEmail = createServerFn({ method: "POST" })
   .inputValidator(verifyOtpSchema)

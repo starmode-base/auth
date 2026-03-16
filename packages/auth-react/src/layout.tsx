@@ -1,21 +1,4 @@
-import { useEffect, useState } from "react";
 import type React from "react";
-
-export function useViewer<T>(getViewer: () => Promise<T | undefined>) {
-  const [viewer, setViewer] = useState<T>();
-  const [loading, setLoading] = useState(true);
-
-  const fetchViewer = async () => {
-    setViewer(await getViewer());
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchViewer();
-  }, []);
-
-  return { viewer, setViewer, loading, fetchViewer };
-}
 
 export function AuthLayout(props: { children: React.ReactNode; demo: string }) {
   return (

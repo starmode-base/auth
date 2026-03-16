@@ -38,10 +38,11 @@ export async function verifyOtp(data: { identifier: string; otp: string }) {
 }
 
 /**
- * Change email
+ * Change email (advanced: OTP for identity verification while authenticated)
  *
  * Verifies OTP for the new email, then swaps it on the authenticated user.
  * Requires an active session — the OTP proves ownership of the new address.
+ * Wire to useOtpFlow on the client to enable email changes.
  */
 export async function changeEmail(data: { identifier: string; otp: string }) {
   const parsed = verifyOtpSchema.safeParse(data);

@@ -1,5 +1,5 @@
 {
-  "name": "bun-react-template",
+  "name": "@repo/example-bun-otp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@starmode/auth": "workspace:*",
-    "@starmode/auth-react": "workspace:*",
+    "@repo/auth-react": "workspace:*",
     "bun-plugin-tailwind": "^0.1.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

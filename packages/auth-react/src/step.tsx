@@ -1,4 +1,5 @@
 import type React from "react";
+import { Page, Button } from "./atoms";
 
 export type StepProps = {
   value: string;
@@ -21,9 +22,9 @@ function Step(props: {
   inputProps?: React.ComponentProps<"input">;
 }) {
   return (
-    <form
-      className="m-auto flex w-full max-w-sm flex-col gap-8 p-8"
-      onSubmit={(e) => {
+    <Page
+      as="form"
+      onSubmit={(e: React.FormEvent) => {
         e.preventDefault();
         if (!props.valid) return;
         props.onSubmit();
@@ -46,14 +47,10 @@ function Step(props: {
           <div className="text-red-500">{props.error}</div>
         ) : null}
       </div>
-      <button
-        type="submit"
-        disabled={!props.valid}
-        className="rounded-full bg-gray-900 py-3 text-white hover:bg-gray-800 disabled:opacity-40"
-      >
+      <Button type="submit" disabled={!props.valid}>
         {props.label}
-      </button>
-    </form>
+      </Button>
+    </Page>
   );
 }
 

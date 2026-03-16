@@ -1,32 +1,22 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import {
-  requestOtp,
-  verifyOtp,
-  signOut,
-  signOutAll,
-  getViewer,
-} from "../auth-rpc";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { requestOtp, verifyOtp, signOut, signOutAll } from "./actions";
 import {
   Page,
   Button,
   EmailStep,
   OtpStep,
   Toolbar,
-  AuthLayout,
   useOtpFlow,
 } from "@repo/auth-react";
-
-export const Route = createFileRoute("/")({
-  loader: () => getViewer(),
-  component: App,
-});
 
 type Viewer = { userId: string; email: string };
 
 function AuthFlow(props: { onSignedIn: () => void }) {
   const flow = useOtpFlow({
-    requestOtp: (id) => requestOtp({ data: { identifier: id } }),
-    verify: (id, otp) => verifyOtp({ data: { identifier: id, otp } }),
+    requestOtp: (id) => requestOtp({ identifier: id }),
+    verify: (id, otp) => verifyOtp({ identifier: id, otp }),
     onSuccess: () => props.onSignedIn(),
   });
 
@@ -62,20 +52,17 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
   );
 }
 
-function App() {
-  const viewer = Route.useLoaderData();
+export function HomePage(props: { viewer?: Viewer }) {
   const router = useRouter();
 
-  return (
-    <AuthLayout demo="One-time password demo">
-      {viewer ? (
-        <Authenticated
-          viewer={viewer}
-          onSignedOut={() => router.invalidate()}
-        />
-      ) : (
-        <AuthFlow onSignedIn={() => router.invalidate()} />
-      )}
-    </AuthLayout>
-  );
+  if (props.viewer) {
+    return (
+      <Authenticated
+        viewer={props.viewer}
+        onSignedOut={() => router.refresh()}
+      />
+    );
+  }
+
+  return <AuthFlow onSignedIn={() => router.refresh()} />;
 }

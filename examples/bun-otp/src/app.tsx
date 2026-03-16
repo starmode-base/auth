@@ -1,238 +1,69 @@
 import "./index.css";
 
+import { requestOtp, verifyOtp, signOut, getViewer } from "./auth-rpc";
 import {
-  requestOtp,
-  verifyOtp,
-  changeEmail,
-  signOut,
-  getViewer,
-  requestOtpSchema,
-  verifyOtpSchema,
-} from "./auth-rpc";
-import {
+  Page,
+  Button,
   EmailStep,
   OtpStep,
-  ChangeEmailStep,
-  VerifyEmailStep,
   Toolbar,
-} from "@starmode/auth-react";
-import { useEffect, useState } from "react";
+  AuthLayout,
+  useAsync,
+  useOtpFlow,
+} from "@repo/auth-react";
 
 type Viewer = { userId: string; email: string };
 
 function AuthFlow(props: { onSignedIn: () => void }) {
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [emailInput, setEmailInput] = useState("");
-  const [otpInput, setOtpInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const flow = useOtpFlow({
+    requestOtp: (id) => requestOtp({ identifier: id }),
+    verify: (id, otp) => verifyOtp({ identifier: id, otp }),
+    onSuccess: () => props.onSignedIn(),
+  });
 
-  if (step === "email") {
-    const valid =
-      requestOtpSchema.shape.identifier.safeParse(emailInput).success;
-
-    return (
-      <EmailStep
-        value={emailInput}
-        onChange={setEmailInput}
-        valid={valid}
-        error={error}
-        onSubmit={async () => {
-          const result = await requestOtp({ identifier: emailInput });
-
-          if (result.success) {
-            setStep("otp");
-            setError(null);
-          } else {
-            setError("Failed to send one-time password");
-          }
-        }}
-      />
-    );
-  }
-
-  const valid = verifyOtpSchema.shape.otp.safeParse(otpInput).success;
-
-  return (
-    <OtpStep
-      value={otpInput}
-      onChange={setOtpInput}
-      valid={valid}
-      error={error}
-      onSubmit={async () => {
-        const result = await verifyOtp({
-          identifier: emailInput,
-          otp: otpInput,
-        });
-
-        if (result.success) {
-          props.onSignedIn();
-        } else {
-          setError("Invalid one-time password");
-        }
-      }}
-    />
+  return flow.step === "email" ? (
+    <EmailStep {...flow.emailStepProps} />
+  ) : (
+    <OtpStep {...flow.otpStepProps} />
   );
 }
 
-function ChangeEmailFlow(props: {
-  onChanged: (viewer: Viewer) => void;
-  onCancel: () => void;
-}) {
-  const [step, setStep] = useState<"email" | "otp">("email");
-  const [emailInput, setEmailInput] = useState("");
-  const [otpInput, setOtpInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  if (step === "email") {
-    const valid =
-      requestOtpSchema.shape.identifier.safeParse(emailInput).success;
-
-    return (
-      <>
-        <ChangeEmailStep
-          value={emailInput}
-          onChange={setEmailInput}
-          valid={valid}
-          error={error}
-          onSubmit={async () => {
-            const result = await requestOtp({ identifier: emailInput });
-
-            if (result.success) {
-              setStep("otp");
-              setError(null);
-            } else {
-              setError("Failed to send one-time password");
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="text-gray-500 hover:text-gray-700"
-          onClick={props.onCancel}
-        >
-          Cancel
-        </button>
-      </>
-    );
-  }
-
-  const valid = verifyOtpSchema.shape.otp.safeParse(otpInput).success;
-
+function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
   return (
-    <>
-      <VerifyEmailStep
-        value={otpInput}
-        onChange={setOtpInput}
-        valid={valid}
-        error={error}
-        onSubmit={async () => {
-          const result = await changeEmail({
-            identifier: emailInput,
-            otp: otpInput,
-          });
-
-          if (result.success) {
-            props.onChanged(result.viewer);
-          } else {
-            setError("Invalid one-time password");
-          }
-        }}
-      />
-      <button
-        type="button"
-        className="text-gray-500 hover:text-gray-700"
-        onClick={props.onCancel}
-      >
-        Cancel
-      </button>
-    </>
-  );
-}
-
-function Authenticated(props: {
-  viewer: Viewer;
-  onViewerChanged: (viewer: Viewer) => void;
-  onSignedOut: () => void;
-}) {
-  const [changingEmail, setChangingEmail] = useState(false);
-
-  return (
-    <div className="flex flex-col">
+    <Page>
       <Toolbar email={props.viewer.email} />
-
-      <div className="m-auto flex w-full max-w-sm flex-col gap-8">
-        {changingEmail ? (
-          <ChangeEmailFlow
-            onChanged={(viewer) => {
-              props.onViewerChanged(viewer);
-              setChangingEmail(false);
-            }}
-            onCancel={() => setChangingEmail(false)}
-          />
-        ) : (
-          <>
-            <div className="flex flex-col gap-2">
-              <div className="text-3xl font-semibold">Welcome</div>
-              <div className="text-gray-500">{props.viewer?.email}</div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="rounded-full bg-gray-900 px-4 py-2 text-white"
-                onClick={() => {
-                  setChangingEmail(true);
-                }}
-              >
-                Change email
-              </button>
-              <button
-                className="rounded-full bg-gray-900 px-4 py-2 text-white"
-                onClick={async () => {
-                  await signOut();
-                  props.onSignedOut();
-                }}
-              >
-                Sign out
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+      <Button
+        onClick={async () => {
+          await signOut();
+          props.onSignedOut();
+        }}
+      >
+        Sign out
+      </Button>
+    </Page>
   );
 }
 
 export function App() {
-  const [viewer, setViewer] = useState<Viewer>();
-  const [loading, setLoading] = useState(true);
-
-  const fetchViewer = async () => {
-    setViewer(await getViewer());
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchViewer();
-  }, []);
+  const {
+    data: viewer,
+    setData: setViewer,
+    loading,
+    refetch,
+  } = useAsync<Viewer>(getViewer);
 
   if (loading) return null;
 
   return (
-    <div className="grid min-h-dvh gap-4 p-4 text-gray-950 md:grid-cols-2">
+    <AuthLayout demo="One-time password demo">
       {viewer ? (
         <Authenticated
           viewer={viewer}
-          onViewerChanged={setViewer}
           onSignedOut={() => setViewer(undefined)}
         />
       ) : (
-        <AuthFlow onSignedIn={fetchViewer} />
+        <AuthFlow onSignedIn={refetch} />
       )}
-      <div className="flex gap-8 rounded-xl bg-[#F400A1]/25 p-8 text-black">
-        <div className="m-auto text-center">
-          <div className="text-3xl font-bold">ΛUTH</div>
-          <p>One-time password demo</p>
-        </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

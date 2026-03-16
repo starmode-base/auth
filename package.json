@@ -1,5 +1,5 @@
 {
-  "name": "@auth/monorepo",
+  "name": "@repo/monorepo",
   "private": true,
   "packageManager": "bun@1.3.4",
   "workspaces": [

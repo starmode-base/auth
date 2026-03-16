@@ -1,5 +1,5 @@
 {
-  "name": "tanstack-start-passkey",
+  "name": "@repo/example-tanstack-passkey",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@starmode/auth": "workspace:*",
-    "@starmode/auth-react": "workspace:*",
+    "@repo/auth-react": "workspace:*",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-router": "^1.166.2",
     "@tanstack/react-start": "^1.166.2",
