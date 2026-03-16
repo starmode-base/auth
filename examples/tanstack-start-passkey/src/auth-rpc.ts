@@ -8,7 +8,7 @@ import type {
 } from "@starmode/auth/client";
 
 /**
- * Start passkey registration
+ * Server function: Start passkey registration
  *
  * Creates a new user, generates a registration token, and returns WebAuthn
  * registration options for the browser ceremony.
@@ -37,21 +37,18 @@ export const startRegistration = createServerFn({ method: "POST" }).handler(
 );
 
 /**
- * Verify passkey registration schema
- */
-const verifyRegistrationSchema = z.object({
-  registrationToken: z.string(),
-  credential: z.any() as z.ZodType<RegistrationCredential>,
-});
-
-/**
- * Verify passkey registration
+ * Server function: Verify passkey registration
  *
  * Verifies the credential from the browser ceremony, stores the passkey,
  * and creates a session.
  */
 export const verifyRegistration = createServerFn({ method: "POST" })
-  .inputValidator(verifyRegistrationSchema)
+  .inputValidator(
+    z.object({
+      registrationToken: z.string(),
+      credential: z.any() as z.ZodType<RegistrationCredential>,
+    }),
+  )
   .handler(async ({ data }) => {
     const result = await auth.verifyRegistration({
       registrationToken: data.registrationToken,
@@ -64,7 +61,7 @@ export const verifyRegistration = createServerFn({ method: "POST" })
   });
 
 /**
- * Start adding a passkey to an authenticated user
+ * Server function: Start adding a passkey to an authenticated user
  *
  * Requires an active session. Creates a registration token for the current
  * user and returns WebAuthn registration options.
@@ -94,7 +91,7 @@ export const startAddPasskey = createServerFn({ method: "POST" }).handler(
 );
 
 /**
- * Start passkey authentication
+ * Server function: Start passkey authentication
  *
  * Generates WebAuthn authentication options for the browser ceremony.
  */
@@ -131,7 +128,7 @@ export const verifyAuthentication = createServerFn({ method: "POST" })
   });
 
 /**
- * List passkeys for the current user
+ * Server function: List passkeys for the current user
  *
  * Returns stored credential metadata for the authenticated user.
  */
@@ -149,7 +146,7 @@ export const listPasskeys = createServerFn().handler(async () => {
 });
 
 /**
- * Remove a passkey
+ * Server function: Remove a passkey
  *
  * Deletes a passkey for the current user. Refuses to delete the last passkey.
  */
@@ -170,27 +167,25 @@ export const removePasskey = createServerFn({ method: "POST" })
   });
 
 /**
- * Sign out
+ * Server function: Sign out
  *
  * Invalidates the current session and clears the session cookie.
  */
-export const signOut = createServerFn({ method: "POST" }).handler(async () => {
-  await auth.signOut();
-});
-
-/**
- * Sign out all devices
- *
- * Deletes every session for the current user and clears the session cookie.
- */
-export const signOutAll = createServerFn({ method: "POST" }).handler(
-  async () => {
-    await auth.signOutAll();
-  },
+export const signOut = createServerFn({ method: "POST" }).handler(() =>
+  auth.signOut(),
 );
 
 /**
- * Get viewer
+ * Server function: Sign out all devices
+ *
+ * Deletes every session for the current user and clears the session cookie.
+ */
+export const signOutAll = createServerFn({ method: "POST" }).handler(() =>
+  auth.signOutAll(),
+);
+
+/**
+ * Server function: Get viewer
  *
  * Returns the current user if authenticated, or undefined otherwise.
  */

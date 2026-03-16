@@ -49,7 +49,7 @@ export const verifyOtp = createServerFn({ method: "POST" })
   });
 
 /**
- * Change email (advanced: OTP for identity verification while authenticated)
+ * Server function: Change email
  *
  * Verifies OTP for the new email, then swaps it on the authenticated user.
  * Requires an active session — the OTP proves ownership of the new address.
@@ -71,27 +71,25 @@ export const changeEmail = createServerFn({ method: "POST" })
   });
 
 /**
- * Sign out server function
+ * Server function: Sign out
  *
  * Invalidates the current session and clears the session cookie.
  */
-export const signOut = createServerFn({ method: "POST" }).handler(async () => {
-  await auth.signOut();
-});
-
-/**
- * Sign out all devices
- *
- * Deletes every session for the current user and clears the session cookie.
- */
-export const signOutAll = createServerFn({ method: "POST" }).handler(
-  async () => {
-    await auth.signOutAll();
-  },
+export const signOut = createServerFn({ method: "POST" }).handler(() =>
+  auth.signOut(),
 );
 
 /**
- * Get viewer server function
+ * Server function: Sign out all devices
+ *
+ * Deletes every session for the current user and clears the session cookie.
+ */
+export const signOutAll = createServerFn({ method: "POST" }).handler(() =>
+  auth.signOutAll(),
+);
+
+/**
+ * Server function: Get viewer
  *
  * Returns the current user if authenticated, or undefined otherwise.
  */
