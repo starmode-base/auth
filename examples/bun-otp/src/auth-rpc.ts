@@ -51,11 +51,10 @@ export const verifyOtp = (data: z.input<typeof verifyOtpSchema>) =>
   post("/api/verify-otp", verifyOtpSchema.parse(data));
 
 /**
- * Change email (advanced: OTP for identity verification while authenticated)
+ * Change email
  *
  * Verifies OTP for the new email, then swaps it on the authenticated user.
  * Requires an active session — the OTP proves ownership of the new address.
- * Wire to useOtpFlow on the client to enable email changes.
  */
 export const changeEmail = (data: z.input<typeof verifyOtpSchema>) =>
   post("/api/change-email", verifyOtpSchema.parse(data));

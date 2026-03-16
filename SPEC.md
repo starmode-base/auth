@@ -477,15 +477,15 @@ Only things that need reactive state (loading, error) or multi-step orchestratio
 
 **Core hooks** — encode correct auth flows, the publishable value:
 
-- `useOtpFlow()` — manages email → OTP state machine with step transitions, validation, and error handling
 - `usePasskeyRegistration()` — orchestrates 3-step WebAuthn registration ceremony (server start → browser createPasskey → server verify)
 - `usePasskeyAuthentication()` — orchestrates 3-step WebAuthn authentication ceremony
+
+OTP flow is simple enough to inline in examples (4 `useState` calls + 2 form handlers). Passkey ceremonies are not — they involve the browser credential API, try/catch, and 3-step async sequences.
 
 **Example infrastructure** — keeps examples focused on auth logic, not styling:
 
 - `useAsync()` — convenience hook for loading asynchronous data (app data, not auth — exists for DRY examples only)
-- UI atoms: `Page`, `Button`, `Toolbar`, `Avatar`, `AuthLayout`
-- Step components: `EmailStep`, `OtpStep`, `ChangeEmailStep`, `VerifyEmailStep`
+- UI atoms: `Page`, `Button`, `Header`, `Input`, `EmailInput`, `OtpInput`, `Toolbar`, `Avatar`, `AuthLayout`
 - `PasskeyList` — passkey management UI
 
 **Data fetching strategy in examples:**

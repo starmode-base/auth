@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import {
   requestOtp,
@@ -5,15 +6,17 @@ import {
   signOut,
   signOutAll,
   getViewer,
+  requestOtpSchema,
+  verifyOtpSchema,
 } from "../auth-rpc";
 import {
   Page,
   Button,
-  EmailStep,
-  OtpStep,
+  Header,
+  EmailInput,
+  OtpInput,
   Toolbar,
   AuthLayout,
-  useOtpFlow,
 } from "@repo/auth-react";
 
 export const Route = createFileRoute("/")({
@@ -24,16 +27,67 @@ export const Route = createFileRoute("/")({
 type Viewer = { userId: string; email: string };
 
 function AuthFlow(props: { onSignedIn: () => void }) {
-  const flow = useOtpFlow({
-    requestOtp: (id) => requestOtp({ data: { identifier: id } }),
-    verify: (id, otp) => verifyOtp({ data: { identifier: id, otp } }),
-    onSuccess: () => props.onSignedIn(),
-  });
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  return flow.step === "email" ? (
-    <EmailStep {...flow.emailStepProps} />
-  ) : (
-    <OtpStep {...flow.otpStepProps} />
+  if (step === "email") {
+    return (
+      <Page
+        as="form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const result = await requestOtp({ data: { identifier: email } });
+          if (result.success) {
+            setStep("otp");
+            setError(null);
+          } else {
+            setError("Failed to send one-time password");
+          }
+        }}
+      >
+        <Header title="Welcome!" description="Let's get you signed in." />
+        <EmailInput value={email} onChange={setEmail} error={error} />
+        <Button
+          type="submit"
+          disabled={!requestOtpSchema.safeParse({ identifier: email }).success}
+        >
+          Send one-time password
+        </Button>
+      </Page>
+    );
+  }
+
+  return (
+    <Page
+      as="form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const result = await verifyOtp({
+          data: { identifier: email, otp },
+        });
+        if (result.success) {
+          props.onSignedIn();
+        } else {
+          setError("Invalid one-time password");
+        }
+      }}
+    >
+      <Header
+        title="Check your email"
+        description="Enter your one-time password."
+      />
+      <OtpInput value={otp} onChange={setOtp} error={error} />
+      <Button
+        type="submit"
+        disabled={
+          !verifyOtpSchema.safeParse({ identifier: email, otp }).success
+        }
+      >
+        Continue
+      </Button>
+    </Page>
   );
 }
 

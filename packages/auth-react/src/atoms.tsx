@@ -43,6 +43,67 @@ export function Avatar(props: { initials: string }) {
   );
 }
 
+export function Header(props: { title: string; description?: string }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="text-3xl font-semibold">{props.title}</div>
+      {props.description && (
+        <div className="text-gray-500">{props.description}</div>
+      )}
+    </div>
+  );
+}
+
+type InputProps = {
+  value: string;
+  onChange: (value: string) => void;
+  error?: string | null;
+} & Omit<React.ComponentProps<"input">, "onChange" | "className">;
+
+export function Input({ value, onChange, error, ...props }: InputProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        type="text"
+        className="h-10 border-b border-gray-300 bg-transparent placeholder:text-gray-500"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        {...props}
+      />
+      {error != null && <div className="text-red-500">{error}</div>}
+    </div>
+  );
+}
+
+export function EmailInput(
+  props: Omit<InputProps, "placeholder" | "inputMode" | "autoComplete">,
+) {
+  return (
+    <Input
+      placeholder="Email address"
+      inputMode="email"
+      autoComplete="email"
+      autoCapitalize="none"
+      autoCorrect="off"
+      spellCheck={false}
+      {...props}
+    />
+  );
+}
+
+export function OtpInput(
+  props: Omit<InputProps, "placeholder" | "inputMode" | "autoComplete">,
+) {
+  return (
+    <Input
+      placeholder="One-time password"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      {...props}
+    />
+  );
+}
+
 export function Toolbar(props: { email: string }) {
   const initials = props.email.slice(0, 2).toUpperCase();
 

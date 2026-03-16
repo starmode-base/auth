@@ -14,15 +14,21 @@ import {
 import {
   Page,
   Button,
+  Header,
   AuthLayout,
   usePasskeyRegistration,
   usePasskeyAuthentication,
   PasskeyList,
 } from "@repo/auth-react";
-import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/")({
-  loader: () => getViewer(),
+  loader: async () => {
+    const [viewer, { passkeys }] = await Promise.all([
+      getViewer(),
+      listPasskeys(),
+    ]);
+    return { viewer, passkeys };
+  },
   component: App,
 });
 
@@ -44,10 +50,7 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
 
   return (
     <Page>
-      <div className="flex flex-col gap-2">
-        <div className="text-3xl font-semibold">Welcome!</div>
-        <div className="text-gray-500">Sign in or create an account.</div>
-      </div>
+      <Header title="Welcome!" description="Sign in or create an account." />
       <div className="flex flex-col gap-3">
         <Button onClick={register.submit} disabled={register.loading}>
           Create a passkey
@@ -69,40 +72,30 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
   );
 }
 
-function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
-  const [passkeys, setPasskeys] = useState<PasskeyEntry[]>([]);
-
-  const fetchPasskeys = async () => {
-    const result = await listPasskeys();
-    setPasskeys(result.passkeys);
-  };
-
-  useEffect(() => {
-    fetchPasskeys();
-  }, []);
-
+function Authenticated(props: {
+  viewer: Viewer;
+  passkeys: PasskeyEntry[];
+  onChanged: () => void;
+}) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
     verify: (args) => verifyRegistration({ data: args }),
-    onSuccess: () => fetchPasskeys(),
+    onSuccess: () => props.onChanged(),
   });
 
   const handleRemovePasskey = async (credentialId: string) => {
     const result = await removePasskey({ data: { credentialId } });
     if (result.success) {
-      await fetchPasskeys();
+      props.onChanged();
     }
   };
 
   return (
     <Page>
-      <div className="flex flex-col gap-2">
-        <div className="text-3xl font-semibold">Welcome</div>
-        <div className="text-gray-500">{props.viewer.userId}</div>
-      </div>
+      <Header title="Welcome" description={props.viewer.userId} />
 
       <PasskeyList
-        passkeys={passkeys}
+        passkeys={props.passkeys}
         onAdd={addPasskey.submit}
         onRemove={handleRemovePasskey}
         loading={addPasskey.loading}
@@ -115,7 +108,7 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
       <Button
         onClick={async () => {
           await signOut();
-          props.onSignedOut();
+          props.onChanged();
         }}
       >
         Sign out
@@ -124,7 +117,7 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
         variant="secondary"
         onClick={async () => {
           await signOutAll();
-          props.onSignedOut();
+          props.onChanged();
         }}
       >
         Sign out all devices
@@ -134,7 +127,7 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
 }
 
 function App() {
-  const viewer = Route.useLoaderData();
+  const { viewer, passkeys } = Route.useLoaderData();
   const router = useRouter();
 
   return (
@@ -142,7 +135,8 @@ function App() {
       {viewer ? (
         <Authenticated
           viewer={viewer}
-          onSignedOut={() => router.invalidate()}
+          passkeys={passkeys}
+          onChanged={() => router.invalidate()}
         />
       ) : (
         <UnauthenticatedView onSignedIn={() => router.invalidate()} />

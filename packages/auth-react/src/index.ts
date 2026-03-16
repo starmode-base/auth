@@ -1,9 +1,15 @@
-export { EmailStep, OtpStep, ChangeEmailStep, VerifyEmailStep } from "./step";
-export type { StepProps } from "./step";
-export { Page, Button, Avatar, Toolbar } from "./atoms";
+export {
+  Page,
+  Button,
+  Header,
+  Input,
+  EmailInput,
+  OtpInput,
+  Avatar,
+  Toolbar,
+} from "./atoms";
 export { AuthLayout } from "./layout";
 export { useAsync } from "./use-async";
-export { useOtpFlow } from "./use-otp-flow";
 export {
   usePasskeyRegistration,
   usePasskeyAuthentication,
