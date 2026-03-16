@@ -78,6 +78,15 @@ const server = serve({
       },
     },
 
+    "/api/sign-out-all": {
+      async POST(req) {
+        const resHeaders = new Headers();
+        const auth = makeRequestAuth(req, resHeaders);
+        await auth.signOutAll();
+        return Response.json({ success: true }, { headers: resHeaders });
+      },
+    },
+
     "/api/viewer": {
       async GET(req) {
         const resHeaders = new Headers();

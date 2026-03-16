@@ -68,6 +68,13 @@ export const changeEmail = (data: z.input<typeof verifyOtpSchema>) =>
 export const signOut = () => post("/api/sign-out");
 
 /**
+ * Sign out all devices
+ *
+ * Deletes every session for the current user and clears the session cookie.
+ */
+export const signOutAll = () => post("/api/sign-out-all");
+
+/**
  * Get viewer
  *
  * Returns the current user if authenticated, or undefined otherwise.

@@ -1,6 +1,6 @@
 import "./index.css";
 
-import { requestOtp, verifyOtp, signOut, getViewer } from "./auth-rpc";
+import { requestOtp, verifyOtp, signOut, signOutAll, getViewer } from "./auth-rpc";
 import {
   Page,
   Button,
@@ -39,6 +39,15 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
         }}
       >
         Sign out
+      </Button>
+      <Button
+        variant="secondary"
+        onClick={async () => {
+          await signOutAll();
+          props.onSignedOut();
+        }}
+      >
+        Sign out all devices
       </Button>
     </Page>
   );
