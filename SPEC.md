@@ -1,6 +1,6 @@
 IMPORTANT: THIS IS A LOOSE SPEC THAT WE _SHOULD_ CHANGE AS WE IMPLEMENT AND FIND BETTER PATTERNS
 
-# STΛR MODΞ ΛUTH
+# ΛUTH
 
 The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
@@ -15,6 +15,7 @@ Passkeys + OTP as composable primitives. Apps choose their flow.
 - **Nano scope** — intentionally small, won't grow into Auth0
 - **Zero dependencies** — no runtime dependencies, peer dependencies only where unavoidable
 - **Strong typings** — no type assertions (`as`), full type inference from API design
+- **All fields required** — config types have no optional fields. Explicit beats convenient.
 
 ### Inverted architecture
 
@@ -66,10 +67,11 @@ The library provides primitives. Your app composes the flow that fits your secur
 
 ### Primitives
 
-See `MakeAuthResult` and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
+See `OtpAuthResult`, `PasskeyAuthResult`, `MakeAuthResult`, and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
 
 | Primitive                                               | What it does                         | Client |
 | ------------------------------------------------------- | ------------------------------------ | ------ |
+| `createSession({ userId })`                             | Create session for user              | ❌     |
 | `requestOtp({ identifier })`                            | Send OTP to identifier (email/phone) | ✅     |
 | `verifyOtp({ identifier, otp })`                        | Verify OTP → `{ success }`           | ✅     |
 | `createRegistrationToken({ userId, identifier })`       | Create registration token            | ❌     |
@@ -83,7 +85,7 @@ See `MakeAuthResult` and `AuthClient` types in `packages/auth/src/types.ts` for 
 
 **Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
-**Key design:** `verifyOtp` only verifies — it doesn't create sessions by default. Apps can create sessions after OTP verification if desired (OTP-only auth). `verifyRegistration` and `verifyAuthentication` create sessions. Apps compose the flow they need.
+**Key design:** `verifyOtp` only verifies — it doesn't create sessions. For OTP-only auth, apps call `createSession` explicitly after verification. `verifyRegistration` and `verifyAuthentication` create sessions implicitly. Apps compose the flow they need.
 
 ### Flows
 
@@ -126,6 +128,15 @@ Add email:   getSession → requestOtp → verifyOtp → [app: storeEmail]
 ```
 
 User creates account with just a passkey. Email is collected later (optional, for communication).
+
+**OTP only** (no passkeys):
+
+```
+Sign up:    requestOtp → verifyOtp → [app: upsertUser] → createSession → session
+Sign in:    requestOtp → verifyOtp → [app: lookupUser] → createSession → session
+```
+
+Simplest flow — email is both identity and auth. No passkeys, no registration tokens. See `examples/tanstack-start-otp/` for a working implementation.
 
 ### Flow details
 
@@ -236,25 +247,31 @@ Users should register multiple passkeys for redundancy. Each passkey can indepen
 
 ## Architecture
 
-Everything is explicit, never implicit. No nesting, no magic. You provide adapters (typed callbacks), the library orchestrates them.
+Everything is explicit, never implicit. Config is grouped by feature (`session`, `otp`, `passkey`) — each group bundles its settings and storage adapter. You provide adapters (typed callbacks), the library orchestrates them.
 
 ### Framework-agnostic by design
 
-| Layer             | What it does              | Framework-specific? |
-| ----------------- | ------------------------- | ------------------- |
-| `makeAuth`        | Server-side auth logic    | No                  |
-| `makeAuthHandler` | REST handler for auth API | No                  |
-| `makeAuthClient`  | Client (HTTP + WebAuthn)  | No                  |
+| Layer             | What it does                   | Framework-specific? |
+| ----------------- | ------------------------------ | ------------------- |
+| `makeOtpAuth`     | OTP + session                  | No                  |
+| `makePasskeyAuth` | Passkey + session              | No                  |
+| `makeAuth`        | OTP + passkey + session (full) | No                  |
+| `makeAuthHandler` | REST handler for auth API      | No                  |
+| `makeAuthClient`  | Client (HTTP + WebAuthn)       | No                  |
+
+Three factory functions, one per auth surface. Pick the one that matches your flow. `makeAuthHandler` and `makeAuthClient` are optional — apps can call primitives directly via server functions.
+
+> **Open question:** We may fold the three factories into a single `makeAuth` with conditional return types based on which config groups are present (`otp`, `passkey`, or both). The three-factory approach is stricter and simpler; the single-factory approach is more flexible. Decision pending.
 
 The library provides a REST-based architecture. Server exposes `makeAuthHandler`, client uses `makeAuthClient`. Session management uses cookies automatically.
 
 ### Server module (`@starmode/auth`)
 
-See `examples/tanstack-start/src/lib/auth.ts` for a working example. Config types are documented in `MakeAuthConfig` in `packages/auth/src/types.ts`.
+See `examples/tanstack-start/src/lib/auth.ts` for a working example. Config types (`OtpAuthConfig`, `PasskeyAuthConfig`, `FullAuthConfig`) and all storage/adapter types are documented in `packages/auth/src/types.ts`.
 
 **Custom storage adapters:**
 
-See `StorageAdapter` type in `packages/auth/src/types.ts` — it's self-documenting.
+Storage is split by concern: `OtpStorage`, `SessionStorage`, `CredentialStorage`. Each factory only requires the storage types it uses. See `packages/auth/src/types.ts` — they're self-documenting.
 
 **Why no database drivers?**
 
@@ -268,7 +285,9 @@ Naming: simple adapters are `{variant}{Type}`, factories are `make{Variant}{Type
 
 ```
 Storage:
-✓ storageMemory()              — in-memory persistence (dev/test)
+✓ memoryOtpStorage()           — in-memory OTP persistence (dev/test)
+✓ memorySessionStorage()       — in-memory session persistence (dev/test)
+✓ memoryCredentialStorage()    — in-memory credential persistence (dev/test)
 
 Codecs:
 ✓ sessionHmac()                — HMAC-signed session tokens (stateless)
@@ -319,12 +338,12 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 
 **How it works:**
 
-1. User authenticates via passkey (`verifyRegistration` or `verifyAuthentication`)
+1. User authenticates via passkey (`verifyRegistration` or `verifyAuthentication`) or app calls `createSession` (e.g. after OTP verification)
 2. Server creates session → stores in DB → encodes token → sets HttpOnly cookie
 3. Browser automatically sends cookie with every request
 4. Server decodes token → validates → returns userId or null
 
-**Note:** OTP verification (`verifyOtp`) does not create a session — it only proves the user controls an identifier. Sessions are only created by passkey verification.
+**Note:** OTP verification (`verifyOtp`) does not create a session — it only proves the user controls an identifier. Apps create sessions explicitly via `createSession` (a core primitive) or implicitly via passkey verification (`verifyRegistration`, `verifyAuthentication`).
 
 **Token format via codec:**
 
@@ -340,7 +359,7 @@ The auth system has five distinct TTLs, each serving a different purpose:
 | TTL           | Config                         | Purpose                                      | Typical value                   | Sliding refresh |
 | ------------- | ------------------------------ | -------------------------------------------- | ------------------------------- | --------------- |
 | Token TTL     | `sessionHmac({ ttl })`         | Revocation window — how long before DB check | 10 min                          | No              |
-| Session TTL   | `makeAuth({ sessionTtl })`     | Inactivity timeout — when to sign out user   | 30 days or `Infinity` (forever) | Yes             |
+| Session TTL   | `session: { ttl }`             | Inactivity timeout — when to sign out user   | 30 days or `Infinity` (forever) | Yes             |
 | Cookie TTL    | `sessionCookieDefaults.maxAge` | Browser cookie lifetime — auto-deleted after | 400 days                        | Yes             |
 | OTP TTL       | `otpTransportConsole({ ttl })` | OTP validity — how long to enter the code    | 10 min                          | No              |
 | Challenge TTL | `webAuthn: { challengeTtl }`   | WebAuthn challenge validity                  | 5 min                           | No              |
@@ -445,23 +464,34 @@ For now, we keep it minimal — auth only, viewer fetching is your responsibilit
 
 ### Framework examples
 
-See `examples/tanstack-start/` for a complete working example:
+See `examples/tanstack-start/` for a full OTP → passkey example and `examples/tanstack-start-otp/` for OTP-only:
 
-- `src/lib/auth.ts` — server-side auth setup
-- `src/lib/auth.client.ts` — client setup
-- `src/lib/auth.server.ts` — app-specific flows (signUp, getViewer)
-- `src/routes/api.auth/route.ts` — REST handler
-- `src/routes/index.tsx` — UI with full auth flow
+- `examples/tanstack-start/src/lib/auth.ts` — full auth setup (`makeAuth`)
+- `examples/tanstack-start-otp/src/auth.ts` — OTP-only setup (`makeOtpAuth`)
 
-### React hooks
+### React hooks (`@repo/auth-react`)
 
-Only things that need reactive state (loading, error) or depend on other hooks need a React hook. Everything else can call the auth methods directly.
+A reference implementation package with two layers.
 
-**Hooks (manage async state):**
+Only things that need reactive state (loading, error) or multi-step orchestration need a React hook. Everything else can call the auth methods directly.
 
-- `useOtpFlow()` — manages OTP request/verify with loading/error state
-- `usePasskeyRegister()` — manages WebAuthn registration flow
-- `usePasskeySignIn()` — manages WebAuthn authentication flow
+**Core hooks** — encode correct auth flows, the publishable value:
+
+- `usePasskeyRegistration()` — orchestrates 3-step WebAuthn registration ceremony (server start → browser createPasskey → server verify)
+- `usePasskeyAuthentication()` — orchestrates 3-step WebAuthn authentication ceremony
+
+OTP flow is simple enough to inline in examples (4 `useState` calls + 2 form handlers). Passkey ceremonies are not — they involve the browser credential API, try/catch, and 3-step async sequences.
+
+**Example infrastructure** — keeps examples focused on auth logic, not styling:
+
+- `useAsync()` — convenience hook for loading asynchronous data (app data, not auth — exists for DRY examples only)
+- UI atoms: `Page`, `Button`, `Header`, `Input`, `EmailInput`, `OtpInput`, `Toolbar`, `Avatar`, `AuthLayout`
+- `PasskeyList` — passkey management UI
+
+**Data fetching strategy in examples:**
+
+- Meta-frameworks (Next.js, TanStack Start): use framework-native patterns (server components, route loaders)
+- Plain React (Bun): uses `useAsync` for client-side data loading
 
 **Direct calls (no hook needed):**
 
@@ -471,7 +501,7 @@ await authClient.signOut();
 await authClient.requestOtp({ identifier: email });
 ```
 
-**Note:** No `useViewer()` hook — that's app data, not auth. Use your own data fetching (React Query, SWR, server components, etc.).
+**Note:** No `useViewer()` hook — that's app data, not auth. Use your framework's data fetching (server components, route loaders, React Query, SWR, etc.).
 
 ## Scope
 
@@ -480,7 +510,7 @@ await authClient.requestOtp({ identifier: email });
 - OTP: `requestOtp`, `verifyOtp`
 - Registration token: `createRegistrationToken`, `validateRegistrationToken`
 - Passkeys: `generateRegistrationOptions`, `verifyRegistration`, `generateAuthenticationOptions`, `verifyAuthentication`
-- Session: `getSession` (server-only), `signOut` (client-callable)
+- Session: `createSession` (server-only), `getSession` (server-only), `signOut` (client-callable)
 
 **Adapters:**
 
@@ -508,19 +538,19 @@ Example features:
 - [x] Sign in (passkey)
 - [x] Sign out
 - [ ] Unified "continue with email" flow (handles new + existing users)
-- [ ] Add passkey (while authenticated)
-- [ ] Add/change email or phone (OTP verification for new identifiers)
-- [ ] Sign out all devices
-- [ ] Manage passkeys UI
+- [x] Add passkey (while authenticated)
+- [x] Add/change email (OTP verification for new identifier)
+- [x] Sign out all devices
+- [x] Manage passkeys UI
 - [ ] Manage sessions UI
 - [ ] Strict mode demo (disable OTP for existing users)
 
 Library additions (as needed):
 
-- [ ] `allowCredentials` in `generateAuthenticationOptions()` — filter passkeys by identifier
+- [ ] `allowCredentials` in `generateAuthenticationOptions()` — see design notes below
 - [ ] Make `identifier` optional in `createRegistrationToken()` — support passkey-only sign-up
-- [ ] Session management primitives (`getSessions`, `signOutAll`)
-- [ ] Passkey management primitives (`getPasskeys`, `deletePasskey`)
+- [x] Session management: `signOutAll()` on core methods, `deleteByUserId()` on `SessionStorage`
+- [x] Passkey management: `delete()` on `CredentialStorage` — apps call storage directly for list/delete
 
 Suggested order:
 
@@ -531,6 +561,35 @@ Suggested order:
 5. Session management (`getSessions`, `signOutAll`) — needs new primitives
 6. Passkey management (`getPasskeys`, `deletePasskey`) — needs new primitives
 7. Strict mode — demonstrate disabling OTP for existing users
+
+### `allowCredentials` design notes
+
+The `allowCredentials` field on `PublicKeyCredentialRequestOptions` tells the browser which credential IDs the server expects, limiting the passkey picker to only those passkeys.
+
+**Currently:** `generateAuthenticationOptions()` leaves `allowCredentials` empty, which means "discoverable credential" — the browser picks from all passkeys matching the `rpId`. This works for the passkey-only flow because modern passkeys use `residentKey: "preferred"` and are discoverable by default.
+
+**When it matters:**
+
+- **Non-discoverable credentials** (e.g., security keys in non-resident mode): These _require_ `allowCredentials` because the authenticator can't enumerate stored credentials — the server must tell it which credential IDs to look for.
+- **Identifier-first flows** ("enter email, then passkey"): The server looks up credential IDs by email, passes them as `allowCredentials`, and the browser only offers matching passkeys. This is the "continue with email" pattern from the OTP+passkey combined flow.
+- **Shared device clarity**: When multiple people use the same device, filtering avoids showing all accounts in the passkey picker.
+
+**When it doesn't matter:**
+
+- On production domains, the browser already filters passkeys by `rpId` — users only see passkeys for your site. The "too many passkeys" problem is mostly a development issue on `localhost`.
+- For discoverable passkeys (the default), the browser handles selection natively.
+
+**API shape (planned):**
+
+```
+generateAuthenticationOptions()                          // current — discoverable, no filter
+generateAuthenticationOptions({ userId })                // planned — filter by user's stored credentials
+generateAuthenticationOptions({ allowCredentials })      // planned — explicit credential ID list
+```
+
+The `userId` variant would look up credentials via `CredentialStorage.get(userId)` and populate `allowCredentials` automatically. The explicit variant gives apps full control.
+
+**Deferred until:** The combined OTP+passkey example with identifier-first flow, where the user enters their email before authenticating with a passkey.
 
 _Later: Next.js example_
 

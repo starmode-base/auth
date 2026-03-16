@@ -1,6 +1,8 @@
 import {
   makeAuth,
-  storageMemory,
+  memoryOtpStorage,
+  memorySessionStorage,
+  memoryCredentialStorage,
   sessionHmac,
   registrationHmac,
   otpTransportConsole,
@@ -32,29 +34,37 @@ function createAuthForRequest(req: Request) {
   pendingCookie = null;
 
   return makeAuth({
-    storage: storageMemory(),
-    sessionCodec: sessionHmac({ secret: "dev-secret", ttl: 600 }),
-    registrationCodec: registrationHmac({
-      secret: "dev-secret",
-      ttl: 300,
-    }),
-    otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
-    webAuthn: {
-      rpId: "localhost",
-      rpName: "Bun Memory Example",
-      challengeTtl: 5 * 60 * 1000,
+    session: {
+      storage: memorySessionStorage(),
+      codec: sessionHmac({ secret: "dev-secret", ttl: 600 }),
+      transport: sessionTransportCookie({
+        get: (name) => getCookieFromRequest(req, name),
+        set: (name, value, opts) => {
+          pendingCookie = { value, maxAge: opts.maxAge };
+        },
+        clear: (name, opts) => {
+          pendingCookie = { value: "", maxAge: 0 };
+        },
+        options: { ...sessionCookieDefaults, cookieName: SESSION_COOKIE },
+      }),
+      ttl: Infinity,
     },
-    sessionTransport: sessionTransportCookie({
-      get: (name) => getCookieFromRequest(req, name),
-      set: (name, value, opts) => {
-        pendingCookie = { value, maxAge: opts.maxAge };
+    otp: {
+      storage: memoryOtpStorage(),
+      transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+    },
+    passkey: {
+      storage: memoryCredentialStorage(),
+      registrationCodec: registrationHmac({
+        secret: "dev-secret",
+        ttl: 300,
+      }),
+      webAuthn: {
+        rpId: "localhost",
+        rpName: "Bun Memory Example",
+        challengeTtl: 5 * 60 * 1000,
       },
-      clear: (name, opts) => {
-        pendingCookie = { value: "", maxAge: 0 };
-      },
-      options: { ...sessionCookieDefaults, cookieName: SESSION_COOKIE },
-    }),
-    sessionTtl: Infinity,
+    },
     debug: true,
   });
 }

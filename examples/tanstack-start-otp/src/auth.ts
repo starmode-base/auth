@@ -1,8 +1,8 @@
 import {
-  makeAuth,
-  storageMemory,
+  makeOtpAuth,
+  memoryOtpStorage,
+  memorySessionStorage,
   sessionHmac,
-  registrationHmac,
   otpTransportConsole,
 } from "@starmode/auth";
 import {
@@ -10,23 +10,19 @@ import {
   sessionCookieDefaults,
 } from "@starmode/auth/tanstack";
 
-export const auth = makeAuth({
-  storage: storageMemory(),
-  sessionCodec: sessionHmac({
-    secret: "dev-secret-do-not-use-in-production",
-    ttl: 600,
-  }),
-  registrationCodec: registrationHmac({
-    secret: "dev-secret-do-not-use-in-production",
-    ttl: 300,
-  }),
-  otpTransport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
-  webAuthn: {
-    rpId: "localhost",
-    rpName: "TanStack Start Example",
-    challengeTtl: 5 * 60 * 1000,
+export const auth = makeOtpAuth({
+  session: {
+    storage: memorySessionStorage(),
+    codec: sessionHmac({
+      secret: "dev-secret-do-not-use-in-production",
+      ttl: 600,
+    }),
+    transport: sessionTransportTanstack(sessionCookieDefaults),
+    ttl: Infinity,
   },
-  sessionTransport: sessionTransportTanstack(sessionCookieDefaults),
-  sessionTtl: Infinity,
+  otp: {
+    storage: memoryOtpStorage(),
+    transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+  },
   debug: true,
 });

@@ -41,9 +41,9 @@ This is security-critical code.
 
 ## TDD (critical)
 
-- NEVER look at implementation code before writing a test
-- Derive expected behavior ONLY from: SPEC, requirements, or asking the user
-- Test expectations based on reading code = INVALID test
+- NEVER write tests based on implemented code
+- ALWAYS write tests based on expected behavior (spec, requirements, user input)
+- When unsure about expected behavior, ask the user
 
 ## Prose style
 
@@ -53,4 +53,4 @@ This is security-critical code.
 ## Code review instructions
 
 - Look for dead code
-- Look uselsee assertions in tests
+- Look for useless assertions in tests

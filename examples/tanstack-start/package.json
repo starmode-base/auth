@@ -1,27 +1,27 @@
 {
-  "name": "tanstack-start",
+  "name": "@repo/example-tanstack-start",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev --port 3101",
+    "dev": "vite dev --port 3201",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@starmode/auth": "workspace:*",
-    "@tailwindcss/vite": "^4.2.0",
-    "@tanstack/react-router": "^1.161.3",
-    "@tanstack/react-start": "^1.161.3",
+    "@tailwindcss/vite": "^4.2.1",
+    "@tanstack/react-router": "^1.167.3",
+    "@tanstack/react-start": "^1.166.14",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "tailwindcss": "^4.2.0"
+    "tailwindcss": "^4.2.1"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.4",
+    "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^8.0.0"
   }
 }

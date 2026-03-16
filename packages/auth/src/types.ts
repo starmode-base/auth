@@ -27,30 +27,30 @@ export type CredentialRecord = {
   credential: StoredCredential;
 };
 
-/**
- * Storage adapter (persistence)
- *
- * Implements storage for OTPs, sessions, and passkey credentials.
- * You can implement this as a single class or object wrapping your database.
- */
-export type StorageAdapter = {
-  otp: {
-    store: (record: OtpRecord) => Promise<void>;
-    verify: (identifier: string, otp: string) => Promise<boolean>;
-  };
-  session: {
-    store: (record: SessionRecord) => Promise<void>;
-    get: (sessionId: string) => Promise<SessionRecord | null>;
-    delete: (sessionId: string) => Promise<void>;
-  };
-  credential: {
-    store: (record: CredentialRecord) => Promise<void>;
-    get: (userId: string) => Promise<StoredCredential[]>;
-    getById: (
-      credentialId: string,
-    ) => Promise<{ userId: string; credential: StoredCredential } | null>;
-    updateCounter: (credentialId: string, counter: number) => Promise<void>;
-  };
+/** OTP storage adapter */
+export type OtpStorage = {
+  store: (record: OtpRecord) => Promise<void>;
+  verify: (identifier: string, otp: string) => Promise<boolean>;
+};
+
+/** Session storage adapter */
+export type SessionStorage = {
+  store: (record: SessionRecord) => Promise<void>;
+  get: (sessionId: string) => Promise<SessionRecord | null>;
+  delete: (sessionId: string) => Promise<void>;
+  /** Delete all sessions belonging to the same user as this session */
+  deleteAll: (sessionId: string) => Promise<void>;
+};
+
+/** Credential (passkey) storage adapter */
+export type CredentialStorage = {
+  store: (record: CredentialRecord) => Promise<void>;
+  get: (userId: string) => Promise<StoredCredential[]>;
+  getById: (
+    credentialId: string,
+  ) => Promise<{ userId: string; credential: StoredCredential } | null>;
+  updateCounter: (credentialId: string, counter: number) => Promise<void>;
+  delete: (credentialId: string) => Promise<void>;
 };
 
 /**
@@ -151,6 +151,10 @@ export type Result<T = object> =
 export type RequestOtpResult = { success: true };
 export type VerifyOtpResult = Result;
 
+export type CreateSessionResult = Result<{
+  session: { token: string; userId: string };
+}>;
+
 export type CreateRegistrationTokenResult = { registrationToken: string };
 
 export type ValidateRegistrationTokenResult = Result<{
@@ -223,21 +227,86 @@ export type VerifyAuthenticationResult = Result<{
   session: { token: string; userId: string };
 }>;
 
-export type MakeAuthConfig = {
-  storage: StorageAdapter;
-  sessionCodec: SessionCodec;
-  registrationCodec: RegistrationCodec;
-  otpTransport: OtpTransportAdapter;
-  sessionTransport: SessionTransportAdapter;
-  webAuthn: WebAuthnConfig;
+/** Session config — always required */
+export type SessionConfig = {
+  storage: SessionStorage;
+  codec: SessionCodec;
+  transport: SessionTransportAdapter;
   /** Session TTL in ms (Infinity = forever). Inactivity timeout with sliding refresh. */
-  sessionTtl: number;
-  /** Enable debug logging for development */
-  debug?: boolean;
+  ttl: number;
 };
 
-/** All primitives returned by makeAuth */
-export type MakeAuthResult = {
+/** OTP config — presence enables OTP methods */
+export type OtpConfig = {
+  storage: OtpStorage;
+  transport: OtpTransportAdapter;
+};
+
+/** Passkey config — presence enables passkey methods */
+export type PasskeyConfig = {
+  storage: CredentialStorage;
+  registrationCodec: RegistrationCodec;
+  webAuthn: WebAuthnConfig;
+};
+
+/** Config for makeOtpAuth */
+export type OtpAuthConfig = {
+  session: SessionConfig;
+  otp: OtpConfig;
+  debug: boolean;
+};
+
+/** Config for makePasskeyAuth */
+export type PasskeyAuthConfig = {
+  session: SessionConfig;
+  passkey: PasskeyConfig;
+  debug: boolean;
+};
+
+/** Config for makeAuth (OTP + passkeys) */
+export type FullAuthConfig = {
+  session: SessionConfig;
+  otp: OtpConfig;
+  passkey: PasskeyConfig;
+  debug: boolean;
+};
+
+/** Core methods — always available regardless of auth config */
+export type CoreMethods = {
+  /**
+   * Create a session for the given user
+   *
+   * Stores the session, encodes the token, and sets it via the session
+   * transport (e.g. cookie). Server-side only.
+   */
+  createSession: (args: { userId: string }) => Promise<CreateSessionResult>;
+
+  /**
+   * Get the current session
+   *
+   * Returns the session if the user is authenticated, or null otherwise.
+   * Used to check auth state on page load and during navigation.
+   */
+  getSession: () => Promise<{ userId: string } | null>;
+
+  /**
+   * Sign out and end the current session
+   *
+   * Invalidates the current session and clears the session cookie.
+   */
+  signOut: () => Promise<void>;
+
+  /**
+   * Sign out all sessions for the current user
+   *
+   * Deletes every session for the authenticated user (including the current
+   * one) and clears the session cookie.
+   */
+  signOutAll: () => Promise<void>;
+};
+
+/** OTP methods — available when otpTransport is configured */
+export type OtpMethods = {
   /**
    * Send OTP to identifier (email or phone)
    *
@@ -256,7 +325,10 @@ export type MakeAuthResult = {
     identifier: string;
     otp: string;
   }) => Promise<VerifyOtpResult>;
+};
 
+/** Passkey methods — available when registrationCodec + webAuthn are configured */
+export type PasskeyMethods = {
   /**
    * Create a short-lived registration token
    *
@@ -317,24 +389,16 @@ export type MakeAuthResult = {
   verifyAuthentication: (args: {
     credential: AuthenticationCredential;
   }) => Promise<VerifyAuthenticationResult>;
-
-  /**
-   * Get the current session
-   *
-   * Returns the session if the user is authenticated, or null otherwise.
-   * Used to check auth state on page load and during navigation.
-   */
-  getSession: () => Promise<{ userId: string } | null>;
-
-  /**
-   * Sign out and end the current session
-   *
-   * Invalidates the current session and clears the session cookie.
-   */
-  signOut: () => Promise<void>;
 };
 
-export type MakeAuth = (config: MakeAuthConfig) => MakeAuthResult;
+/** makeAuth result when only OTP is configured */
+export type OtpAuthResult = CoreMethods & OtpMethods;
+
+/** makeAuth result when only passkeys are configured */
+export type PasskeyAuthResult = CoreMethods & PasskeyMethods;
+
+/** makeAuth result when both OTP and passkeys are configured */
+export type MakeAuthResult = CoreMethods & OtpMethods & PasskeyMethods;
 
 /**
  * Auth client interface — HTTP mutations + browser WebAuthn helpers.
