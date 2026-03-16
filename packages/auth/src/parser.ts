@@ -37,10 +37,10 @@ function obj<T extends Record<string, Parser<unknown>>>(
       } catch (error) {
         // Invariant: all parsers throw an Error
         if (!(error instanceof Error)) {
-          throw new Error(`Unexpected error: ${error}`);
+          throw new Error(`Unexpected error: ${error}`, { cause: error });
         }
 
-        throw new Error(`"${key}": ${error.message}`);
+        throw new Error(`"${key}": ${error.message}`, { cause: error });
       }
     }
 
