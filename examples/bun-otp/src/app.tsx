@@ -1,6 +1,12 @@
 import "./index.css";
 
-import { requestOtp, verifyOtp, signOut, signOutAll, getViewer } from "./auth-rpc";
+import {
+  requestOtp,
+  verifyOtp,
+  signOut,
+  signOutAll,
+  getViewer,
+} from "./auth-rpc";
 import {
   Page,
   Button,
