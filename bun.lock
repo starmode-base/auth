@@ -11,19 +11,7 @@
         "vitest": "^4.1.0",
       },
     },
-    "examples/bun-memory": {
-      "name": "@repo/example-bun-memory",
-      "dependencies": {
-        "@starmode/auth": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.3.10",
-      },
-      "peerDependencies": {
-        "typescript": "^5.9.3",
-      },
-    },
-    "examples/bun-otp": {
+    "examples/otp/bun-otp": {
       "name": "@repo/example-bun-otp",
       "version": "0.1.0",
       "dependencies": {
@@ -41,7 +29,7 @@
         "@types/react-dom": "^19.2.3",
       },
     },
-    "examples/nextjs-otp": {
+    "examples/otp/nextjs-otp": {
       "name": "@repo/example-nextjs-otp",
       "version": "0.1.0",
       "dependencies": {
@@ -62,27 +50,7 @@
         "typescript": "^5.9.3",
       },
     },
-    "examples/tanstack-start": {
-      "name": "@repo/example-tanstack-start",
-      "dependencies": {
-        "@starmode/auth": "workspace:*",
-        "@tailwindcss/vite": "^4.2.1",
-        "@tanstack/react-router": "^1.167.4",
-        "@tanstack/react-start": "^1.166.15",
-        "react": "^19.2.4",
-        "react-dom": "^19.2.4",
-        "tailwindcss": "^4.2.1",
-      },
-      "devDependencies": {
-        "@types/node": "^25.5.0",
-        "@types/react": "^19.2.14",
-        "@types/react-dom": "^19.2.3",
-        "@vitejs/plugin-react": "^6.0.1",
-        "typescript": "^5.9.3",
-        "vite": "^8.0.0",
-      },
-    },
-    "examples/tanstack-start-otp": {
+    "examples/otp/tanstack-start-otp": {
       "name": "@repo/example-tanstack-otp",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
@@ -104,7 +72,7 @@
         "vite": "^8.0.0",
       },
     },
-    "examples/tanstack-start-passkey": {
+    "examples/passkey/tanstack-start-passkey": {
       "name": "@repo/example-tanstack-passkey",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
@@ -116,6 +84,38 @@
         "react-dom": "^19.2.4",
         "tailwindcss": "^4.2.1",
         "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@types/node": "^25.5.0",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.1",
+        "typescript": "^5.9.3",
+        "vite": "^8.0.0",
+      },
+    },
+    "examples/tmp/bun-memory": {
+      "name": "@repo/example-bun-memory",
+      "dependencies": {
+        "@starmode/auth": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.10",
+      },
+      "peerDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
+    "examples/tmp/tanstack-start": {
+      "name": "@repo/example-tanstack-start",
+      "dependencies": {
+        "@starmode/auth": "workspace:*",
+        "@tailwindcss/vite": "^4.2.1",
+        "@tanstack/react-router": "^1.167.4",
+        "@tanstack/react-start": "^1.166.15",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "tailwindcss": "^4.2.1",
       },
       "devDependencies": {
         "@types/node": "^25.5.0",
@@ -405,17 +405,17 @@
 
     "@repo/auth-react": ["@repo/auth-react@workspace:packages/auth-react"],
 
-    "@repo/example-bun-memory": ["@repo/example-bun-memory@workspace:examples/bun-memory"],
+    "@repo/example-bun-memory": ["@repo/example-bun-memory@workspace:examples/tmp/bun-memory"],
 
-    "@repo/example-bun-otp": ["@repo/example-bun-otp@workspace:examples/bun-otp"],
+    "@repo/example-bun-otp": ["@repo/example-bun-otp@workspace:examples/otp/bun-otp"],
 
-    "@repo/example-nextjs-otp": ["@repo/example-nextjs-otp@workspace:examples/nextjs-otp"],
+    "@repo/example-nextjs-otp": ["@repo/example-nextjs-otp@workspace:examples/otp/nextjs-otp"],
 
-    "@repo/example-tanstack-otp": ["@repo/example-tanstack-otp@workspace:examples/tanstack-start-otp"],
+    "@repo/example-tanstack-otp": ["@repo/example-tanstack-otp@workspace:examples/otp/tanstack-start-otp"],
 
-    "@repo/example-tanstack-passkey": ["@repo/example-tanstack-passkey@workspace:examples/tanstack-start-passkey"],
+    "@repo/example-tanstack-passkey": ["@repo/example-tanstack-passkey@workspace:examples/passkey/tanstack-start-passkey"],
 
-    "@repo/example-tanstack-start": ["@repo/example-tanstack-start@workspace:examples/tanstack-start"],
+    "@repo/example-tanstack-start": ["@repo/example-tanstack-start@workspace:examples/tmp/tanstack-start"],
 
     "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.0.0-rc.9", "", { "os": "android", "cpu": "arm64" }, "sha512-lcJL0bN5hpgJfSIz/8PIf02irmyL43P+j1pTCfbD1DbLkmGRuFIA4DD3B3ZOvGqG0XiVvRznbKtN0COQVaKUTg=="],
 
@@ -733,7 +733,7 @@
 
     "flat-cache": ["flat-cache@4.0.1", "", { "dependencies": { "flatted": "^3.2.9", "keyv": "^4.5.4" } }, "sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw=="],
 
-    "flatted": ["flatted@3.4.1", "", {}, "sha512-IxfVbRFVlV8V/yRaGzk0UVIcsKKHMSfYw66T/u4nTwlWteQePsxe//LjudR1AMX4tZW3WFCh3Zqa/sjlqpbURQ=="],
+    "flatted": ["flatted@3.4.2", "", {}, "sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA=="],
 
     "follow-redirects": ["follow-redirects@1.15.11", "", {}, "sha512-deG2P0JfjrTxl50XGCDyfI97ZGVCxIpfKYmfyrQ54n5FO/0gfIES8C/Psl6kWVDolizcaaxZJnTS0QSMxvnsBQ=="],
 

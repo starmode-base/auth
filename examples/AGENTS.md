@@ -3,6 +3,46 @@
 These rules govern how examples are written. They exist so that examples are
 readable for both developers and LLMs, and so that new examples stay consistent.
 
+## Example organization
+
+Examples are organized in two levels: **auth flow** (folder) → **framework +
+storage** (example). The auth flow is the primary dimension because that's the
+user's first decision — they pick a flow, then pick their stack.
+
+```
+examples/
+  otp/                        OTP only
+  passkey/                    Passkey only
+  otp-passkey/                OTP → passkey (default pattern)
+  otp-passkey-strict/         OTP → passkey, OTP disabled after setup
+  passkey-otp/                Passkey first, OTP to collect email later
+```
+
+Inside each flow folder, examples are named `{framework}-{storage}`:
+
+- Frameworks: `tanstack-start`, `nextjs`, `bun`
+- Storage: `memory`, `postgres`
+
+Example: `examples/otp/tanstack-start-postgres/`
+
+### Example matrix
+
+| Flow                 | `tanstack-start-memory` | `tanstack-start-postgres` | `nextjs-memory` | `nextjs-postgres` | `bun-memory` | `bun-postgres` |
+| -------------------- | ----------------------- | ------------------------- | --------------- | ----------------- | ------------ | -------------- |
+| `otp`                | ✅                      | —                         | ✅              | —                 | ✅           | —              |
+| `passkey`            | ✅                      | —                         | —               | —                 | —            | —              |
+| `otp-passkey`        | —                       | —                         | —               | —                 | —            | —              |
+| `otp-passkey-strict` | —                       | —                         | —               | —                 | —            | —              |
+| `passkey-otp`        | —                       | —                         | —               | —                 | —            | —              |
+
+✅ = done, — = planned
+
+### Legacy examples (delete when covered)
+
+- `tanstack-start` — full OTP → passkey, uses older patterns (`authClient`
+  direct, local atoms). Replaced by `otp-passkey/tanstack-start-memory`.
+- `bun-memory` — minimal in-memory test. Delete anytime.
+
 ## Framework-native data fetching
 
 Each framework should use its own data-loading pattern:
