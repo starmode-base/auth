@@ -67,7 +67,7 @@ The library provides primitives. Your app composes the flow that fits your secur
 
 ### Primitives
 
-See `OtpAuthResult`, `PasskeyAuthResult`, `MakeAuthResult`, and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
+See `CoreMethods`, `OtpMethods`, `PasskeyMethods`, and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
 
 | Primitive                                               | What it does                         | Client |
 | ------------------------------------------------------- | ------------------------------------ | ------ |
@@ -82,6 +82,7 @@ See `OtpAuthResult`, `PasskeyAuthResult`, `MakeAuthResult`, and `AuthClient` typ
 | `verifyAuthentication({ credential })`                  | Verify + session                     | ✅     |
 | `getSession()`                                          | Get session data                     | ❌     |
 | `signOut()`                                             | End session                          | ✅     |
+| `signOutAll()`                                          | End all sessions for user            | ❌     |
 
 **Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
@@ -136,7 +137,7 @@ Sign up:    requestOtp → verifyOtp → [app: upsertUser] → createSession →
 Sign in:    requestOtp → verifyOtp → [app: lookupUser] → createSession → session
 ```
 
-Simplest flow — email is both identity and auth. No passkeys, no registration tokens. See `examples/tanstack-start-otp/` for a working implementation.
+Simplest flow — email is both identity and auth. No passkeys, no registration tokens. See `examples/tanstack-start-react/otp-memory/` for a working implementation.
 
 ### Flow details
 
@@ -303,6 +304,7 @@ Session transport:
 ✓ sessionTransportHeader()     — header-based session transport
 ✓ sessionTransportMemory()     — in-memory (testing)
 ✓ sessionTransportTanstack()   — TanStack Start cookie transport (@starmode/auth/tanstack)
+✓ sessionTransportNextjs()     — Next.js cookie transport (@starmode/auth/nextjs)
 
 Handler:
 ✓ makeAuthHandler()            — REST handler for auth API
@@ -350,7 +352,7 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 - `sessionHmac({ secret, ttl })` — HMAC-signed JSON with `{ sessionId, sessionExp, userId, tokenExp }`. Stateless validation for non-expired tokens, validates against DB when `tokenExp` passes. Types use `Date` (wire format is ms). `sessionExp: null` = forever.
 - `sessionOpaque()` — Opaque (random string). Always validates against DB.
 
-**Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production).
+**Cookie settings:** HttpOnly, SameSite=Lax, Secure (in production). Chrome caps cookie expiry at 400 days.
 
 ### TTLs and expiry
 
@@ -361,7 +363,7 @@ The auth system has five distinct TTLs, each serving a different purpose:
 | Token TTL     | `sessionHmac({ ttl })`         | Revocation window — how long before DB check | 10 min                          | No              |
 | Session TTL   | `session: { ttl }`             | Inactivity timeout — when to sign out user   | 30 days or `Infinity` (forever) | Yes             |
 | Cookie TTL    | `sessionCookieDefaults.maxAge` | Browser cookie lifetime — auto-deleted after | 400 days                        | Yes             |
-| OTP TTL       | `otpTransportConsole({ ttl })` | OTP validity — how long to enter the code    | 10 min                          | No              |
+| OTP TTL       | `otpTransportConsole({ ttl })` | OTP validity — how long to enter the otp     | 10 min                          | No              |
 | Challenge TTL | `webAuthn: { challengeTtl }`   | WebAuthn challenge validity                  | 5 min                           | No              |
 
 **Token TTL vs Session TTL:**
@@ -471,7 +473,7 @@ See `examples/tanstack-start/` for a full OTP → passkey example and `examples/
 
 ### React hooks (`@repo/auth-react`)
 
-A reference implementation package with two layers.
+See `examples/AGENTS.md` for the full conventions on hooks, UI atoms, and data fetching strategy per framework.
 
 Only things that need reactive state (loading, error) or multi-step orchestration need a React hook. Everything else can call the auth methods directly.
 
@@ -510,46 +512,50 @@ await authClient.requestOtp({ identifier: email });
 - OTP: `requestOtp`, `verifyOtp`
 - Registration token: `createRegistrationToken`, `validateRegistrationToken`
 - Passkeys: `generateRegistrationOptions`, `verifyRegistration`, `generateAuthenticationOptions`, `verifyAuthentication`
-- Session: `createSession` (server-only), `getSession` (server-only), `signOut` (client-callable)
+- Session: `createSession` (server-only), `getSession` (server-only), `signOut` (client-callable), `signOutAll` (server-only)
 
 **Adapters:**
 
 - Storage: memory (dev), PostgreSQL (planned)
 - Tokens: HMAC (session + registration), opaque (session)
 - OTP delivery: console (dev), Resend (planned), SendGrid (planned)
-- Session transport: cookie, header, memory (testing), TanStack
+- Session transport: cookie, header, memory (testing), TanStack, Next.js
 - Flows: planned (apps compose primitives directly for now)
 
 **Frameworks:**
 
 - Server: Framework-agnostic functions
 - Client: Vanilla JS core + React hooks
-- Tested with: Next.js (App Router), TanStack Start
+- Tested with: Next.js (App Router), TanStack Start, Bun
 
 **Roadmap:**
 
-_Next: TanStack Start full example_
+_Next: combined OTP + passkey examples_
 
-Build out the TanStack Start example as a reference app with common auth features. This drives library improvements — examples validate the design.
+Build out combined flow examples. Examples validate the design and drive library improvements.
 
 Example features:
 
-- [x] Sign up (OTP → passkey)
+- [x] Sign up (OTP-only)
+- [x] Sign up (passkey-only)
 - [x] Sign in (passkey)
 - [x] Sign out
+- [ ] Combined OTP → passkey flow
 - [ ] Unified "continue with email" flow (handles new + existing users)
-- [x] Add passkey (while authenticated)
-- [x] Add/change email (OTP verification for new identifier)
-- [x] Sign out all devices
-- [x] Manage passkeys UI
+- [ ] Add passkey (while authenticated)
+- [ ] Add/change email (OTP verification for new identifier)
+- [ ] Sign out all devices
+- [ ] Manage passkeys UI
 - [ ] Manage sessions UI
 - [ ] Strict mode demo (disable OTP for existing users)
+
+Note: the legacy `examples/tmp/tanstack-start/` has working versions of several of these features (add passkey, add/change email, sign out all, manage passkeys) but uses older patterns. These should be ported to the current example structure.
 
 Library additions (as needed):
 
 - [ ] `allowCredentials` in `generateAuthenticationOptions()` — see design notes below
 - [ ] Make `identifier` optional in `createRegistrationToken()` — support passkey-only sign-up
-- [x] Session management: `signOutAll()` on core methods, `deleteByUserId()` on `SessionStorage`
+- [x] Session management: `signOutAll()` on core methods, `deleteAll()` on `SessionStorage`
 - [x] Passkey management: `delete()` on `CredentialStorage` — apps call storage directly for list/delete
 
 Suggested order:
@@ -593,7 +599,7 @@ The `userId` variant would look up credentials via `CredentialStorage.get(userId
 
 _Later: Next.js example_
 
-Port full example to Next.js App Router. Two framework examples prove the library is framework-agnostic.
+Port passkey example to Next.js App Router. Two framework examples prove the library is framework-agnostic.
 
 _Future:_
 
@@ -609,7 +615,7 @@ _Future:_
 **Exclusions:**
 
 - ❌ OAuth / social login
-- ❌ Magic links — link preview bots and SMS OG card fetchers invalidate links before the user clicks, and the "which device gets signed in?" confusion (the device that clicked vs the device that initiated) creates poor UX. OTP is unambiguous: you sign in where you type the code
+- ❌ Magic links — link preview bots and SMS OG card fetchers invalidate links before the user clicks, and the "which device gets signed in?" confusion (the device that clicked vs the device that initiated) creates poor UX. OTP is unambiguous: you sign in where you type the otp
 - ❌ Password-based auth
 - ❌ Legacy browser support
 - ❌ SAML / SSO / enterprise features
