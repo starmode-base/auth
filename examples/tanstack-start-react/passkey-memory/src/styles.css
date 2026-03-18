@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@source "../../../packages/auth-react/src";
+@import "@repo/auth-react/styles.css";
 
 /* Button cursor */
 @layer base {
