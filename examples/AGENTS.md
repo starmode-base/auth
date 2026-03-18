@@ -5,43 +5,52 @@ readable for both developers and LLMs, and so that new examples stay consistent.
 
 ## Example organization
 
-Examples are organized in two levels: **auth flow** (folder) → **framework +
-storage** (example). The auth flow is the primary dimension because that's the
-user's first decision — they pick a flow, then pick their stack.
+Examples are organized in two levels: **framework** (folder) → **flow + storage**
+(example). Framework is the primary dimension because developers start with their
+stack, then pick an auth flow.
 
 ```
 examples/
-  otp/                        OTP only
-  passkey/                    Passkey only
-  otp-passkey/                OTP → passkey (default pattern)
-  otp-passkey-strict/         OTP → passkey, OTP disabled after setup
-  passkey-otp/                Passkey first, OTP to collect email later
+  tanstack-start-react/       TanStack Start with React
+  nextjs/                     Next.js (App Router)
+  bun-react/                  Bun with React (no meta-framework)
 ```
 
-Inside each flow folder, examples are named `{framework}-{storage}`:
+Inside each framework folder, examples are named `{flow}-{storage}`:
 
-- Frameworks: `tanstack-start`, `nextjs`, `bun`
+- Flows: `otp`, `passkey`, `otp-passkey`, `otp-passkey-strict`, `passkey-otp`
 - Storage: `memory`, `postgres`
 
-Example: `examples/otp/tanstack-start-postgres/`
+Example: `examples/tanstack-start-react/otp-postgres/`
+
+The `-react` suffix appears where the platform supports multiple renderers
+(TanStack Start → future SolidJS) or doesn't imply one (Bun). Next.js is
+always React, so no suffix.
 
 ### Example matrix
 
-| Flow                 | `tanstack-start-memory` | `tanstack-start-postgres` | `nextjs-memory` | `nextjs-postgres` | `bun-memory` | `bun-postgres` |
-| -------------------- | ----------------------- | ------------------------- | --------------- | ----------------- | ------------ | -------------- |
-| `otp`                | ✅                      | —                         | ✅              | —                 | ✅           | —              |
-| `passkey`            | ✅                      | —                         | —               | —                 | —            | —              |
-| `otp-passkey`        | —                       | —                         | —               | —                 | —            | —              |
-| `otp-passkey-strict` | —                       | —                         | —               | —                 | —            | —              |
-| `passkey-otp`        | —                       | —                         | —               | —                 | —            | —              |
+| Flow                          | `tanstack-start-react` | `nextjs` | `bun-react` |
+| ----------------------------- | ---------------------- | -------- | ----------- |
+| `otp-memory`                  | ✅                     | ✅       | ✅          |
+| `otp-postgres`                | —                      | —        | —           |
+| `passkey-memory`              | ✅                     | —        | —           |
+| `passkey-postgres`            | —                      | —        | —           |
+| `otp-passkey-memory`          | —                      | —        | —           |
+| `otp-passkey-postgres`        | —                      | —        | —           |
+| `otp-passkey-strict-memory`   | —                      | —        | —           |
+| `otp-passkey-strict-postgres` | —                      | —        | —           |
+| `passkey-otp-memory`          | —                      | —        | —           |
+| `passkey-otp-postgres`        | —                      | —        | —           |
 
 ✅ = done, — = planned
 
 ### Legacy examples (delete when covered)
 
-- `tanstack-start` — full OTP → passkey, uses older patterns (`authClient`
-  direct, local atoms). Replaced by `otp-passkey/tanstack-start-memory`.
-- `bun-memory` — minimal in-memory test. Delete anytime.
+These live in `tmp/` and use older patterns:
+
+- `tmp/tanstack-start` — full OTP → passkey, uses `authClient` direct and local
+  atoms. Replaced by `tanstack-start-react/otp-passkey-memory`.
+- `tmp/bun-memory` — minimal in-memory test. Delete anytime.
 
 ## Framework-native data fetching
 
