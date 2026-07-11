@@ -68,7 +68,7 @@ function verifyOrigin(origin: string, expectedRpId: string): void {
     }
   } catch (err) {
     if (err instanceof TypeError) {
-      throw new Error(`Invalid origin URL: ${origin}`);
+      throw new Error(`Invalid origin URL: ${origin}`, { cause: err });
     }
     throw err;
   }
