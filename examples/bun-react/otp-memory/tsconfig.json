@@ -7,7 +7,6 @@
     "lib": ["ESNext", "DOM"],
     "jsx": "react-jsx",
     "allowJs": true,
-    "allowImportingTsExtensions": true,
     "types": ["bun"],
     "paths": {
       "@/*": ["./src/*"]
