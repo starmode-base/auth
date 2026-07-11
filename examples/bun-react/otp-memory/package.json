@@ -11,14 +11,14 @@
     "@starmode/auth": "workspace:*",
     "@repo/auth-react": "workspace:*",
     "bun-plugin-tailwind": "^0.1.2",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "tailwindcss": "^4.2.2",
-    "zod": "^4.3.6"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/react": "^19.2.14",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@types/bun": "^1.3.11"
+    "@types/bun": "^1.3.14"
   }
 }
