@@ -1,17 +1,9 @@
 {
   "compilerOptions": {
-    /* Environment */
-    "target": "ES2022",
     "jsx": "react-jsx",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
-    "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true,
-    "noUncheckedSideEffectImports": true,
+    "allowImportingTsExtensions": true,
 
-    /* Base */
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
