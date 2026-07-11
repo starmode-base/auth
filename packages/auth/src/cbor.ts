@@ -11,11 +11,7 @@
  */
 
 export type CborValue =
-  | number
-  | Uint8Array
-  | string
-  | CborValue[]
-  | Map<CborValue, CborValue>;
+  number | Uint8Array | string | CborValue[] | Map<CborValue, CborValue>;
 
 export function decodeCbor(data: Uint8Array): CborValue {
   let offset = 0;

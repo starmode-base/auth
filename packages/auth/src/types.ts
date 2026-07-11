@@ -145,8 +145,7 @@ export type AuthErrorCode =
 
 /** Generic result type for failable operations */
 export type Result<T = object> =
-  | ({ success: true } & T)
-  | { success: false; error: AuthErrorCode };
+  ({ success: true } & T) | { success: false; error: AuthErrorCode };
 
 export type RequestOtpResult = { success: true };
 export type VerifyOtpResult = Result;

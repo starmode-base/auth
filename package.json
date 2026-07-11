@@ -18,9 +18,9 @@
     "clean:hard": "rm -rf node_modules packages/*/node_modules examples/*/*/{node_modules,.next,.output,tsconfig.tsbuildinfo} bun.lock && bun install"
   },
   "devDependencies": {
-    "prettier": "^3.8.1",
-    "prettier-plugin-tailwindcss": "^0.7.2",
+    "prettier": "^3.9.5",
+    "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.10"
   }
 }
