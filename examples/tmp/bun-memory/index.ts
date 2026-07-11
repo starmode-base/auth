@@ -39,10 +39,10 @@ function createAuthForRequest(req: Request) {
       codec: sessionHmac({ secret: "dev-secret", ttl: 600 }),
       transport: sessionTransportCookie({
         get: (name) => getCookieFromRequest(req, name),
-        set: (name, value, opts) => {
+        set: (_name, value, opts) => {
           pendingCookie = { value, maxAge: opts.maxAge };
         },
-        clear: (name, opts) => {
+        clear: (_name, _opts) => {
           pendingCookie = { value: "", maxAge: 0 };
         },
         options: { ...sessionCookieDefaults, cookieName: SESSION_COOKIE },

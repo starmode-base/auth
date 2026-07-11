@@ -15,3 +15,6 @@ declare module "*.module.css" {
   const classes: { readonly [key: string]: string };
   export = classes;
 }
+
+/** Plain CSS, imported for its side effects */
+declare module "*.css";

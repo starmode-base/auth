@@ -33,6 +33,7 @@
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
     "neon-testing": "^3.0.0",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.63.0"
   }
 }

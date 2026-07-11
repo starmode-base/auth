@@ -273,15 +273,16 @@ describe("client types", () => {
       const auth = makeAuthClient("/api/auth");
 
       // These should all type-check
-      const _r1: { success: boolean } = await auth.requestOtp({
+      (await auth.requestOtp({
         identifier: "test@example.com",
-      });
-      const _r2: { success: boolean } = await auth.verifyOtp({
+      })) satisfies { success: boolean };
+      (await auth.verifyOtp({
         identifier: "test@example.com",
         otp: "123456",
-      });
-      const _r3: void = await auth.signOut();
+      })) satisfies { success: boolean };
+      (await auth.signOut()) satisfies void;
     };
+    void _typeCheck;
 
     expect(true).toBe(true);
   });
@@ -292,6 +293,7 @@ describe("client types", () => {
       const auth: AuthClient = makeAuthClient("/api/auth");
       return auth;
     };
+    void _typeCheck;
 
     expect(true).toBe(true);
   });

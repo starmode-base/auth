@@ -1,16 +1,25 @@
 {
   "compilerOptions": {
+    /* Environment */
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "strict": true,
-    "skipLibCheck": true,
+    "lib": ["ESNext", "DOM"],
     "declaration": true,
     "declarationMap": true,
-    "noEmit": true,
-    "isolatedModules": true,
+
+    /* Base */
+    "moduleDetection": "force",
     "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     "noUncheckedIndexedAccess": true,
-    "lib": ["ESNext", "DOM"]
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true
   }
 }

@@ -3,7 +3,7 @@ export type StoredCredential = {
   id: string;
   publicKey: Uint8Array;
   counter: number;
-  transports?: AuthenticatorTransport[];
+  transports?: AuthenticatorTransport[] | undefined;
 };
 
 /** OTP DB record */
@@ -190,9 +190,9 @@ export type RegistrationCredential = {
   response: {
     clientDataJSON: string;
     attestationObject: string;
-    transports?: AuthenticatorTransport[];
+    transports?: AuthenticatorTransport[] | undefined;
   };
-  authenticatorAttachment?: AuthenticatorAttachment;
+  authenticatorAttachment?: AuthenticatorAttachment | undefined;
   clientExtensionResults: AuthenticationExtensionsClientOutputs;
 };
 
@@ -204,9 +204,9 @@ export type AuthenticationCredential = {
     clientDataJSON: string;
     authenticatorData: string;
     signature: string;
-    userHandle?: string;
+    userHandle?: string | undefined;
   };
-  authenticatorAttachment?: AuthenticatorAttachment;
+  authenticatorAttachment?: AuthenticatorAttachment | undefined;
   clientExtensionResults: AuthenticationExtensionsClientOutputs;
 };
 

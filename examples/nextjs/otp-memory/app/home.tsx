@@ -103,7 +103,7 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
   );
 }
 
-export function HomePage(props: { viewer?: Viewer }) {
+export function HomePage(props: { viewer?: Viewer | undefined }) {
   const router = useRouter();
 
   if (props.viewer) {

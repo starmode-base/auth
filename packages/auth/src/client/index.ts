@@ -33,17 +33,20 @@ export async function createPasskey(
   options: PublicKeyCredentialCreationOptionsJSON,
 ): Promise<RegistrationCredential | null> {
   // Convert JSON options to browser API format
+  const { excludeCredentials, ...rest } = options;
   const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-    ...options,
+    ...rest,
     challenge: base64urlToBuffer(options.challenge),
     user: {
       ...options.user,
       id: base64urlToBuffer(options.user.id),
     },
-    excludeCredentials: options.excludeCredentials?.map((cred) => ({
-      ...cred,
-      id: base64urlToBuffer(cred.id),
-    })),
+    ...(excludeCredentials && {
+      excludeCredentials: excludeCredentials.map((cred) => ({
+        ...cred,
+        id: base64urlToBuffer(cred.id),
+      })),
+    }),
   };
 
   // Trigger browser WebAuthn ceremony
@@ -85,13 +88,16 @@ export async function getPasskey(
   options: PublicKeyCredentialRequestOptionsJSON,
 ): Promise<AuthenticationCredential | null> {
   // Convert JSON options to browser API format
+  const { allowCredentials, ...rest } = options;
   const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-    ...options,
+    ...rest,
     challenge: base64urlToBuffer(options.challenge),
-    allowCredentials: options.allowCredentials?.map((cred) => ({
-      ...cred,
-      id: base64urlToBuffer(cred.id),
-    })),
+    ...(allowCredentials && {
+      allowCredentials: allowCredentials.map((cred) => ({
+        ...cred,
+        id: base64urlToBuffer(cred.id),
+      })),
+    }),
   };
 
   // Trigger browser WebAuthn ceremony

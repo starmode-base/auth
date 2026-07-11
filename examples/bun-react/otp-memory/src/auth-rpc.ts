@@ -22,7 +22,7 @@ const post = async (url: string, data?: unknown) => {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: data ? JSON.stringify(data) : undefined,
+    ...(data ? { body: JSON.stringify(data) } : {}),
   });
 
   return res.json();

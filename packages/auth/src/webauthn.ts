@@ -32,8 +32,8 @@ type ParsedAuthData = {
   signCount: number;
   userPresent: boolean;
   userVerified: boolean;
-  credentialId?: Uint8Array;
-  coseKey?: Map<CborValue, CborValue>;
+  credentialId?: Uint8Array | undefined;
+  coseKey?: Map<CborValue, CborValue> | undefined;
 };
 
 /** Compare two Uint8Arrays for equality */
@@ -230,7 +230,7 @@ export type VerifyRegistrationResult = {
   credentialId: string;
   publicKey: Uint8Array;
   counter: number;
-  transports?: AuthenticatorTransport[];
+  transports?: AuthenticatorTransport[] | undefined;
 };
 
 /**
