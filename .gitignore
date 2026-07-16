@@ -3,3 +3,6 @@ node_modules/
 
 # Misc
 .DS_Store
+
+# Local work queue, deliberately untracked (see AGENTS.md documentation map)
+/TODO.md

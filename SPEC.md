@@ -252,17 +252,17 @@ Everything is explicit, never implicit. Config is grouped by feature (`session`,
 
 ### Framework-agnostic by design
 
-| Layer             | What it does                   | Framework-specific? |
-| ----------------- | ------------------------------ | ------------------- |
-| `makeOtpAuth`     | OTP + session                  | No                  |
-| `makePasskeyAuth` | Passkey + session              | No                  |
-| `makeAuth`        | OTP + passkey + session (full) | No                  |
-| `makeAuthHandler` | REST handler for auth API      | No                  |
-| `makeAuthClient`  | Client (HTTP + WebAuthn)       | No                  |
+| Layer             | What it does                      | Framework-specific? |
+| ----------------- | --------------------------------- | ------------------- |
+| `makeAuth`        | Session core, strategies chain on | No                  |
+| `.withOtp()`      | Adds OTP methods                  | No                  |
+| `.withPasskey()`  | Adds passkey methods              | No                  |
+| `makeAuthHandler` | REST handler for auth API         | No                  |
+| `makeAuthClient`  | Client (HTTP + WebAuthn)          | No                  |
 
-Three factory functions, one per auth surface. Pick the one that matches your flow. `makeAuthHandler` and `makeAuthClient` are optional — apps can call primitives directly via server functions.
+One entry point, builder-style: `makeAuth(session).withOtp(otp).withPasskey(passkey)`. Every step returns a complete, usable auth object. `makeAuthHandler` and `makeAuthClient` are optional — apps can call primitives directly via server functions.
 
-> **Open question:** We may fold the three factories into a single `makeAuth` with conditional return types based on which config groups are present (`otp`, `passkey`, or both). The three-factory approach is stricter and simpler; the single-factory approach is more flexible. Decision pending.
+> **Decided (2026-07-16):** One factory, builder pattern — replaces the earlier three factories (`makeOtpAuth`, `makePasskeyAuth`, `makeAuth(full)`). Rationale: each chained step takes a concrete config type, so TypeScript enforces exact configs (excess keys rejected, invalid combos unrepresentable, duplicate `.withOtp()` a type error) while the result type only carries the methods that were configured. A single options-object factory can't do this without generics that wreck error messages; mutation-based config (class setters) can't be typed at all. Same progressive-inference pattern as TanStack Start server functions and tRPC. See `packages/auth/README.md` for the API.
 
 The library provides a REST-based architecture. Server exposes `makeAuthHandler`, client uses `makeAuthClient`. Session management uses cookies automatically.
 

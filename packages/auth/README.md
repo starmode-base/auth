@@ -17,22 +17,24 @@ Passkeys and OTP as composable primitives. Auth that an agent can set up in one 
 bun add @starmode/auth
 ```
 
-## One factory
+## One entry point
 
-There is exactly one entry point. Which config groups you pass determines which methods you get back — enforced by TypeScript:
+`makeAuth` creates the session core. Strategies chain on:
 
 ```ts
-makeAuth({ session }); // sessions only
-makeAuth({ session, otp }); // + requestOtp, verifyOtp
-makeAuth({ session, passkey }); // + passkey ceremonies
-makeAuth({ session, otp, passkey }); // everything
+makeAuth(session); // sessions only
+makeAuth(session).withOtp(otp); // + requestOtp, verifyOtp
+makeAuth(session).withPasskey(passkey); // + passkey ceremonies
+makeAuth(session).withOtp(otp).withPasskey(passkey); // everything
 ```
+
+Every step returns a complete, usable auth object — there is no `.build()` finisher, and chain order doesn't matter.
 
 The type-safety contract:
 
-- The result type only has methods for the groups you configured. Calling `auth.verifyOtp` on a passkey-only instance is a type error, not a runtime error.
-- Unknown config keys are rejected. No silently ignored config.
-- Within a group, every field is required. If it matters, you set it.
+- Methods follow the chain. `verifyOtp` only exists after `.withOtp()` — calling it on a passkey-only instance is a type error, not a runtime error.
+- Each step takes a concrete config type: unknown keys are rejected, every field is required. If it matters, you set it.
+- No combination of calls compiles but half-works — misconfiguration is unrepresentable.
 
 ## Quickstarts
 
@@ -57,20 +59,17 @@ import {
 } from "@starmode/auth/tanstack"; // or /nextjs
 
 export const auth = makeAuth({
-  session: {
-    storage: memorySessionStorage(),
-    codec: sessionHmac({
-      secret: process.env.AUTH_SECRET!,
-      ttl: 10 * 60 * 1000,
-    }),
-    transport: sessionTransportTanstack(sessionCookieDefaults),
-    ttl: 30 * 24 * 60 * 60 * 1000, // inactivity timeout
-  },
-  otp: {
-    storage: memoryOtpStorage(),
-    delivery: otpDeliveryConsole({ ttl: 10 * 60 * 1000 }),
-  },
+  storage: memorySessionStorage(),
+  codec: sessionHmac({
+    secret: process.env.AUTH_SECRET!,
+    ttl: 10 * 60 * 1000,
+  }),
+  transport: sessionTransportTanstack(sessionCookieDefaults),
+  ttl: 30 * 24 * 60 * 60 * 1000, // inactivity timeout
   debug: false,
+}).withOtp({
+  storage: memoryOtpStorage(),
+  delivery: otpDeliveryConsole({ ttl: 10 * 60 * 1000 }),
 });
 ```
 
@@ -92,22 +91,18 @@ return auth.createSession({ userId: user.id });
 No email service, no external anything. The whole setup lives in your repo.
 
 ```ts
-export const auth = makeAuth({
-  session: {/* same as above */},
-  passkey: {
-    storage: memoryCredentialStorage(),
-    challenges: memoryChallengeStorage(),
-    registrationCodec: registrationHmac({
-      secret: process.env.AUTH_SECRET!,
-      ttl: 5 * 60 * 1000,
-    }),
-    webAuthn: {
-      rpId: "localhost",
-      rpName: "My app",
-      challengeTtl: 5 * 60 * 1000,
-    },
+export const auth = makeAuth({/* session core, same as above */}).withPasskey({
+  storage: memoryCredentialStorage(),
+  challenges: memoryChallengeStorage(),
+  registrationCodec: registrationHmac({
+    secret: process.env.AUTH_SECRET!,
+    ttl: 5 * 60 * 1000,
+  }),
+  webAuthn: {
+    rpId: "localhost",
+    rpName: "My app",
+    challengeTtl: 5 * 60 * 1000,
   },
-  debug: false,
 });
 ```
 
@@ -133,7 +128,7 @@ Sign-in is the same shape with the authentication methods — no token needed.
 
 ### OTP + passkeys (recommended default)
 
-OTP proves inbox ownership at sign-up; passkeys do the everyday sign-in. Config is the union: pass both `otp` and `passkey` groups.
+OTP proves inbox ownership at sign-up; passkeys do the everyday sign-in. Config is the union: chain both `.withOtp()` and `.withPasskey()`.
 
 ```ts
 // server function — after otp verify, bridge into the passkey ceremony

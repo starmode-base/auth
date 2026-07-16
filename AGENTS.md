@@ -4,11 +4,30 @@
 
 ## Development workflow
 
-- Use `SPEC.md` as the source of intent
+- Use `packages/auth/README.md` as the source of intent — it documents the target API and wins over code
 - Generate code + tests together in small chunks
 - Human reviews for: unnecessary complexity, over-engineering, maintainability
 - Iterate until tight
-- Tests become the true spec — `SPEC.md` is historical documentation of intent
+- Tests become the true spec — the README is the contract they encode
+
+## Documentation map
+
+Roles (decided 2026-07-16): README = contract, SPEC = rationale, TODO = queue.
+
+Now:
+
+- `packages/auth/README.md` — the contract: target API, drives implementation. Where it disagrees with the code, the README wins.
+- `SPEC.md` — rationale and dated decision record. Partially stale; never treat it as the contract.
+- `TODO.md` — work queue from the 2026-07 repo review. Deliberately uncommitted.
+
+Destination (hold until the contract is finished and proven by the builder factory implementation):
+
+- `/README.md` (root, new) — rationale: philosophy, positioning, security model, dated decisions, absorbed from `SPEC.md`
+- `packages/auth/README.md` — contract plus behavioral docs (TTL/session mechanics move here or to a linked docs file)
+- `SPEC.md` — deleted once fully dissolved
+- Queue moves to issues, or `TODO.md` remains
+
+Don't start the doc reorganization ahead of that milestone — SPEC content can't be sorted into rationale vs behavioral docs until the contract settles.
 
 ## Quality over speed
 
