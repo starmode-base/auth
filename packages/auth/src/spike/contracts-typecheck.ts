@@ -13,8 +13,8 @@ import type {
   AuthCoreOtp,
   AuthCorePasskey,
   AuthFull,
-} from "./make-auth";
-import { makeAuth } from "./make-auth";
+} from "./contracts";
+import { makeAuth } from "./contracts";
 
 declare const session: MakeAuthConfig;
 declare const otp: WithOtpConfig;

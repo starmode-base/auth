@@ -2,7 +2,7 @@
  * Playground — exercises the contracts with no-op adapters.
  * Note every no-op fails closed: a do-nothing auth denies everything.
  */
-import { makeAuth } from "./make-auth";
+import { makeAuth } from "./contracts";
 
 export const auth = makeAuth({
   storage: {
