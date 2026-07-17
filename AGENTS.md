@@ -2,9 +2,17 @@
 
 - Use `bun run check` after edits to type check all workspaces
 
+## Session start
+
+Read before working, in order:
+
+1. `packages/auth/src/spike/contracts.ts` — the typed API spec, current source of intent. Wins over the README and the code while the API is finalized.
+2. `TODO.md` — the work queue (gitignored, local to this machine).
+3. `SPEC.md` — rationale and dated decision blocks. Search it before proposing design changes; don't bulk-read (~700 lines).
+
 ## Development workflow
 
-- Use `packages/auth/README.md` as the source of intent — it documents the target API and wins over code
+- Source of intent: `packages/auth/src/spike/contracts.ts` while the API is finalized; `packages/auth/README.md` resumes as the contract at promotion, rewritten from the settled contracts
 - Order of work: types (signatures) → tests → implementation. Signatures make the contract concrete, tests encode it, implementation satisfies it.
 - When designing an adapter interface, ask what the lazy implementation does — it must fail closed (deny access), never open
 - Type files are split by layer (see SPEC.md "Adapter layering"): contracts, mechanisms, bindings, configs — file organization mirrors the layers
@@ -19,7 +27,8 @@ Roles (decided 2026-07-16): README = contract, SPEC = rationale, TODO = queue.
 
 Now:
 
-- `packages/auth/README.md` — the contract: target API, drives implementation. Where it disagrees with the code, the README wins.
+- `packages/auth/src/spike/contracts.ts` — the typed API spec: source of intent, wins over README and code while the API is finalized.
+- `packages/auth/README.md` — the contract prose: stale during API finalization, rewritten from contracts.ts at promotion.
 - `SPEC.md` — rationale and dated decision record. Partially stale; never treat it as the contract.
 - `TODO.md` — work queue from the 2026-07 repo review. Deliberately uncommitted.
 
