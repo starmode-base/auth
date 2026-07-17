@@ -89,6 +89,28 @@ if (registrationResult.success) {
   void registrationResult.session;
 }
 
+/* Commands without failure modes collapse — the envelope needs no narrowing */
+
+declare const created: Awaited<ReturnType<AuthCore["session"]["create"]>>;
+void created.success;
+void created.token;
+void created.userId;
+
+/* Commands with failure modes require narrowing before payload access */
+
+declare const otpVerified: Awaited<ReturnType<AuthFull["otp"]["verify"]>>;
+// @ts-expect-error error exists only on the failure branch — narrow on success first
+void otpVerified.error;
+
+/* Error unions are narrowed per method */
+
+declare const otpFailure: Extract<
+  Awaited<ReturnType<AuthFull["otp"]["verify"]>>,
+  { success: false }
+>;
+const otpError: "invalid_otp" = otpFailure.error;
+void otpError;
+
 /* Duplicate steps are type errors — with* removes itself from the chain */
 
 // @ts-expect-error withOtp cannot be chained twice

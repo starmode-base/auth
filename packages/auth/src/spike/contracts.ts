@@ -25,12 +25,17 @@ export type AuthErrorCode =
   | "internal_error";
 
 /**
- * Result of an operation with expected failure modes — including malformed
- * client input. Expected failures are values, never exceptions; absence is
- * null; idempotent success is void. Infrastructure failures throw.
+ * Command result. Expected failures — including malformed client input —
+ * are values the caller branches on; E lists exactly the failures the
+ * command can produce, and E = never collapses the type to an always-success
+ * envelope. Queries return the value or null instead: absence is not
+ * failure. Infrastructure failures throw.
  */
-export type Result<T = object> =
-  ({ success: true } & T) | { success: false; error: AuthErrorCode };
+export type Result<T extends object, E extends AuthErrorCode> = [E] extends [
+  never,
+]
+  ? { success: true } & T
+  : ({ success: true } & T) | { success: false; error: E };
 
 /* ────────────────────────────────────────────────────────────────────────
  * Session — the core. Records → adapters → config → namespace → results.
@@ -110,12 +115,12 @@ export type SessionNamespace = {
    */
   create: (args: {
     userId: string;
-  }) => Promise<{ token: string; userId: string }>;
+  }) => Promise<Result<{ token: string; userId: string }, never>>;
   get: () => Promise<{ userId: string } | null>;
-  /** End the current session (signs the user out) */
-  end: () => Promise<void>;
-  /** End all sessions for the current user (signs out every device) */
-  endAll: () => Promise<void>;
+  /** Ends the current session (signs the user out) */
+  end: () => Promise<Result<object, never>>;
+  /** Ends all sessions for the current user (signs out every device) */
+  endAll: () => Promise<Result<object, never>>;
 };
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -174,7 +179,7 @@ export type WithOtpConfig = {
   delivery: OtpDelivery;
 };
 
-export type VerifyOtpResult = Result;
+export type VerifyOtpResult = Result<object, "invalid_otp">;
 
 /** Otp methods — added as the `otp` namespace by withOtp */
 export type OtpNamespace = {
@@ -182,7 +187,7 @@ export type OtpNamespace = {
    * Sends an otp to the identifier. Never reveals whether delivery
    * succeeded (enumeration safety).
    */
-  request: (args: { identifier: string }) => Promise<void>;
+  request: (args: { identifier: string }) => Promise<Result<object, never>>;
   verify: (args: {
     identifier: string;
     otp: string;
@@ -330,24 +335,35 @@ export type AuthenticationCredential = {
 /* Results — verification returns the verified userId; sessions are created
  * explicitly via session.create. */
 
-export type CreateRegistrationTokenResult = { registrationToken: string };
+export type CreateRegistrationTokenResult = Result<
+  { registrationToken: string },
+  never
+>;
 
-export type ValidateRegistrationTokenResult = Result<{
-  userId: string;
-  identifier: string | null;
-}>;
+export type ValidateRegistrationTokenResult = Result<
+  { userId: string; identifier: string | null },
+  "invalid_token"
+>;
 
-export type RegistrationOptionsResult = Result<{
-  options: PublicKeyCredentialCreationOptionsJSON;
-}>;
+export type RegistrationOptionsResult = Result<
+  { options: PublicKeyCredentialCreationOptionsJSON },
+  "invalid_token"
+>;
 
-export type AuthenticationOptionsResult = {
-  options: PublicKeyCredentialRequestOptionsJSON;
-};
+export type AuthenticationOptionsResult = Result<
+  { options: PublicKeyCredentialRequestOptionsJSON },
+  never
+>;
 
-export type VerifyRegistrationResult = Result<{ userId: string }>;
+export type VerifyRegistrationResult = Result<
+  { userId: string },
+  "invalid_token" | "challenge_expired" | "user_mismatch" | "verification_failed"
+>;
 
-export type VerifyAuthenticationResult = Result<{ userId: string }>;
+export type VerifyAuthenticationResult = Result<
+  { userId: string },
+  "credential_not_found" | "challenge_expired" | "verification_failed"
+>;
 
 /** Passkey methods — added as the `passkey` namespace by withPasskey */
 export type PasskeyNamespace = {

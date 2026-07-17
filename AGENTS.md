@@ -58,7 +58,13 @@ This is security-critical code.
 
 ## Error handling
 
-- All public API functions return `Result<T>` — never throw
+The mental model (decided 2026-07-17): three channels, one rule per kind of function.
+
+- Commands (public API methods that do something) return `Result<T, E>` with a narrowed per-method error union — expected failures are values, including malformed client input. `E = never` collapses the type to an always-success envelope, so no dead error branches.
+- Queries (public API lookups) return the value or `null` — absence is not failure. Currently only `session.get`.
+- Adapter interfaces (SPI) return plain values/null — the envelope is how the library speaks, not how it listens.
+- Infrastructure failures throw, everywhere — they are breakage, not outcomes. Throws are for the error monitor; Results are for the user.
+- The library never throws as flow control — no auth flow requires try/catch. Every shipped wire layer converts throws to error envelopes (500 + `internal_error`).
 - Use `result.ok()` for success, `result.fail()` for expected failures
 - Invariants: Never use type assertions (`as`). Throw instead — surfaces bugs immediately. Comment each invariant `Invariant: reasoning`
 - Must prove the error with a test before adding try-catch
