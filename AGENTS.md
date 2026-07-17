@@ -54,6 +54,7 @@ This is security-critical code.
 - No optional parameters and no defaults — anywhere, API or config (decided 2026-07-17). Noisier but more distinct. May be reconsidered later; not now.
 - Never export local symbols
 - Use TS/JS style comments
+- Comments (decided 2026-07-17): JSDoc in contract/spec files is spec text — held to completeness, state every constraint the type can't show. Everywhere else comments are held to necessity — only what code can't express, never narration. Tone: professional library API docs (what the reader needs to use it correctly) — never design rationale, internal notes, or decision history; those belong in SPEC.md.
 
 ## Error handling
 
