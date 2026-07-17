@@ -44,11 +44,11 @@ otpAuth.otp.verify({ identifier: "test@example.com", otp: "123456" });
 
 export const passkey = auth.withPasskey({
   storage: {
-    get: async () => [],
-    getById: async () => null,
+    store: async () => undefined,
+    get: async () => null,
+    list: async () => [],
     updateCounter: async () => undefined,
     delete: async () => undefined,
-    store: async () => undefined,
   },
   challenges: {
     store: async () => undefined,

@@ -215,10 +215,11 @@ export type CredentialRecord = {
 /** Credential (passkey) storage adapter */
 export type CredentialStorage = {
   store: (record: CredentialRecord) => Promise<void>;
-  get: (userId: string) => Promise<StoredCredential[]>;
-  getById: (
+  get: (
     credentialId: string,
   ) => Promise<{ userId: string; credential: StoredCredential } | null>;
+  /** All credentials belonging to the user */
+  list: (userId: string) => Promise<StoredCredential[]>;
   /** Persist the WebAuthn signature counter after authentication (clone detection) */
   updateCounter: (credentialId: string, counter: number) => Promise<void>;
   delete: (credentialId: string) => Promise<void>;
