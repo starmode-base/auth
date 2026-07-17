@@ -51,6 +51,7 @@ This is security-critical code.
 - ESM only, no CommonJS
 - TypeScript only, no transpile to JS
 - Factories should be prefixed with `make` (e.g., `makeAuth`, `makeMemoryAdapters`)
+- No optional parameters and no defaults — anywhere, API or config (decided 2026-07-17). Noisier but more distinct. May be reconsidered later; not now.
 - Never export local symbols
 - Use TS/JS style comments
 

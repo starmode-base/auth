@@ -16,7 +16,7 @@ Passkeys + OTP as composable primitives. Apps choose their flow.
 - **Nano scope** — intentionally small, won't grow into Auth0
 - **Zero dependencies** — no runtime dependencies, peer dependencies only where unavoidable
 - **Strong typings** — no type assertions (`as`), full type inference from API design
-- **All fields required** — config types have no optional fields. Explicit beats convenient.
+- **All fields required** — no optional parameters and no defaults, anywhere (decided 2026-07-17). Noisier but more distinct; explicit beats convenient. Optionals/defaults may be reconsidered later, not now.
 
 ### Inverted architecture
 
