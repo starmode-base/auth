@@ -358,7 +358,10 @@ export type AuthenticationOptionsResult = Result<
 
 export type VerifyRegistrationResult = Result<
   { userId: string },
-  "invalid_token" | "challenge_expired" | "user_mismatch" | "verification_failed"
+  | "invalid_token"
+  | "challenge_expired"
+  | "user_mismatch"
+  | "verification_failed"
 >;
 
 export type VerifyAuthenticationResult = Result<
