@@ -19,10 +19,16 @@ export type AuthErrorCode =
   | "user_mismatch"
   | "credential_not_found"
   | "verification_failed"
+  /** Wire-level only (REST handler); never returned by auth methods */
   | "invalid_request"
+  /** Wire-level only (REST handler); never returned by auth methods */
   | "internal_error";
 
-/** Generic result type for failable operations — expected failures are values, never exceptions */
+/**
+ * Result of an operation with expected failure modes — including malformed
+ * client input. Expected failures are values, never exceptions; absence is
+ * null; idempotent success is void. Infrastructure failures throw.
+ */
 export type Result<T = object> =
   ({ success: true } & T) | { success: false; error: AuthErrorCode };
 
@@ -96,13 +102,15 @@ export type MakeAuthConfig = {
   debug: boolean;
 };
 
-export type CreateSessionResult = Result<{
-  session: { token: string; userId: string };
-}>;
-
 /** Session methods — the core namespace, present at every step */
 export type SessionNamespace = {
-  create: (args: { userId: string }) => Promise<CreateSessionResult>;
+  /**
+   * Creates a session for the given user. The token is also delivered via
+   * the session transport; it is returned for header-based clients.
+   */
+  create: (args: {
+    userId: string;
+  }) => Promise<{ token: string; userId: string }>;
   get: () => Promise<{ userId: string } | null>;
   /** End the current session (signs the user out) */
   end: () => Promise<void>;
@@ -166,12 +174,15 @@ export type WithOtpConfig = {
   delivery: OtpDelivery;
 };
 
-export type RequestOtpResult = { success: true };
 export type VerifyOtpResult = Result;
 
 /** Otp methods — added as the `otp` namespace by withOtp */
 export type OtpNamespace = {
-  request: (args: { identifier: string }) => Promise<RequestOtpResult>;
+  /**
+   * Sends an otp to the identifier. Never reveals whether delivery
+   * succeeded (enumeration safety).
+   */
+  request: (args: { identifier: string }) => Promise<void>;
   verify: (args: {
     identifier: string;
     otp: string;
