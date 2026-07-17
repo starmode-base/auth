@@ -12,6 +12,7 @@ Passkeys + OTP as composable primitives. Apps choose their flow.
 - **Library-first** — your database is the source of truth, with an optional hosted service
 - **LLM-friendly** — no DNS config, no OAuth dashboards, no external clicks required
 - **Explicit over implicit** — no magic defaults, everything is a visible import
+- **Semantic contracts** — adapter interfaces state meaning (`verify`), never mechanism (`take`), so core stays frozen while implementations evolve freely
 - **Nano scope** — intentionally small, won't grow into Auth0
 - **Zero dependencies** — no runtime dependencies, peer dependencies only where unavoidable
 - **Strong typings** — no type assertions (`as`), full type inference from API design
@@ -250,6 +251,17 @@ Users should register multiple passkeys for redundancy. Each passkey can indepen
 
 Everything is explicit, never implicit. Config is grouped by feature (`session`, `otp`, `passkey`) — each group bundles its settings and storage adapter. You provide adapters (typed callbacks), the library orchestrates them.
 
+### Adapter layering
+
+> **Decided (2026-07-16):** Four layers, each with one rule. Users enter at any layer; each layer produces the input type of the layer above.
+
+| Layer      | What it is                                  | Rule                                                                     | Examples                                                                               |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| Contracts  | The adapter interfaces — the product        | Semantic, never mechanical; core runs on anything satisfying them        | `OtpStorage`, `SessionCodec`, `SessionTransportAdapter`                                |
+| Mechanisms | Logic shipped as adapters, environment-free | No framework imports, ever                                               | `sessionTransportCookie`, `makeHmacCodec`, memory storages, `makeOtpStorage` (planned) |
+| Bindings   | Environment glue                            | Zero logic — an if-statement means the logic moves down into a mechanism | `sessionTransportTanstack`, `sessionTransportNextjs`                                   |
+| Configs    | Pre-composed config values                  | Data only — composition plus literals, no functions of their own         | `sessionCookieDefaults`; planned bundles like `placeholderOtp`                         |
+
 ### Framework-agnostic by design
 
 | Layer             | What it does                      | Framework-specific? |
@@ -273,6 +285,12 @@ See `examples/tanstack-start/src/lib/auth.ts` for a working example. Config type
 **Custom storage adapters:**
 
 Storage is split by concern: `OtpStorage`, `SessionStorage`, `CredentialStorage`. Each factory only requires the storage types it uses. See `packages/auth/src/types.ts` — they're self-documenting.
+
+> **Decided (2026-07-16): Semantic contracts, frozen core.** `OtpStorage.verify` stays the contract — it states meaning ("is this valid"), never mechanism. This keeps core frozen (policy changes are adapter releases, not core majors) and keeps the contract maximally general: delegated verification (e.g. Twilio Verify, where the provider checks the otp and no local record exists) is a valid adapter. Power lives at the edges; core hardly ever changes.
+
+> **Decided (2026-07-16): Mechanisms make the common case correct by construction.** We ship factories that produce correct adapters from dumb atomic primitives: `makeOtpStorage({ store, take })` returns an `OtpStorage` with expiry check, comparison, and one-time consumption built in — written and race-tested once by us. `take(identifier)` is atomic fetch-and-delete (`DELETE … RETURNING`, `GETDEL`); that one-word guarantee — atomic — is the entire adapter obligation, and the lazy implementation fails closed. Database recipes target `store`/`take`; power users (delegated verification, custom lockouts, dev bypasses) implement `OtpStorage` raw — full control, visibly off the blessed path. Conformance tests ship alongside: sequential (take twice → second null) plus deterministic barrier-based race checks — no hammering (see https://www.lirbank.com/harnessing-postgres-race-conditions.md).
+
+> **Decided (2026-07-16): One attempt per otp.** A wrong otp consumes it — the user starts over with a fresh request. No attempt budgets, no re-store logic; every failure path fails closed. The typo cost is one email round-trip; acceptable for v1, revisit only on observed user friction. Per-identifier/per-IP rate limiting remains out of scope (infrastructure layer).
 
 **Why no database drivers?**
 
@@ -335,6 +353,10 @@ See `AuthClient` type in `packages/auth/src/types.ts` for the full interface. Th
 - **Browser WebAuthn:** `createPasskey`, `getPasskey`
 
 **Note:** `getSession` is server-only. Apps decide how to expose auth status to the client (e.g., SSR loader, server function).
+
+### No events API
+
+> **Decided (2026-07-16):** The library ships no hooks or events system (cf. NextAuth events callbacks, Better Auth hooks). Those exist because flow-owning libraries must ventilate their internals; this library's flows are composed in userland, so the app already stands wherever a hook would fire — holding the `Result` of the very call an event would describe. Intent events (`onSignUp`) are structurally impossible for core: sign-up vs sign-in is decided by the app's upsert (`isNew`), which core never sees. Mechanical events (`onSessionCreated`) are redundant: they would fire when you call a function you called. Placement rules: business analytics (Mixpanel etc.) goes at the userland composition point next to `isNew`; security telemetry (audit logs, failed-attempt alerts) goes in adapter or method decorators. One mapped exception: the optional REST handler bypasses userland — if interception is ever needed there, it becomes a `makeAuthHandler` option, never a core concept.
 
 ### Session management
 
@@ -636,6 +658,19 @@ Do you want passkeys? Yes → use this. No → this isn't for you.
 If you need OAuth, SAML, legacy browser support, or enterprise SSO—use Auth0, Clerk or Okta.
 
 If you're building a new project and want passkey auth that an LLM can set up in one prompt, this is it.
+
+### How we differ
+
+The through-line: **flow ownership**. Flow-owning libraries (NextAuth, Better Auth) and hosted providers (Clerk, Auth0) execute the auth flow for you; here the library does the heavy lifting — credential verification, sessions, crypto — while the flow itself is a few readable calls in your own code. Most differences below are consequences of that one split.
+
+1. **No events API, because nothing happens behind your back.** Hooks and events callbacks exist because a library that runs the flow for you must let your app back in. Our flow already lives in your code — you're standing wherever a hook would fire, holding the return value an event would describe. An entire subsystem deleted by architecture, not omitted.
+2. **Analytics without approximation.** Sign-up vs sign-in intent is born in your upsert (`isNew`) — the only place that can know it. Event-based designs approximate intent; we don't have to.
+3. **Your database is the source of truth.** Hosted providers own your users and you sync from them; schema-generating libraries dictate your tables. We never touch your users table — the library persists only its own four internal record types, through functions you write with your own ORM.
+4. **No database drivers.** Incumbent adapters take a connection and run their queries against their schema — compatibility errors, forced indexes, migration coupling. We take typed functions you implement however you like.
+5. **Frozen core via semantic contracts.** Interfaces state meaning (`verify`), not mechanism, so policy evolution ships as adapters and mechanisms — not core majors with migration guides.
+6. **Misconfiguration is a type error.** Builder steps take exact concrete configs — no optional fields, no unknown keys, no runtime options validation. The invalid setup doesn't compile.
+7. **Agent-native, not agent-adapted.** No OAuth dashboards, no DNS, no external clicks. Signature-as-spec interfaces, flows visible in app code where an agent reads and writes them, and a core small enough to audit in one sitting.
+8. **Fail-closed by construction.** The lazy or broken implementation of every interface denies access rather than granting it — and we ship the conformance tests that prove it.
 
 **Why passkey-first:**
 
