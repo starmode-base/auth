@@ -1,17 +1,10 @@
 /**
  * ΛUTH contracts — the typed API spec.
  *
- * Self-sufficient: imports nothing from the legacy tree, so it can be edited
- * freely. This file is the source of intent while the API is finalized; the
- * README is rewritten from it at promotion. It contains contracts only —
- * everything user code touches: adapter interfaces, config shapes, method
- * namespaces, the four auth shapes, factory signatures. Mechanisms, bindings,
- * and config bundles are implementations of these contracts and live outside.
- *
- * Layout previews the promoted file split: each banner section becomes a file.
- *
- * Verified by make-auth-typecheck.ts (compile-time assertions, both
- * directions) and exercised by playground.ts.
+ * Everything user code touches: adapter interfaces, config shapes, method
+ * namespaces, auth shapes, and factory signatures. Source of intent while
+ * the API is finalized. Verified by contracts-typecheck.ts and exercised by
+ * playground.ts.
  */
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -63,7 +56,7 @@ export type SessionPayload = {
   userId: string;
 };
 
-/** Decoded session token. Returned only when authentic; forged/garbled tokens decode to null. */
+/** Decoded session token. Invalid or forged tokens decode to null. */
 export type SessionDecoded = SessionPayload & {
   /** Token expiration (fixed — the revocation window) */
   exp: Date;
@@ -93,7 +86,7 @@ export type SessionTransport = {
   clear: () => void;
 };
 
-/** Config for makeAuth — the session core (session is not a sub-object; it IS the core) */
+/** Config for makeAuth — the session core */
 export type MakeAuthConfig = {
   storage: SessionStorage;
   codec: SessionCodec;
@@ -130,13 +123,12 @@ export type OtpRecord = {
 };
 
 /**
- * OTP storage adapter — the semantic contract.
+ * OTP storage adapter.
  *
- * verify states meaning, not mechanism: implementations must guarantee
- * expiry, comparison, and one-time use — or be produced by makeOtpStorage,
- * which builds those guarantees from two dumb atomic primitives. Delegated
- * verification (e.g. a provider that checks the otp remotely) implements
- * this contract directly.
+ * Implementations must guarantee expiry, comparison, and one-time use. Use
+ * makeOtpStorage to build these guarantees from two primitives, or implement
+ * verify directly (e.g. delegated verification via a provider's check
+ * endpoint).
  */
 export type OtpStorage = {
   store: (record: OtpRecord) => Promise<void>;
@@ -145,9 +137,9 @@ export type OtpStorage = {
 };
 
 /**
- * Input contract for makeOtpStorage — two dumb primitives, one guarantee.
- * take must be an atomic fetch-and-delete (DELETE … RETURNING, GETDEL).
- * The lazy implementation fails closed: returning null denies access.
+ * Input for makeOtpStorage: otp storage as two primitives. take must be
+ * atomic — fetch and delete in one operation (e.g. DELETE … RETURNING,
+ * GETDEL).
  */
 export type MakeOtpStorageConfig = {
   /** Upsert */
@@ -224,7 +216,7 @@ export type ChallengeRecord = {
   expiresAt: Date;
 };
 
-/** Challenge storage adapter — challenges are single-use, so take-shaped */
+/** Challenge storage adapter. Challenges are single-use. */
 export type ChallengeStorage = {
   store: (record: ChallengeRecord) => Promise<void>;
   /** Atomic fetch-and-delete. Unknown challenge returns null. */
@@ -238,7 +230,7 @@ export type RegistrationPayload = {
   identifier: string | null;
 };
 
-/** Decoded registration token. Returned only when authentic; forged tokens decode to null. */
+/** Decoded registration token. Invalid or forged tokens decode to null. */
 export type RegistrationDecoded = RegistrationPayload & {
   /** Token expiration */
   exp: Date;
@@ -255,6 +247,12 @@ export type RegistrationCodec = {
 export type WebAuthnConfig = {
   rpId: string;
   rpName: string;
+  /**
+   * Exact allowed origins, scheme + host + port — e.g. ["https://app.example.com"].
+   * Matched exactly against clientDataJSON.origin: no wildcards, no subdomain
+   * logic, never inferred from rpId.
+   */
+  allowedOrigins: string[];
   /** Challenge validity duration in ms */
   challengeTtl: number;
 };
@@ -318,10 +316,8 @@ export type AuthenticationCredential = {
   clientExtensionResults: AuthenticationExtensionsClientOutputs;
 };
 
-/* Results — pure verification, no session piping. Verification returns the
- * userId; apps create sessions explicitly via session.create, exactly like
- * the otp flow. Symmetry unlocks composition: multi-factor, step-up checks,
- * and custom flows need no library support. */
+/* Results — verification returns the verified userId; sessions are created
+ * explicitly via session.create. */
 
 export type CreateRegistrationTokenResult = { registrationToken: string };
 
@@ -355,21 +351,21 @@ export type PasskeyNamespace = {
   registrationOptions: (args: {
     registrationToken: string;
   }) => Promise<RegistrationOptionsResult>;
-  /** Verifies and stores the credential. Does NOT create a session. */
+  /** Verifies and stores the credential. Does not create a session — call session.create. */
   verifyRegistration: (args: {
     registrationToken: string;
     credential: RegistrationCredential;
   }) => Promise<VerifyRegistrationResult>;
   authenticationOptions: () => Promise<AuthenticationOptionsResult>;
-  /** Verifies the assertion against the stored credential. Does NOT create a session. */
+  /** Verifies the assertion against the stored credential. Does not create a session — call session.create. */
   verifyAuthentication: (args: {
     credential: AuthenticationCredential;
   }) => Promise<VerifyAuthenticationResult>;
 };
 
 /* ────────────────────────────────────────────────────────────────────────
- * Composition — the builder. Every config unit yields one namespace.
- * Four concrete shapes, no generics; misconfiguration does not compile.
+ * Composition — the builder. Each configured unit adds its namespace.
+ * Invalid configurations do not compile.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** Session-only auth — both strategies still available to chain */

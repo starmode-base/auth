@@ -61,6 +61,7 @@ export const passkey = auth.withPasskey({
   webAuthn: {
     rpId: "localhost",
     rpName: "Spike",
+    allowedOrigins: [],
     challengeTtl: 0,
   },
 });
