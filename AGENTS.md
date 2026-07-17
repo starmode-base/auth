@@ -5,6 +5,9 @@
 ## Development workflow
 
 - Use `packages/auth/README.md` as the source of intent — it documents the target API and wins over code
+- Order of work: types (signatures) → tests → implementation. Signatures make the contract concrete, tests encode it, implementation satisfies it.
+- When designing an adapter interface, ask what the lazy implementation does — it must fail closed (deny access), never open
+- Type files are split by layer (see SPEC.md "Adapter layering"): contracts, mechanisms, bindings, configs — file organization mirrors the layers
 - Generate code + tests together in small chunks
 - Human reviews for: unnecessary complexity, over-engineering, maintainability
 - Iterate until tight
