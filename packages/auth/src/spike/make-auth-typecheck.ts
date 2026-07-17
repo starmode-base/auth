@@ -67,6 +67,28 @@ void makeAuth(session).withOtp(otp).verifyOtp;
 // @ts-expect-error verifyAuthentication is not a root method — it is auth.passkey.verifyAuthentication
 void makeAuth(session).withPasskey(passkey).verifyAuthentication;
 
+/* Passkey verification is pure — it returns the userId, never a session */
+
+declare const verifyResult: Awaited<
+  ReturnType<AuthFull["passkey"]["verifyAuthentication"]>
+>;
+
+if (verifyResult.success) {
+  void verifyResult.userId;
+  // @ts-expect-error verification carries no session — create one explicitly via session.create
+  void verifyResult.session;
+}
+
+declare const registrationResult: Awaited<
+  ReturnType<AuthFull["passkey"]["verifyRegistration"]>
+>;
+
+if (registrationResult.success) {
+  void registrationResult.userId;
+  // @ts-expect-error registration carries no session — create one explicitly via session.create
+  void registrationResult.session;
+}
+
 /* Duplicate steps are type errors — with* removes itself from the chain */
 
 // @ts-expect-error withOtp cannot be chained twice

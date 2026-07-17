@@ -55,14 +55,15 @@ This means:
 
 These are independent primitives. Apps decide how to combine them:
 
-| Flow                       | Description                                           | Use case                                           |
-| -------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| **Passkeys only**          | Passkey sign-up and sign-in, no OTP                   | Anonymous/pseudonymous apps, maximum privacy       |
-| **OTP only**               | OTP sign-up and sign-in, no passkeys                  | Simple apps, Clerk-like DX                         |
-| **Passkey → OTP**          | Passkey first, OTP to collect email later             | Privacy-first, email optional for communication    |
-| **OTP → Passkey**          | OTP to verify email, then passkey (current default)   | Most apps — verified email + passkey auth          |
-| **OTP → Passkey (strict)** | OTP for initial sign-up only, passkey-only after      | High security — no OTP backdoor for existing users |
-| **OTP for email changes**  | Use OTP to verify new email/phone while authenticated | Common feature — add/change contact info           |
+| Flow                        | Description                                                                 | Use case                                                        |
+| --------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Passkeys only**           | Passkey sign-up and sign-in, no OTP                                         | Anonymous/pseudonymous apps, maximum privacy                    |
+| **OTP only**                | OTP sign-up and sign-in, no passkeys                                        | Simple apps, Clerk-like DX                                      |
+| **Passkey → OTP**           | Passkey first, OTP to collect email later                                   | Privacy-first, email optional for communication                 |
+| **OTP → Passkey**           | OTP to verify email, then passkey (current default)                         | Most apps — verified email + passkey auth                       |
+| **OTP → Passkey (strict)**  | OTP for initial sign-up only, passkey-only after                            | High security — no OTP backdoor for existing users              |
+| **OTP while authenticated** | Verify a new email/phone, or step-up before a sensitive action              | Add/change contact info, sudo mode                              |
+| **Bring your own**          | Session core only — app verifies by its own means, then creates the session | Invite tokens, recovery codes, SSO assertions, guest-first apps |
 
 The library provides primitives. Your app composes the flow that fits your security/UX tradeoffs.
 
@@ -70,28 +71,30 @@ The library provides primitives. Your app composes the flow that fits your secur
 
 See `CoreMethods`, `OtpMethods`, `PasskeyMethods`, and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
 
-| Primitive                                               | What it does                         | Client |
-| ------------------------------------------------------- | ------------------------------------ | ------ |
-| `createSession({ userId })`                             | Create session for user              | ❌     |
-| `requestOtp({ identifier })`                            | Send OTP to identifier (email/phone) | ✅     |
-| `verifyOtp({ identifier, otp })`                        | Verify OTP → `{ success }`           | ✅     |
-| `createRegistrationToken({ userId, identifier })`       | Create registration token            | ❌     |
-| `validateRegistrationToken({ token })`                  | Validate → `{ userId, identifier }`  | ❌     |
-| `generateRegistrationOptions({ registrationToken })`    | WebAuthn registration options        | ✅     |
-| `verifyRegistration({ registrationToken, credential })` | Verify + store + session             | ✅     |
-| `generateAuthenticationOptions()`                       | WebAuthn sign-in options             | ✅     |
-| `verifyAuthentication({ credential })`                  | Verify + session                     | ✅     |
-| `getSession()`                                          | Get session data                     | ❌     |
-| `signOut()`                                             | End session                          | ✅     |
-| `signOutAll()`                                          | End all sessions for user            | ❌     |
+| Primitive                                               | What it does                          | Client |
+| ------------------------------------------------------- | ------------------------------------- | ------ |
+| `createSession({ userId })`                             | Create session for user               | ❌     |
+| `requestOtp({ identifier })`                            | Send OTP to identifier (email/phone)  | ✅     |
+| `verifyOtp({ identifier, otp })`                        | Verify OTP → `{ success }`            | ✅     |
+| `createRegistrationToken({ userId, identifier })`       | Create registration token             | ❌     |
+| `validateRegistrationToken({ token })`                  | Validate → `{ userId, identifier }`   | ❌     |
+| `generateRegistrationOptions({ registrationToken })`    | WebAuthn registration options         | ✅     |
+| `verifyRegistration({ registrationToken, credential })` | Verify + store passkey → `{ userId }` | ✅     |
+| `generateAuthenticationOptions()`                       | WebAuthn sign-in options              | ✅     |
+| `verifyAuthentication({ credential })`                  | Verify passkey → `{ userId }`         | ✅     |
+| `getSession()`                                          | Get session data                      | ❌     |
+| `signOut()`                                             | End session                           | ✅     |
+| `signOutAll()`                                          | End all sessions for user             | ❌     |
 
 **Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
-**Key design:** `verifyOtp` only verifies — it doesn't create sessions. For OTP-only auth, apps call `createSession` explicitly after verification. `verifyRegistration` and `verifyAuthentication` create sessions implicitly. Apps compose the flow they need.
+**Key design:** Verification never creates sessions. `verifyOtp`, `verifyRegistration`, and `verifyAuthentication` only prove facts and return the verified `userId` — apps create sessions explicitly via `createSession`. One rule, no exceptions.
+
+> **Decided (2026-07-17): Pure verification.** Previously `verifyRegistration`/`verifyAuthentication` created sessions implicitly. Removed: core produces verified facts; a session is policy, and policy lives in userland — passkey sign-in is verify then `createSession`, identical in shape to the otp flow. The uniform rule unlocks zero-feature composition (multi-factor, step-up, custom flows need no library support) and fails closed (forgetting the session call yields no session). Consequences: (1) a browser-only REST flow can't complete sign-in — composing verify + createSession requires an app server function, which sharpens the open question about `makeAuthHandler`'s role; (2) the app now binds the verified userId to the session — examples must always thread the verify result's `userId` into `createSession` (see branded verified ids under Future).
 
 ### Flows
 
-The library provides primitives. Apps compose flows. Below are common patterns.
+The library provides primitives. Apps compose flows. Below are common patterns. In the diagrams, `session` at the end of a chain is an explicit `createSession` call by your app — nothing creates sessions implicitly.
 
 **Passkeys only** (no OTP):
 
@@ -576,7 +579,7 @@ Note: the legacy `examples/tmp/tanstack-start/` has working versions of several 
 Library additions (as needed):
 
 - [ ] `allowCredentials` in `generateAuthenticationOptions()` — see design notes below
-- [ ] Make `identifier` optional in `createRegistrationToken()` — support passkey-only sign-up
+- [x] `identifier: string | null` in `createRegistrationToken()` — explicit null for passkey-only sign-up (nullable, not optional, per the no-optionals rule; decided 2026-07-17, spiked)
 - [x] Session management: `signOutAll()` on core methods, `deleteAll()` on `SessionStorage`
 - [x] Passkey management: `delete()` on `CredentialStorage` — apps call storage directly for list/delete
 
@@ -630,6 +633,7 @@ _Future:_
 - Feature: E2EE/PRF module — WebAuthn PRF for key derivation
 - Feature: Recovery codes — generate/verify with KDF (80-bit entropy, e.g. `7KF3-M9PN-2XLT-8HVQ`). For regular apps: code → session. For E2EE: code → recovery key → unwrap DEK client-side, then create new passkey
 - Feature: Cross-ecosystem add-device — QR code flow with ephemeral key exchange. Device A (signed in) displays QR, device B scans and creates passkey. For E2EE: securely transfers KEK so device A can wrap DEK for the new credential. Same flow works for regular apps (ignore the KEK)
+- Feature: Branded verified ids — verification results return a branded `VerifiedUserId` that `createSession` prefers, making the verified-user-to-session binding type-enforced (closes the wrong-userId composition footgun where an app passes its own lookup's id instead of the verify result's). Deferred until evidence it's needed — no just-in-case abstractions.
 - Feature: LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
 - Service: Hosted user dashboard
 - Service: Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)

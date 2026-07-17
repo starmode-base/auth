@@ -26,13 +26,11 @@ import type {
   RequestOtpResult,
   VerifyOtpResult,
   CreateRegistrationTokenResult,
-  ValidateRegistrationTokenResult,
   GenerateRegistrationOptionsResult,
-  VerifyRegistrationResult,
   GenerateAuthenticationOptionsResult,
-  VerifyAuthenticationResult,
   RegistrationCredential,
   AuthenticationCredential,
+  Result,
 } from "../types";
 
 /** WebAuthn challenge record (single-use) */
@@ -93,11 +91,27 @@ export type OtpNamespace = {
   }) => Promise<VerifyOtpResult>;
 };
 
+/**
+ * Passkey verification results — pure verification, no session piping.
+ * Verification returns the userId; apps create sessions explicitly via
+ * session.create, exactly like the otp flow. Symmetry unlocks composition:
+ * multi-factor, step-up checks, and custom flows need no library support.
+ */
+export type PasskeyVerifyRegistrationResult = Result<{ userId: string }>;
+export type PasskeyVerifyAuthenticationResult = Result<{ userId: string }>;
+
+/** Mirrors createRegistrationToken's nullable identifier */
+export type ValidateRegistrationTokenResult = Result<{
+  userId: string;
+  identifier: string | null;
+}>;
+
 /** Passkey methods — added as the `passkey` namespace by withPasskey */
 export type PasskeyNamespace = {
   createRegistrationToken: (args: {
     userId: string;
-    identifier: string;
+    /** Shown in the passkey picker (user.name). Null for identifier-less sign-up (passkey-only apps). */
+    identifier: string | null;
   }) => Promise<CreateRegistrationTokenResult>;
   validateRegistrationToken: (args: {
     token: string;
@@ -105,14 +119,16 @@ export type PasskeyNamespace = {
   registrationOptions: (args: {
     registrationToken: string;
   }) => Promise<GenerateRegistrationOptionsResult>;
+  /** Verifies and stores the credential. Does NOT create a session. */
   verifyRegistration: (args: {
     registrationToken: string;
     credential: RegistrationCredential;
-  }) => Promise<VerifyRegistrationResult>;
+  }) => Promise<PasskeyVerifyRegistrationResult>;
   authenticationOptions: () => Promise<GenerateAuthenticationOptionsResult>;
+  /** Verifies the assertion against the stored credential. Does NOT create a session. */
   verifyAuthentication: (args: {
     credential: AuthenticationCredential;
-  }) => Promise<VerifyAuthenticationResult>;
+  }) => Promise<PasskeyVerifyAuthenticationResult>;
 };
 
 /** Session-only auth — both strategies still available to chain */
@@ -211,6 +227,11 @@ export const passkey = auth.withPasskey({
 
 passkey.passkey.authenticationOptions();
 // passkey.passkey.validateRegistrationToken()
+
+// Sign in is two explicit calls — verification never creates sessions:
+//   const verified = await auth.passkey.verifyAuthentication({ credential });
+//   if (!verified.success) return verified;
+//   return auth.session.create({ userId: verified.userId });
 
 export const passkeyAndOtp = passkey.withOtp({
   storage: {
