@@ -293,7 +293,9 @@ Storage is split by concern: `OtpStorage`, `SessionStorage`, `CredentialStorage`
 
 > **Decided (2026-07-16): Mechanisms make the common case correct by construction.** We ship factories that produce correct adapters from dumb atomic primitives: `makeOtpStorage({ store, take })` returns an `OtpStorage` with expiry check, comparison, and one-time consumption built in — written and race-tested once by us. `take(identifier)` is atomic fetch-and-delete (`DELETE … RETURNING`, `GETDEL`); that one-word guarantee — atomic — is the entire adapter obligation, and the lazy implementation fails closed. Database recipes target `store`/`take`; power users (delegated verification, custom lockouts, dev bypasses) implement `OtpStorage` raw — full control, visibly off the blessed path. Conformance tests ship alongside: sequential (take twice → second null) plus deterministic barrier-based race checks — no hammering (see https://www.lirbank.com/harnessing-postgres-race-conditions.md).
 
-> **Decided (2026-07-16): One attempt per otp.** A wrong otp consumes it — the user starts over with a fresh request. No attempt budgets, no re-store logic; every failure path fails closed. The typo cost is one email round-trip; acceptable for v1, revisit only on observed user friction. Per-identifier/per-IP rate limiting remains out of scope (infrastructure layer).
+> **Decided (2026-07-16): One attempt per otp.** A wrong otp consumes it — the user starts over with a fresh request. No attempt budgets, no re-store logic; every failure path fails closed. The typo cost is one email round-trip; acceptable for v1, revisit only on observed user friction. Per-IP rate limiting stays with the app; per-identifier cooldown is mechanism-layer (decided 2026-07-17, below).
+
+> **Decided (2026-07-17): Rate limiting splits by who holds the state.** A rate limit is a decision over state and is enforced where that state lives, atomically — or it isn't real. The library owns exactly one relevant state, the otp record, so it enforces exactly one limit: per-identifier issuance frequency. `OtpStorage.store` may refuse (returns `false`), `requestOtp` fails with `rate_limited` and sends nothing, and the cooldown knob lives on `makeOtpStorage` (required field, `0` = explicitly off), enforced by an atomic conditional-put `store` primitive — the same one-word obligation as `take`. Per-IP/volume/bot defense stays with the app (it holds the request); sender reputation stays with the sending service (it holds cross-app outcomes). Full vector map and deployment shapes: THREAT-MODEL.md. Supersedes the blanket "rate limiting (infrastructure-layer concern)" exclusion.
 
 **Why no database drivers?**
 
@@ -637,6 +639,7 @@ _Future:_
 - Feature: LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
 - Service: Hosted user dashboard
 - Service: Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)
+- Service: Hosted session storage (idea, 2026-07-17) — a plain `SessionStorage` adapter, HMAC codec only (storage is consulted only at token refresh, so latency amortizes and outages degrade in token-TTL windows). The line: the service may host library-owned state (sessions, otp records, challenges), never app-owned state (users) — the Clerk problem is sync direction, not hosting, and library-state references only `userId` strings, so there is nothing to sync. Fits OTP-shaped apps, which already depend on a remote sender at sign-in; passkey-only apps lose self-sufficiency and should stay local. Credentials are borderline — UIs list passkeys, so hosting them adds a remote query; per-concern adapters mean you can host sessions and keep credentials local
 
 **Exclusions:**
 
@@ -645,7 +648,7 @@ _Future:_
 - ❌ Password-based auth
 - ❌ Legacy browser support
 - ❌ SAML / SSO / enterprise features
-- ❌ Rate limiting (infrastructure-layer concern)
+- ❌ IP/volume rate limiting and bot defense — request-layer state the library never sees (app middleware, WAF, captcha). Per-identifier cooldown is in scope — see THREAT-MODEL.md
 
 **Constraints:**
 
