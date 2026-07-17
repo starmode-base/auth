@@ -41,7 +41,11 @@ export type Result<T extends object, E extends AuthErrorCode> = [E] extends [
  * Session — the core. Records → adapters → config → namespace → results.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/** Session DB record */
+/**
+ * Session record — the shape exchanged with SessionStorage, not a stored
+ * schema. Storage maps it to and from its own representation; reads must
+ * return records equivalent to what store received.
+ */
 export type SessionRecord = {
   sessionId: string;
   userId: string;
@@ -55,8 +59,6 @@ export type SessionStorage = {
   store: (record: SessionRecord) => Promise<void>;
   get: (sessionId: string) => Promise<SessionRecord | null>;
   delete: (sessionId: string) => Promise<void>;
-  /** Delete all sessions belonging to the same user as this session */
-  deleteAll: (sessionId: string) => Promise<void>;
 };
 
 /** Session token payload */
@@ -119,15 +121,13 @@ export type SessionNamespace = {
   get: () => Promise<{ userId: string } | null>;
   /** Ends the current session (signs the user out) */
   end: () => Promise<Result<object, never>>;
-  /** Ends all sessions for the current user (signs out every device) */
-  endAll: () => Promise<Result<object, never>>;
 };
 
 /* ────────────────────────────────────────────────────────────────────────
  * OTP — identity verification, optionally authentication.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/** OTP DB record */
+/** Otp record — the shape exchanged with otp storage, not a stored schema */
 export type OtpRecord = {
   /** Identifier (email address, phone number, etc.) */
   identifier: string;
@@ -206,7 +206,7 @@ export type StoredCredential = {
   transports?: AuthenticatorTransport[] | undefined;
 };
 
-/** Credential DB record */
+/** Credential record — the shape exchanged with CredentialStorage, not a stored schema */
 export type CredentialRecord = {
   userId: string;
   credential: StoredCredential;
@@ -221,8 +221,7 @@ export type CredentialStorage = {
   /** All credentials belonging to the user */
   list: (userId: string) => Promise<StoredCredential[]>;
   /** Persist the WebAuthn signature counter after authentication (clone detection) */
-  updateCounter: (credentialId: string, counter: number) => Promise<void>;
-  delete: (credentialId: string) => Promise<void>;
+  setCounter: (credentialId: string, counter: number) => Promise<void>;
 };
 
 /** WebAuthn challenge record (single-use) */

@@ -7,7 +7,6 @@ import { makeAuth } from "./contracts";
 export const auth = makeAuth({
   storage: {
     get: async () => null,
-    deleteAll: async () => undefined,
     store: async () => undefined,
     delete: async () => undefined,
   },
@@ -47,8 +46,7 @@ export const passkey = auth.withPasskey({
     store: async () => undefined,
     get: async () => null,
     list: async () => [],
-    updateCounter: async () => undefined,
-    delete: async () => undefined,
+    setCounter: async () => undefined,
   },
   challenges: {
     store: async () => undefined,

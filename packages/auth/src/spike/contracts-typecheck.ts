@@ -35,7 +35,7 @@ expectType<AuthFull>(makeAuth(session).withPasskey(passkey).withOtp(otp));
 
 /* The session namespace is present at every step */
 void makeAuth(session).session.get;
-void makeAuth(session).withOtp(otp).session.endAll;
+void makeAuth(session).withOtp(otp).session.end;
 void makeAuth(session).withOtp(otp).withPasskey(passkey).session.create;
 
 /* Strategy namespaces only exist after their step */
