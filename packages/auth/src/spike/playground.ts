@@ -16,7 +16,7 @@ export const auth = makeAuth({
     ttl: 0,
   },
   transport: {
-    get: () => undefined,
+    get: () => null,
     set: () => "",
     clear: () => undefined,
   },

@@ -74,9 +74,9 @@ declare const verifyResult: Awaited<
 >;
 
 if (verifyResult.success) {
-  void verifyResult.userId;
+  void verifyResult.data.userId;
   // @ts-expect-error verification carries no session — create one explicitly via session.create
-  void verifyResult.session;
+  void verifyResult.data.session;
 }
 
 declare const registrationResult: Awaited<
@@ -84,19 +84,29 @@ declare const registrationResult: Awaited<
 >;
 
 if (registrationResult.success) {
-  void registrationResult.userId;
+  void registrationResult.data.userId;
   // @ts-expect-error registration carries no session — create one explicitly via session.create
-  void registrationResult.session;
+  void registrationResult.data.session;
 }
 
 /* Commands without failure modes collapse — the envelope needs no narrowing */
 
 declare const created: Awaited<ReturnType<AuthCore["session"]["create"]>>;
 void created.success;
-void created.token;
-void created.userId;
+void created.data.token;
+void created.data.userId;
 
-/* Commands with failure modes require narrowing before payload access */
+// @ts-expect-error T rides in data, never spread into the envelope
+void created.token;
+
+/* Void commands drop the data field entirely */
+
+declare const ended: Awaited<ReturnType<AuthCore["session"]["end"]>>;
+void ended.success;
+// @ts-expect-error void commands carry no data field
+void ended.data;
+
+/* Commands with failure modes require narrowing before data access */
 
 declare const otpVerified: Awaited<ReturnType<AuthFull["otp"]["verify"]>>;
 // @ts-expect-error error exists only on the failure branch — narrow on success first

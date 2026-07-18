@@ -11,6 +11,40 @@
  * Shared vocabulary
  * ──────────────────────────────────────────────────────────────────────── */
 
+/*
+ * Vocabulary
+ *
+ * Type suffixes, by boundary:
+ * - *Record — shape exchanged with a storage adapter; never a stored schema
+ * - *Decoded — what decode returns: what the token carries (record, grant) plus its TokenStatus
+ * - *Config — input to a factory or builder step, named for its consumer
+ * - *Namespace — the methods a builder step adds; *Result — a command's envelope
+ * - *Credential / *JSON — WebAuthn wire shapes mirroring the browser API
+ *
+ * Adapter roles:
+ * - Storage — persistence the user owns
+ * - Codec — token format (encode/decode)
+ * - Transport — how the session token rides on requests (cookie, header)
+ * - Delivery — out-of-band send to the user (email, SMS, console)
+ *
+ * Adapter verbs:
+ * - store — upsert by the record's key
+ * - get — read by key; take — atomic fetch-and-delete; both null when absent
+ * - list — all records for a key
+ * - set* — plain overwrite, never read-modify-write
+ * - verify — check and consume (single-use); send — deliver out of band
+ * - encode / decode — mint and read tokens; invalid tokens decode to null
+ *
+ * Method verbs:
+ * - verify — checks and consumes a single-use artifact
+ * - validate — repeatable check, consumes nothing
+ *
+ * Field rules:
+ * - absence is null, never undefined; nullable, never optional (wire types excepted)
+ * - expiry: expiresAt dates and expired flags, scoped by their object; ttl is a duration in ms
+ * - API methods take one args object; adapter methods take positional args
+ */
+
 /** Error codes for auth failures */
 export type AuthErrorCode =
   | "invalid_otp"
@@ -28,23 +62,30 @@ export type AuthErrorCode =
  * Command result. Expected failures — including malformed client input —
  * are values the caller branches on; E lists exactly the failures the
  * command can produce, and E = never collapses the type to an always-success
- * envelope. Queries return the value or null instead: absence is not
+ * envelope. T rides in data; T = void drops the field for commands that
+ * return nothing. Queries return the value or null instead: absence is not
  * failure. Infrastructure failures throw.
  */
-export type Result<T extends object, E extends AuthErrorCode> = [E] extends [
-  never,
-]
-  ? { success: true } & T
-  : ({ success: true } & T) | { success: false; error: E };
+export type Result<T, E extends AuthErrorCode> =
+  | ([T] extends [void] ? { success: true } : { success: true; data: T })
+  | ([E] extends [never] ? never : { success: false; error: E });
+
+/** The token's own status, as read by decode */
+export type TokenStatus = {
+  expiresAt: Date;
+  /** expiresAt < now, computed by the codec — the codec owns the token clock */
+  expired: boolean;
+};
 
 /* ────────────────────────────────────────────────────────────────────────
  * Session — the core. Records → adapters → config → namespace → results.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /**
- * Session record — the shape exchanged with SessionStorage, not a stored
- * schema. Storage maps it to and from its own representation; reads must
- * return records equivalent to what store received.
+ * Session record — the session's exchange shape: what SessionStorage stores
+ * and the session token carries. Not a stored schema: storage maps it to and
+ * from its own representation; reads must return records equivalent to what
+ * store received.
  */
 export type SessionRecord = {
   sessionId: string;
@@ -55,34 +96,29 @@ export type SessionRecord = {
 
 /** Session storage adapter — plain reads and writes; core enforces expiry */
 export type SessionStorage = {
-  /** Upsert */
   store: (record: SessionRecord) => Promise<void>;
   get: (sessionId: string) => Promise<SessionRecord | null>;
   delete: (sessionId: string) => Promise<void>;
 };
 
-/** Session token payload */
-export type SessionPayload = {
-  sessionId: string;
-  /** Session expiry (null = never expires). Slides on every request. */
-  sessionExp: Date | null;
-  userId: string;
-};
-
 /** Decoded session token. Invalid or forged tokens decode to null. */
-export type SessionDecoded = SessionPayload & {
-  /** Token expiration (fixed — the revocation window) */
-  exp: Date;
-  /** Token expired (exp < now) — forces the storage revocation check */
-  expired: boolean;
+export type SessionDecoded = {
+  /** The session record the token carries or resolves to */
+  record: SessionRecord;
+  /** Expiry is fixed (the revocation window); expired forces the storage revocation check */
+  token: TokenStatus;
 };
 
-/** Session codec — token format (HMAC, opaque, or bring a JWT library) */
+/**
+ * Session codec — token format (HMAC, opaque, or bring a JWT library).
+ * Self-contained tokens carry the session record; reference (opaque) tokens
+ * resolve it via lookup. Storage remains the authority on revocation.
+ */
 export type SessionCodec = {
-  /** expiresAt: null mints a fresh token TTL; a Date preserves an existing expiry (sliding refresh) */
+  /** token.expiresAt: null mints a fresh token TTL; a Date preserves the existing token expiry (sliding refresh) */
   encode: (
-    payload: SessionPayload,
-    options: { expiresAt: Date | null },
+    record: SessionRecord,
+    token: { expiresAt: Date | null },
   ) => Promise<string>;
   decode: (token: string) => Promise<SessionDecoded | null>;
   /** Token TTL in ms — the revocation window */
@@ -92,7 +128,7 @@ export type SessionCodec = {
 /** Session transport — how the token rides on requests (cookie, header) */
 export type SessionTransport = {
   /** Read token from the incoming request */
-  get: () => string | undefined;
+  get: () => string | null;
   /** Store token and return what goes in the response body */
   set: (token: string) => string;
   /** Clear the stored token */
@@ -120,7 +156,7 @@ export type SessionNamespace = {
   }) => Promise<Result<{ token: string; userId: string }, never>>;
   get: () => Promise<{ userId: string } | null>;
   /** Ends the current session (signs the user out) */
-  end: () => Promise<Result<object, never>>;
+  end: () => Promise<Result<void, never>>;
 };
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -155,7 +191,6 @@ export type OtpStorage = {
  * GETDEL).
  */
 export type MakeOtpStorageConfig = {
-  /** Upsert */
   store: (record: OtpRecord) => Promise<void>;
   /** Atomic fetch-and-delete. Unknown identifier returns null. */
   take: (identifier: string) => Promise<OtpRecord | null>;
@@ -179,7 +214,7 @@ export type WithOtpConfig = {
   delivery: OtpDelivery;
 };
 
-export type VerifyOtpResult = Result<object, "invalid_otp">;
+export type VerifyOtpResult = Result<void, "invalid_otp">;
 
 /** Otp methods — added as the `otp` namespace by withOtp */
 export type OtpNamespace = {
@@ -187,7 +222,7 @@ export type OtpNamespace = {
    * Sends an otp to the identifier. Never reveals whether delivery
    * succeeded (enumeration safety).
    */
-  request: (args: { identifier: string }) => Promise<Result<object, never>>;
+  request: (args: { identifier: string }) => Promise<Result<void, never>>;
   verify: (args: {
     identifier: string;
     otp: string;
@@ -203,7 +238,8 @@ export type StoredCredential = {
   id: string;
   publicKey: Uint8Array;
   counter: number;
-  transports?: AuthenticatorTransport[] | undefined;
+  /** null = the client reported no transport hints */
+  transports: AuthenticatorTransport[] | null;
 };
 
 /** Credential record — the shape exchanged with CredentialStorage, not a stored schema */
@@ -215,9 +251,7 @@ export type CredentialRecord = {
 /** Credential (passkey) storage adapter */
 export type CredentialStorage = {
   store: (record: CredentialRecord) => Promise<void>;
-  get: (
-    credentialId: string,
-  ) => Promise<{ userId: string; credential: StoredCredential } | null>;
+  get: (credentialId: string) => Promise<CredentialRecord | null>;
   /** All credentials belonging to the user */
   list: (userId: string) => Promise<StoredCredential[]>;
   /** Persist the WebAuthn signature counter after authentication (clone detection) */
@@ -239,24 +273,27 @@ export type ChallengeStorage = {
   take: (challenge: string) => Promise<ChallengeRecord | null>;
 };
 
-/** Registration token payload */
-export type RegistrationPayload = {
+/**
+ * A grant to register a passkey: the user it belongs to, and the identifier
+ * shown in the passkey picker (user.name; null for identifier-less sign-up
+ * in passkey-only apps).
+ */
+export type RegistrationGrant = {
   userId: string;
-  /** Null for identifier-less sign-up (passkey-only apps) */
   identifier: string | null;
 };
 
 /** Decoded registration token. Invalid or forged tokens decode to null. */
-export type RegistrationDecoded = RegistrationPayload & {
-  /** Token expiration */
-  exp: Date;
-  /** Token expired (exp < now) — expired tokens must be rejected */
-  expired: boolean;
+export type RegistrationDecoded = {
+  /** The grant the token carries */
+  grant: RegistrationGrant;
+  /** Expired tokens must be rejected */
+  token: TokenStatus;
 };
 
 /** Registration codec (short-lived token authorizing passkey registration) */
 export type RegistrationCodec = {
-  encode: (payload: RegistrationPayload) => Promise<string>;
+  encode: (grant: RegistrationGrant) => Promise<string>;
   decode: (token: string) => Promise<RegistrationDecoded | null>;
 };
 
@@ -335,23 +372,24 @@ export type AuthenticationCredential = {
 /* Results — verification returns the verified userId; sessions are created
  * explicitly via session.create. */
 
-export type CreateRegistrationTokenResult = Result<
-  { registrationToken: string },
-  never
->;
+/** Success data is the registration token */
+export type CreateRegistrationTokenResult = Result<string, never>;
 
+/** Success data is the grant the token carries */
 export type ValidateRegistrationTokenResult = Result<
-  { userId: string; identifier: string | null },
+  RegistrationGrant,
   "invalid_token"
 >;
 
+/** Success data is the WebAuthn creation options */
 export type RegistrationOptionsResult = Result<
-  { options: PublicKeyCredentialCreationOptionsJSON },
+  PublicKeyCredentialCreationOptionsJSON,
   "invalid_token"
 >;
 
+/** Success data is the WebAuthn request options */
 export type AuthenticationOptionsResult = Result<
-  { options: PublicKeyCredentialRequestOptionsJSON },
+  PublicKeyCredentialRequestOptionsJSON,
   never
 >;
 
@@ -370,13 +408,11 @@ export type VerifyAuthenticationResult = Result<
 
 /** Passkey methods — added as the `passkey` namespace by withPasskey */
 export type PasskeyNamespace = {
-  createRegistrationToken: (args: {
-    userId: string;
-    /** Shown in the passkey picker (user.name). Null for identifier-less sign-up (passkey-only apps). */
-    identifier: string | null;
-  }) => Promise<CreateRegistrationTokenResult>;
+  createRegistrationToken: (
+    args: RegistrationGrant,
+  ) => Promise<CreateRegistrationTokenResult>;
   validateRegistrationToken: (args: {
-    token: string;
+    registrationToken: string;
   }) => Promise<ValidateRegistrationTokenResult>;
   registrationOptions: (args: {
     registrationToken: string;
