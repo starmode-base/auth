@@ -78,6 +78,7 @@ export type Result<T, E extends AuthErrorCode> =
  * trust is per-decode, so expired is never true.
  */
 export type TokenStatus = {
+  /** End of the trust horizon — the carried record is trusted without a storage check until this */
   expiresAt: Date;
   /** expiresAt < now, computed by the codec — the codec owns the token clock */
   expired: boolean;
@@ -96,7 +97,7 @@ export type TokenStatus = {
 export type SessionRecord = {
   sessionId: string;
   userId: string;
-  /** null = never expires */
+  /** Session expiry — slides on activity; null = never expires */
   expiresAt: Date | null;
 };
 
@@ -158,6 +159,7 @@ export type SessionNamespace = {
    * clients.
    */
   create: (args: { userId: string }) => Promise<Result<string, never>>;
+  /** The current session's user; null when signed out */
   get: () => Promise<{ userId: string } | null>;
   /** Ends the current session (signs the user out) */
   end: () => Promise<Result<void, never>>;
@@ -172,6 +174,7 @@ export type OtpRecord = {
   /** Identifier (email address, phone number, etc.) */
   identifier: string;
   otp: string;
+  /** Stamped by core from WithOtpConfig.ttl */
   expiresAt: Date;
 };
 
@@ -188,22 +191,6 @@ export type OtpStorage = {
   /** One attempt per otp: a wrong guess consumes it */
   verify: (identifier: string, otp: string) => Promise<boolean>;
 };
-
-/**
- * Input for makeOtpStorage: otp storage as two primitives. take must be
- * atomic — fetch and delete in one operation (e.g. DELETE … RETURNING,
- * GETDEL).
- */
-export type MakeOtpStorageConfig = {
-  store: (record: OtpRecord) => Promise<void>;
-  /** Atomic fetch-and-delete. Unknown identifier returns null. */
-  take: (identifier: string) => Promise<OtpRecord | null>;
-};
-
-/** Builds a correct OtpStorage (expiry, comparison, one-time use) from store/take */
-export declare function makeOtpStorage(
-  config: MakeOtpStorageConfig,
-): OtpStorage;
 
 /** OTP delivery adapter (email, SMS, console) */
 export type OtpDelivery = {
@@ -240,6 +227,7 @@ export type CredentialRecord = {
   credentialId: string;
   userId: string;
   publicKey: Uint8Array;
+  /** WebAuthn signature counter (clone detection) */
   counter: number;
   /** null = the client reported no transport hints */
   transports: AuthenticatorTransport[] | null;
@@ -260,6 +248,7 @@ export type ChallengeRecord = {
   challenge: string;
   /** Set for registration ceremonies, null for authentication */
   userId: string | null;
+  /** Stamped by core from WithPasskeyConfig.challengeTtl */
   expiresAt: Date;
 };
 
@@ -270,13 +259,10 @@ export type ChallengeStorage = {
   take: (challenge: string) => Promise<ChallengeRecord | null>;
 };
 
-/**
- * A grant to register a passkey: the user it belongs to, and the identifier
- * shown in the passkey picker (user.name; null for identifier-less sign-up
- * in passkey-only apps).
- */
+/** A grant to register a passkey */
 export type RegistrationGrant = {
   userId: string;
+  /** Shown in the passkey picker (user.name); null for identifier-less sign-up (passkey-only apps) */
   identifier: string | null;
 };
 
@@ -300,7 +286,9 @@ export type RegistrationCodec = {
 
 /** WebAuthn protocol identity — who the relying party is and which origins may speak for it */
 export type WebAuthnConfig = {
+  /** Relying party id — the registrable domain passkeys are bound to */
   rpId: string;
+  /** Human-readable app name shown by authenticators */
   rpName: string;
   /**
    * Exact allowed origins, scheme + host + port — e.g. ["https://app.example.com"].
