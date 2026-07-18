@@ -42,7 +42,7 @@ void makeAuth(session).withOtp(otp).withPasskey(passkey).session.create;
 void makeAuth(session).withOtp(otp).otp.verify;
 void makeAuth(session).withPasskey(passkey).passkey.verifyAuthentication;
 void makeAuth(session).withOtp(otp).withPasskey(passkey).passkey
-  .registrationOptions;
+  .createRegistrationOptions;
 
 // @ts-expect-error otp namespace does not exist before withOtp
 void makeAuth(session).otp;
@@ -93,8 +93,7 @@ if (registrationResult.success) {
 
 declare const created: Awaited<ReturnType<AuthCore["session"]["create"]>>;
 void created.success;
-void created.data.token;
-void created.data.userId;
+void created.data;
 
 // @ts-expect-error T rides in data, never spread into the envelope
 void created.token;
@@ -148,7 +147,7 @@ void makeAuth(session).withPasskey({ ...passkey, unknown: true });
 // @ts-expect-error delivery is required in otp config
 void makeAuth(session).withOtp({ storage: otp.storage });
 
-// @ts-expect-error challenges is required in passkey config
+// @ts-expect-error challengeStorage is required in passkey config
 void makeAuth(session).withPasskey({
   storage: passkey.storage,
   registrationCodec: passkey.registrationCodec,

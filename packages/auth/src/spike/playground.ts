@@ -13,7 +13,6 @@ export const auth = makeAuth({
   codec: {
     encode: async () => "",
     decode: async () => null,
-    ttl: 0,
   },
   transport: {
     get: () => null,
@@ -34,8 +33,8 @@ const otpAuth = auth.withOtp({
   },
   delivery: {
     send: async () => undefined,
-    ttl: 0,
   },
+  ttl: 0,
 });
 
 otpAuth.otp.request({ identifier: "test@example.com" });
@@ -48,7 +47,7 @@ export const passkey = auth.withPasskey({
     list: async () => [],
     setCounter: async () => undefined,
   },
-  challenges: {
+  challengeStorage: {
     store: async () => undefined,
     take: async () => null,
   },
@@ -60,11 +59,11 @@ export const passkey = auth.withPasskey({
     rpId: "localhost",
     rpName: "Spike",
     allowedOrigins: [],
-    challengeTtl: 0,
   },
+  challengeTtl: 0,
 });
 
-passkey.passkey.authenticationOptions();
+passkey.passkey.createAuthenticationOptions();
 
 // Sign in is two explicit calls — verification never creates sessions:
 //   const verified = await auth.passkey.verifyAuthentication({ credential });
@@ -78,8 +77,8 @@ export const passkeyAndOtp = passkey.withOtp({
   },
   delivery: {
     send: async () => undefined,
-    ttl: 0,
   },
+  ttl: 0,
 });
 
 passkeyAndOtp.otp.verify({ identifier: "test@example.com", otp: "123456" });

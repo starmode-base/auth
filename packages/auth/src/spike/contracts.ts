@@ -41,7 +41,8 @@
  *
  * Field rules:
  * - absence is null, never undefined; nullable, never optional (wire types excepted)
- * - expiry: expiresAt dates and expired flags, scoped by their object; ttl is a duration in ms
+ * - expiry: expiresAt dates and expired flags, scoped by their object
+ * - ttl: a duration in ms — unit policy on unit configs; mechanism TTLs live in their factories, off the SPI
  * - API methods take one args object; adapter methods take positional args
  */
 
@@ -70,7 +71,12 @@ export type Result<T, E extends AuthErrorCode> =
   | ([T] extends [void] ? { success: true } : { success: true; data: T })
   | ([E] extends [never] ? never : { success: false; error: E });
 
-/** The token's own status, as read by decode */
+/**
+ * The token's trust status, as read by decode. expiresAt is the trust
+ * horizon: how long the carried record may be trusted without consulting
+ * storage. Self-contained tokens embed it; lookup codecs report now — their
+ * trust is per-decode, so expired is never true.
+ */
 export type TokenStatus = {
   expiresAt: Date;
   /** expiresAt < now, computed by the codec — the codec owns the token clock */
@@ -112,17 +118,16 @@ export type SessionDecoded = {
 /**
  * Session codec — token format (HMAC, opaque, or bring a JWT library).
  * Self-contained tokens carry the session record; reference (opaque) tokens
- * resolve it via lookup. Storage remains the authority on revocation.
+ * resolve it via lookup. Storage remains the authority on revocation. The
+ * token TTL is the codec factory's own config — never core's.
  */
 export type SessionCodec = {
-  /** token.expiresAt: null mints a fresh token TTL; a Date preserves the existing token expiry (sliding refresh) */
+  /** token.expiresAt: null mints a fresh horizon from the codec's own TTL; a Date preserves the existing horizon (sliding refresh) */
   encode: (
     record: SessionRecord,
     token: { expiresAt: Date | null },
   ) => Promise<string>;
   decode: (token: string) => Promise<SessionDecoded | null>;
-  /** Token TTL in ms — the revocation window */
-  ttl: number;
 };
 
 /** Session transport — how the token rides on requests (cookie, header) */
@@ -148,12 +153,11 @@ export type MakeAuthConfig = {
 /** Session methods — the core namespace, present at every step */
 export type SessionNamespace = {
   /**
-   * Creates a session for the given user. The token is also delivered via
-   * the session transport; it is returned for header-based clients.
+   * Creates a session for the given user. Success data is the session token
+   * — also delivered via the session transport; returned for header-based
+   * clients.
    */
-  create: (args: {
-    userId: string;
-  }) => Promise<Result<{ token: string; userId: string }, never>>;
+  create: (args: { userId: string }) => Promise<Result<string, never>>;
   get: () => Promise<{ userId: string } | null>;
   /** Ends the current session (signs the user out) */
   end: () => Promise<Result<void, never>>;
@@ -204,17 +208,15 @@ export declare function makeOtpStorage(
 /** OTP delivery adapter (email, SMS, console) */
 export type OtpDelivery = {
   send: (identifier: string, otp: string) => Promise<void>;
-  /** OTP validity duration in ms */
-  ttl: number;
 };
 
 /** Config for withOtp */
 export type WithOtpConfig = {
   storage: OtpStorage;
   delivery: OtpDelivery;
+  /** Otp validity duration in ms — core stamps OtpRecord.expiresAt from it */
+  ttl: number;
 };
-
-export type VerifyOtpResult = Result<void, "invalid_otp">;
 
 /** Otp methods — added as the `otp` namespace by withOtp */
 export type OtpNamespace = {
@@ -226,26 +228,21 @@ export type OtpNamespace = {
   verify: (args: {
     identifier: string;
     otp: string;
-  }) => Promise<VerifyOtpResult>;
+  }) => Promise<Result<void, "invalid_otp">>;
 };
 
 /* ────────────────────────────────────────────────────────────────────────
  * Passkey — WebAuthn authentication.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/** Credential (passkey) stored data */
-export type StoredCredential = {
-  id: string;
+/** Credential record — the shape exchanged with CredentialStorage, not a stored schema */
+export type CredentialRecord = {
+  credentialId: string;
+  userId: string;
   publicKey: Uint8Array;
   counter: number;
   /** null = the client reported no transport hints */
   transports: AuthenticatorTransport[] | null;
-};
-
-/** Credential record — the shape exchanged with CredentialStorage, not a stored schema */
-export type CredentialRecord = {
-  userId: string;
-  credential: StoredCredential;
 };
 
 /** Credential (passkey) storage adapter */
@@ -253,7 +250,7 @@ export type CredentialStorage = {
   store: (record: CredentialRecord) => Promise<void>;
   get: (credentialId: string) => Promise<CredentialRecord | null>;
   /** All credentials belonging to the user */
-  list: (userId: string) => Promise<StoredCredential[]>;
+  list: (userId: string) => Promise<CredentialRecord[]>;
   /** Persist the WebAuthn signature counter after authentication (clone detection) */
   setCounter: (credentialId: string, counter: number) => Promise<void>;
 };
@@ -291,12 +288,17 @@ export type RegistrationDecoded = {
   token: TokenStatus;
 };
 
-/** Registration codec (short-lived token authorizing passkey registration) */
+/**
+ * Registration codec (short-lived token authorizing passkey registration).
+ * The validity window is the codec factory's own config; encode mints at
+ * that horizon.
+ */
 export type RegistrationCodec = {
   encode: (grant: RegistrationGrant) => Promise<string>;
   decode: (token: string) => Promise<RegistrationDecoded | null>;
 };
 
+/** WebAuthn protocol identity — who the relying party is and which origins may speak for it */
 export type WebAuthnConfig = {
   rpId: string;
   rpName: string;
@@ -306,16 +308,16 @@ export type WebAuthnConfig = {
    * logic, never inferred from rpId.
    */
   allowedOrigins: string[];
-  /** Challenge validity duration in ms */
-  challengeTtl: number;
 };
 
 /** Config for withPasskey */
 export type WithPasskeyConfig = {
   storage: CredentialStorage;
-  challenges: ChallengeStorage;
+  challengeStorage: ChallengeStorage;
   registrationCodec: RegistrationCodec;
   webAuthn: WebAuthnConfig;
+  /** Challenge validity duration in ms — core stamps ChallengeRecord.expiresAt from it */
+  challengeTtl: number;
 };
 
 /* Wire types — WebAuthn JSON for transport between browser and server.
@@ -382,13 +384,13 @@ export type ValidateRegistrationTokenResult = Result<
 >;
 
 /** Success data is the WebAuthn creation options */
-export type RegistrationOptionsResult = Result<
+export type CreateRegistrationOptionsResult = Result<
   PublicKeyCredentialCreationOptionsJSON,
   "invalid_token"
 >;
 
 /** Success data is the WebAuthn request options */
-export type AuthenticationOptionsResult = Result<
+export type CreateAuthenticationOptionsResult = Result<
   PublicKeyCredentialRequestOptionsJSON,
   never
 >;
@@ -414,15 +416,15 @@ export type PasskeyNamespace = {
   validateRegistrationToken: (args: {
     registrationToken: string;
   }) => Promise<ValidateRegistrationTokenResult>;
-  registrationOptions: (args: {
+  createRegistrationOptions: (args: {
     registrationToken: string;
-  }) => Promise<RegistrationOptionsResult>;
+  }) => Promise<CreateRegistrationOptionsResult>;
   /** Verifies and stores the credential. Does not create a session — call session.create. */
   verifyRegistration: (args: {
     registrationToken: string;
     credential: RegistrationCredential;
   }) => Promise<VerifyRegistrationResult>;
-  authenticationOptions: () => Promise<AuthenticationOptionsResult>;
+  createAuthenticationOptions: () => Promise<CreateAuthenticationOptionsResult>;
   /** Verifies the assertion against the stored credential. Does not create a session — call session.create. */
   verifyAuthentication: (args: {
     credential: AuthenticationCredential;
