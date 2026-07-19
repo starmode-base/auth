@@ -44,7 +44,7 @@ This is security-critical code.
 - Don't add edge cases that weren't asked for
 - Don't over-abstract — abstractions must earn their keep
 - Don't add "just in case" code
-- Every test should be necessary — don't test unlikely edge cases
+- Every test should be necessary
 - Code should be simple enough to explain in a security audit
 
 ## Code style
