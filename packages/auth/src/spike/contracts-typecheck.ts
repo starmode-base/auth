@@ -9,9 +9,9 @@ import type {
   MakeAuthConfig,
   WithOtpConfig,
   WithPasskeyConfig,
-  AuthCore,
-  AuthCoreOtp,
-  AuthCorePasskey,
+  Auth,
+  AuthOtp,
+  AuthPasskey,
   AuthFull,
 } from "./contracts";
 import { makeAuth } from "./contracts";
@@ -25,9 +25,9 @@ function expectType<T>(value: T): T {
 }
 
 /* Methods follow the chain — the four shapes */
-expectType<AuthCore>(makeAuth(session));
-expectType<AuthCoreOtp>(makeAuth(session).withOtp(otp));
-expectType<AuthCorePasskey>(makeAuth(session).withPasskey(passkey));
+expectType<Auth>(makeAuth(session));
+expectType<AuthOtp>(makeAuth(session).withOtp(otp));
+expectType<AuthPasskey>(makeAuth(session).withPasskey(passkey));
 expectType<AuthFull>(makeAuth(session).withOtp(otp).withPasskey(passkey));
 
 /* Chain order doesn't matter */
@@ -91,7 +91,7 @@ if (registrationResult.success) {
 
 /* Commands without failure modes collapse — the envelope needs no narrowing */
 
-declare const created: Awaited<ReturnType<AuthCore["session"]["create"]>>;
+declare const created: Awaited<ReturnType<Auth["session"]["create"]>>;
 void created.success;
 void created.data;
 
@@ -100,7 +100,7 @@ void created.token;
 
 /* Void commands drop the data field entirely */
 
-declare const ended: Awaited<ReturnType<AuthCore["session"]["end"]>>;
+declare const ended: Awaited<ReturnType<Auth["session"]["end"]>>;
 void ended.success;
 // @ts-expect-error void commands carry no data field
 void ended.data;

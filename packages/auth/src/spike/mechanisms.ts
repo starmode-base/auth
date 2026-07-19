@@ -7,7 +7,7 @@
 import type { OtpRecord, OtpStorage } from "./contracts";
 
 /**
- * Input for makeOtpStorage: otp storage as two primitives. take must be
+ * Input for makeOtpStorage: OTP storage as two primitives. take must be
  * atomic — fetch and delete in one operation (e.g. DELETE … RETURNING,
  * GETDEL).
  */

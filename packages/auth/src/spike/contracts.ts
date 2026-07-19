@@ -168,7 +168,7 @@ export type SessionNamespace = {
  * OTP — identity verification, optionally authentication.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/** Otp record — the shape exchanged with otp storage, not a stored schema */
+/** OTP record — the shape exchanged with OTP storage, not a stored schema */
 export type OtpRecord = {
   /** Identifier (email address, phone number, etc.) */
   identifier: string;
@@ -187,7 +187,7 @@ export type OtpRecord = {
  */
 export type OtpStorage = {
   store: (record: OtpRecord) => Promise<void>;
-  /** One attempt per otp: a wrong guess consumes it */
+  /** One attempt per OTP: a wrong guess consumes it */
   verify: (identifier: string, otp: string) => Promise<boolean>;
 };
 
@@ -200,18 +200,18 @@ export type OtpDelivery = {
 export type WithOtpConfig = {
   storage: OtpStorage;
   delivery: OtpDelivery;
-  /** Otp validity duration in ms — core stamps OtpRecord.expiresAt from it */
+  /** OTP validity duration in ms — core stamps OtpRecord.expiresAt from it */
   ttl: number;
 };
 
-/** Otp methods — added as the `otp` namespace by withOtp */
+/** OTP methods — added as the `otp` namespace by withOtp */
 export type OtpNamespace = {
   /**
-   * Sends an otp to the identifier. Never reveals whether delivery
+   * Sends an OTP to the identifier. Never reveals whether delivery
    * succeeded (enumeration safety).
    */
   request: (args: { identifier: string }) => Promise<Result<void, never>>;
-  /** A wrong otp consumes it — the user starts over with a fresh request */
+  /** A wrong OTP consumes it — the user starts over with a fresh request */
   verify: (args: {
     identifier: string;
     otp: string;
@@ -373,21 +373,21 @@ export type PasskeyNamespace = {
  * ──────────────────────────────────────────────────────────────────────── */
 
 /** Session-only auth — both strategies still available to chain */
-export type AuthCore = {
+export type Auth = {
   session: SessionNamespace;
-  withOtp: (config: WithOtpConfig) => AuthCoreOtp;
-  withPasskey: (config: WithPasskeyConfig) => AuthCorePasskey;
+  withOtp: (config: WithOtpConfig) => AuthOtp;
+  withPasskey: (config: WithPasskeyConfig) => AuthPasskey;
 };
 
-/** Sessions + otp — only withPasskey remains */
-export type AuthCoreOtp = {
+/** Sessions + OTP — only withPasskey remains */
+export type AuthOtp = {
   session: SessionNamespace;
   otp: OtpNamespace;
   withPasskey: (config: WithPasskeyConfig) => AuthFull;
 };
 
 /** Sessions + passkeys — only withOtp remains */
-export type AuthCorePasskey = {
+export type AuthPasskey = {
   session: SessionNamespace;
   passkey: PasskeyNamespace;
   withOtp: (config: WithOtpConfig) => AuthFull;
@@ -401,4 +401,4 @@ export type AuthFull = {
 };
 
 /** The entry point — builds the session core; chain withOtp and withPasskey to add strategies */
-export declare function makeAuth(config: MakeAuthConfig): AuthCore;
+export declare function makeAuth(config: MakeAuthConfig): Auth;
