@@ -2,7 +2,7 @@
  * ΛUTH contracts — the typed API spec.
  *
  * Everything user code touches: adapter interfaces, config shapes, method
- * namespaces, auth shapes, and factory signatures. Source of intent while
+ * namespaces, auth shapes, and the factory signature. Source of intent while
  * the API is finalized. Verified by contracts-typecheck.ts and exercised by
  * playground.ts.
  */
@@ -19,7 +19,7 @@
  * - *Decoded — what decode returns: what the token carries (record, grant) plus its TokenStatus
  * - *Config — input to a factory or builder step, named for its consumer
  * - *Namespace — the methods a builder step adds; *Result — a command's envelope
- * - *Credential / *JSON — WebAuthn wire shapes mirroring the browser API
+ * - *JSON — WebAuthn wire shapes, ambient from lib.dom; never redeclared here
  *
  * Adapter roles:
  * - Storage — persistence the user owns
@@ -40,7 +40,7 @@
  * - validate — repeatable check, consumes nothing
  *
  * Field rules:
- * - absence is null, never undefined; nullable, never optional (wire types excepted)
+ * - absence is null, never undefined; nullable, never optional
  * - expiry: expiresAt dates and expired flags, scoped by their object
  * - ttl: a duration in ms — unit policy on unit configs; mechanism TTLs live in their factories, off the SPI
  * - API methods take one args object; adapter methods take positional args
@@ -148,6 +148,7 @@ export type MakeAuthConfig = {
   transport: SessionTransport;
   /** Session TTL in ms (Infinity = forever). Inactivity timeout with sliding refresh. */
   ttl: number;
+  /** Log expected auth failures to the console (development aid) */
   debug: boolean;
 };
 
@@ -308,60 +309,6 @@ export type WithPasskeyConfig = {
   challengeTtl: number;
 };
 
-/* Wire types — WebAuthn JSON for transport between browser and server.
- * These mirror the browser API; optionality follows the WebAuthn spec. */
-
-export type PublicKeyCredentialCreationOptionsJSON = {
-  challenge: string;
-  rp: { name: string; id: string };
-  user: { id: string; name: string; displayName: string };
-  pubKeyCredParams: { type: "public-key"; alg: number }[];
-  timeout?: number;
-  attestation?: AttestationConveyancePreference;
-  excludeCredentials?: { id: string; type: "public-key" }[];
-  authenticatorSelection?: AuthenticatorSelectionCriteria;
-  // extensions omitted — add when PRF support is implemented
-};
-
-export type PublicKeyCredentialRequestOptionsJSON = {
-  challenge: string;
-  rpId: string;
-  timeout?: number;
-  allowCredentials?: { id: string; type: "public-key" }[];
-  userVerification?: UserVerificationRequirement;
-  // extensions omitted — add when PRF support is implemented
-};
-
-export type RegistrationCredential = {
-  id: string;
-  rawId: string;
-  type: "public-key";
-  response: {
-    clientDataJSON: string;
-    attestationObject: string;
-    transports?: AuthenticatorTransport[] | undefined;
-  };
-  authenticatorAttachment?: AuthenticatorAttachment | undefined;
-  clientExtensionResults: AuthenticationExtensionsClientOutputs;
-};
-
-export type AuthenticationCredential = {
-  id: string;
-  rawId: string;
-  type: "public-key";
-  response: {
-    clientDataJSON: string;
-    authenticatorData: string;
-    signature: string;
-    userHandle?: string | undefined;
-  };
-  authenticatorAttachment?: AuthenticatorAttachment | undefined;
-  clientExtensionResults: AuthenticationExtensionsClientOutputs;
-};
-
-/* Results — verification returns the verified userId; sessions are created
- * explicitly via session.create. */
-
 /** Success data is the registration token */
 export type CreateRegistrationTokenResult = Result<string, never>;
 
@@ -410,12 +357,12 @@ export type PasskeyNamespace = {
   /** Verifies and stores the credential. Does not create a session — call session.create. */
   verifyRegistration: (args: {
     registrationToken: string;
-    credential: RegistrationCredential;
+    credential: RegistrationResponseJSON;
   }) => Promise<VerifyRegistrationResult>;
   createAuthenticationOptions: () => Promise<CreateAuthenticationOptionsResult>;
   /** Verifies the assertion against the stored credential. Does not create a session — call session.create. */
   verifyAuthentication: (args: {
-    credential: AuthenticationCredential;
+    credential: AuthenticationResponseJSON;
   }) => Promise<VerifyAuthenticationResult>;
 };
 
