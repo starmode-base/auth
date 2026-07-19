@@ -46,7 +46,6 @@
  * - API methods take one args object; adapter methods take positional args
  */
 
-/** Error codes for auth failures */
 export type AuthErrorCode =
   | "invalid_otp"
   | "invalid_token"
@@ -72,10 +71,10 @@ export type Result<T, E extends AuthErrorCode> =
   | ([E] extends [never] ? never : { success: false; error: E });
 
 /**
- * The token's trust status, as read by decode. expiresAt is the trust
- * horizon: how long the carried record may be trusted without consulting
- * storage. Self-contained tokens embed it; lookup codecs report now — their
- * trust is per-decode, so expired is never true.
+ * The token's trust status, as read by decode. The trust horizon bounds how
+ * long the carried record may be trusted without a storage check:
+ * self-contained tokens embed it; lookup codecs report now — their trust is
+ * per-decode, so expired is never true.
  */
 export type TokenStatus = {
   /** End of the trust horizon — the carried record is trusted without a storage check until this */
@@ -85,7 +84,7 @@ export type TokenStatus = {
 };
 
 /* ────────────────────────────────────────────────────────────────────────
- * Session — the core. Records → adapters → config → namespace → results.
+ * Session — the core.
  * ──────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -137,7 +136,6 @@ export type SessionTransport = {
   get: () => string | null;
   /** Store token and return what goes in the response body */
   set: (token: string) => string;
-  /** Clear the stored token */
   clear: () => void;
 };
 
@@ -213,6 +211,7 @@ export type OtpNamespace = {
    * succeeded (enumeration safety).
    */
   request: (args: { identifier: string }) => Promise<Result<void, never>>;
+  /** A wrong otp consumes it — the user starts over with a fresh request */
   verify: (args: {
     identifier: string;
     otp: string;
@@ -330,6 +329,7 @@ export type CreateAuthenticationOptionsResult = Result<
   never
 >;
 
+/** Success data is the verified userId */
 export type VerifyRegistrationResult = Result<
   { userId: string },
   | "invalid_token"
@@ -338,6 +338,7 @@ export type VerifyRegistrationResult = Result<
   | "verification_failed"
 >;
 
+/** Success data is the verified userId */
 export type VerifyAuthenticationResult = Result<
   { userId: string },
   "credential_not_found" | "challenge_expired" | "verification_failed"
@@ -399,4 +400,5 @@ export type AuthFull = {
   passkey: PasskeyNamespace;
 };
 
+/** The entry point — builds the session core; chain withOtp and withPasskey to add strategies */
 export declare function makeAuth(config: MakeAuthConfig): AuthCore;
