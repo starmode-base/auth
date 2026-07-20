@@ -71,9 +71,16 @@ How methods return (commands, queries, adapters, throws) is specified by the `Re
 
 ## TDD (critical)
 
-- NEVER write tests based on implemented code
-- ALWAYS write tests based on expected behavior (spec, requirements, user input)
-- When unsure about expected behavior, ask the user
+Test vocabulary:
+
+- Authority — the source that determines expected behavior, following the documentation map; e.g. a contract, requirement, governing standard, or user/domain expert
+  Example: The contract says a token is expired only when `expiresAt < now`
+- Behavioral claim — what must be true
+  Example: A token is not expired when `expiresAt === now`
+- Test oracle — the expected result or decision rule for a given case
+  Example: `expired` is `false`, encoded as `expect(decoded?.token.expired).toBe(false)`
+
+Every test proves one behavioral claim using a test oracle derived from an authority. The implementation under test is never an authority or test oracle. When no authority determines the expected behavior, ask the user.
 
 ## Test organization
 

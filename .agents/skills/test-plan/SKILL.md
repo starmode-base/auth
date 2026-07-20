@@ -18,34 +18,32 @@ behavioral boundary; it is not necessarily one physical file.
 3. Record cross-unit discoveries under `Parked follow-ups` without pursuing
    them.
 
-## Sources
+## Claims and evidence
 
-Read only the material relevant to the target:
+Gather behavioral claims from the authorities relevant to the target:
 
 1. Requirements supplied by the user.
 2. The authoritative contract and mechanism documentation identified by
    `AGENTS.md`.
-3. Relevant threat-model and work-queue entries.
-4. Existing tests for the target.
+3. Relevant threat-model decisions and governing standards.
 
-Derive expected behavior from these sources, never from the implementation.
-After the claim inventory is established, inspect implementation only when
-needed to identify the public boundary or a test seam.
+Use the work queue to find known gaps and existing tests to classify evidence.
+Existing tests and implementation do not determine expected behavior.
 
 ## Inventory
 
 Build the complete behavioral claim inventory for the target, grouped by
 domain behavior. Include positive behavior, denial or failure behavior,
-boundaries, side effects, time, and concurrency only where the authoritative
-sources require them.
+boundaries, side effects, time, and concurrency only where the authorities
+require them.
 
 Give every claim exactly one status:
 
 - `Covered` — existing evidence directly proves the claim.
 - `Partial` — evidence proves only part of the claim.
 - `Missing` — the claim has no direct evidence.
-- `Unclear` — authoritative sources do not determine the expected behavior.
-- `Out of scope` — the sources explicitly place responsibility elsewhere.
+- `Unclear` — no authority determines the expected behavior.
+- `Out of scope` — an authority explicitly places responsibility elsewhere.
 
 For covered or partial claims, cite the relevant test by name and file. For
 missing or partial claims, briefly state the defect the evidence should catch.
@@ -65,8 +63,8 @@ Questions
 - <Only genuinely unresolved requirements; omit when empty>
 
 Recommended next test
-- <One missing or partial claim, with a short reason; or `None` when every
-  claim is covered or otherwise resolved>
+- <One missing or partial claim and its test oracle, with a short reason; or
+  `None` when every claim is covered or otherwise resolved>
 
 Parked follow-ups
 - <Cross-unit discovery; omit when empty>

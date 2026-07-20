@@ -13,28 +13,20 @@ Turn one approved behavioral claim into one reviewable test.
    approved by the user. If either is absent or ambiguous, ask before working.
 2. Stay within that claim. Do not add adjacent cases, refactor unrelated tests,
    or change production code.
-3. If the authoritative sources do not determine the expected behavior, stop
-   and ask rather than inventing it.
-
-## Sources
-
-Read only the material needed for the selected claim:
-
-1. Requirements supplied by the user.
-2. The authoritative contract and mechanism documentation identified by
-   `AGENTS.md`.
-3. The target test file and directly relevant existing tests.
-
-Derive the test from expected behavior, never from the implementation.
+3. If no authority determines the expected behavior, stop and ask rather than
+   inventing it.
 
 ## Before writing
 
 State briefly:
 
-- The selected claim.
-- The observable oracle.
+- The selected behavioral claim.
+- The test oracle.
 - Where the test will live.
 - Why existing tests do not already prove it.
+
+Derive the test oracle from an authority, never from the implementation under
+test.
 
 The user's claim approval is the authorization to proceed; do not add another
 approval gate unless expected behavior is unclear.
@@ -71,6 +63,7 @@ Report:
 
 ```text
 Claim: <selected claim>
+Oracle: <expected result or decision rule>
 Test: <file and test name>
 Result: <red, green on arrival, or blocked> — <reason>
 Command: <narrow command>
