@@ -71,13 +71,13 @@ export type Result<T, E extends AuthErrorCode> =
   | ([E] extends [never] ? never : { success: false; error: E });
 
 /**
- * The token's trust status, as read by decode. The trust horizon bounds how
- * long the carried record may be trusted without a storage check:
- * self-contained tokens embed it; lookup codecs report now — their trust is
- * per-decode, so expired is never true.
+ * The token's storage-check status, as read by decode. Expiry means the
+ * carried data needs a storage check; it does not make decode return null.
+ * Self-contained tokens embed the expiry; lookup codecs report now — their
+ * trust is per-decode, so expired is never true.
  */
 export type TokenStatus = {
-  /** End of the trust horizon — the carried record is trusted without a storage check until this */
+  /** When the carried data must be checked against storage */
   expiresAt: Date;
   /** expiresAt < now, computed by the codec — the codec owns the token clock */
   expired: boolean;
@@ -122,7 +122,7 @@ export type SessionDecoded = {
  * token TTL is the codec factory's own config — never core's.
  */
 export type SessionCodec = {
-  /** token.expiresAt: null mints a fresh horizon from the codec's own TTL; a Date preserves the existing horizon (sliding refresh) */
+  /** token.expiresAt: null mints a fresh expiry from the codec's own TTL; a Date preserves the supplied expiry */
   encode: (
     record: SessionRecord,
     token: { expiresAt: Date | null },
@@ -282,7 +282,7 @@ export type RegistrationDecoded = {
 /**
  * Registration codec (short-lived token authorizing passkey registration).
  * The validity window is the codec factory's own config; encode mints at
- * that horizon.
+ * that expiry.
  */
 export type RegistrationCodec = {
   encode: (grant: RegistrationGrant) => Promise<string>;

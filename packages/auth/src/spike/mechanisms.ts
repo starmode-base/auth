@@ -29,7 +29,7 @@ export declare function makeOtpStorage(
 /** Input for makeSessionHmacCodec */
 export type MakeSessionHmacCodecConfig = {
   secret: string;
-  /** Token TTL in ms — the trust horizon minted on fresh encodes */
+  /** Token TTL in ms — the token expiry minted on fresh encodes */
   ttl: number;
 };
 

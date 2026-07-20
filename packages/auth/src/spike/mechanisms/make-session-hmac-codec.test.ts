@@ -40,8 +40,8 @@ describe("session record", () => {
   });
 });
 
-describe("trust horizon", () => {
-  it("mints a fresh horizon from its ttl when the directive is null", async () => {
+describe("token expiry", () => {
+  it("sets token expiry from the codec TTL when expiresAt is null", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const decoded = await codec.decode(
       await codec.encode(record, { expiresAt: null }),
@@ -53,24 +53,24 @@ describe("trust horizon", () => {
     });
   });
 
-  it("preserves a given horizon on sliding refresh", async () => {
+  it("preserves a supplied token expiry", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
-    const horizon = new Date(T0.getTime() + 30_000);
+    const tokenExpiry = new Date(T0.getTime() + 30_000);
     const decoded = await codec.decode(
-      await codec.encode(record, { expiresAt: horizon }),
+      await codec.encode(record, { expiresAt: tokenExpiry }),
     );
 
     expect(decoded?.token).toStrictEqual({
-      expiresAt: horizon,
+      expiresAt: tokenExpiry,
       expired: false,
     });
   });
 
   /**
-   * Core checks storage for revocation only after the trust horizon expires.
-   * Rejecting the token here would silently disable that check.
+   * Core checks storage for revocation when token.expired is true, so decode
+   * must retain the record.
    */
-  it("flags an expired horizon but still returns the record", async () => {
+  it("marks an expired token while preserving its record", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const past = new Date(T0.getTime() - 1);
     const decoded = await codec.decode(

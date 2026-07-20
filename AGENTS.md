@@ -82,6 +82,7 @@ How methods return (commands, queries, adapters, throws) is specified by the `Re
 - Use `describe` only for meaningful behavioral groups
 - Prefer no more than one `describe` level
 - Use plain `it` when grouping adds no orientation
+- Test names use API vocabulary and observable behavior, not conceptual terminology
 - Split multiple public units into separate test files when practical
 
 ## Prose style
