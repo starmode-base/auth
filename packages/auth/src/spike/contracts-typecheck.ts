@@ -16,7 +16,7 @@ import type {
 } from "./contracts";
 import { makeAuth } from "./contracts";
 
-declare const session: MakeAuthConfig;
+declare const config: MakeAuthConfig;
 declare const otp: WithOtpConfig;
 declare const passkey: WithPasskeyConfig;
 
@@ -25,47 +25,47 @@ function expectType<T>(value: T): T {
 }
 
 /* Methods follow the chain — the four shapes */
-expectType<Auth>(makeAuth(session));
-expectType<AuthOtp>(makeAuth(session).withOtp(otp));
-expectType<AuthPasskey>(makeAuth(session).withPasskey(passkey));
-expectType<AuthFull>(makeAuth(session).withOtp(otp).withPasskey(passkey));
+expectType<Auth>(makeAuth(config));
+expectType<AuthOtp>(makeAuth(config).withOtp(otp));
+expectType<AuthPasskey>(makeAuth(config).withPasskey(passkey));
+expectType<AuthFull>(makeAuth(config).withOtp(otp).withPasskey(passkey));
 
 /* Chain order doesn't matter */
-expectType<AuthFull>(makeAuth(session).withPasskey(passkey).withOtp(otp));
+expectType<AuthFull>(makeAuth(config).withPasskey(passkey).withOtp(otp));
 
 /* The session namespace is present at every step */
-void makeAuth(session).session.get;
-void makeAuth(session).withOtp(otp).session.end;
-void makeAuth(session).withOtp(otp).withPasskey(passkey).session.create;
+void makeAuth(config).session.get;
+void makeAuth(config).withOtp(otp).session.end;
+void makeAuth(config).withOtp(otp).withPasskey(passkey).session.create;
 
 /* Strategy namespaces only exist after their step */
-void makeAuth(session).withOtp(otp).otp.verify;
-void makeAuth(session).withPasskey(passkey).passkey.verifyAuthentication;
-void makeAuth(session).withOtp(otp).withPasskey(passkey).passkey
+void makeAuth(config).withOtp(otp).otp.verify;
+void makeAuth(config).withPasskey(passkey).passkey.verifyAuthentication;
+void makeAuth(config).withOtp(otp).withPasskey(passkey).passkey
   .createRegistrationOptions;
 
 // @ts-expect-error otp namespace does not exist before withOtp
-void makeAuth(session).otp;
+void makeAuth(config).otp;
 
 // @ts-expect-error otp namespace does not exist on a passkey-only instance
-void makeAuth(session).withPasskey(passkey).otp;
+void makeAuth(config).withPasskey(passkey).otp;
 
 // @ts-expect-error passkey namespace does not exist on an otp-only instance
-void makeAuth(session).withOtp(otp).passkey;
+void makeAuth(config).withOtp(otp).passkey;
 
 /* All methods live in namespaces — the root holds no methods */
 
 // @ts-expect-error getSession is not a root method — it is auth.session.get
-void makeAuth(session).getSession;
+void makeAuth(config).getSession;
 
 // @ts-expect-error createSession is not a root method — it is auth.session.create
-void makeAuth(session).withOtp(otp).createSession;
+void makeAuth(config).withOtp(otp).createSession;
 
 // @ts-expect-error verifyOtp is not a root method — it is auth.otp.verify
-void makeAuth(session).withOtp(otp).verifyOtp;
+void makeAuth(config).withOtp(otp).verifyOtp;
 
 // @ts-expect-error verifyAuthentication is not a root method — it is auth.passkey.verifyAuthentication
-void makeAuth(session).withPasskey(passkey).verifyAuthentication;
+void makeAuth(config).withPasskey(passkey).verifyAuthentication;
 
 /* Passkey verification is pure — it returns the userId, never a session */
 
@@ -123,41 +123,36 @@ void otpError;
 /* Duplicate steps are type errors — with* removes itself from the chain */
 
 // @ts-expect-error withOtp cannot be chained twice
-void makeAuth(session).withOtp(otp).withOtp(otp);
+void makeAuth(config).withOtp(otp).withOtp(otp);
 
 // @ts-expect-error withPasskey cannot be chained twice
-void makeAuth(session).withPasskey(passkey).withPasskey(passkey);
+void makeAuth(config).withPasskey(passkey).withPasskey(passkey);
 
 // @ts-expect-error nothing left to chain after both strategies
-void makeAuth(session).withOtp(otp).withPasskey(passkey).withOtp(otp);
+void makeAuth(config).withOtp(otp).withPasskey(passkey).withOtp(otp);
 
 /* Unknown config keys are rejected */
 
-// @ts-expect-error unknown key in session config
-void makeAuth({ ...session, unknown: true });
+// @ts-expect-error unknown key in makeAuth config
+void makeAuth({ ...config, unknown: true });
 
 // @ts-expect-error unknown key in otp config
-void makeAuth(session).withOtp({ ...otp, unknown: true });
+void makeAuth(config).withOtp({ ...otp, unknown: true });
 
 // @ts-expect-error unknown key in passkey config
-void makeAuth(session).withPasskey({ ...passkey, unknown: true });
+void makeAuth(config).withPasskey({ ...passkey, unknown: true });
 
 /* Every field is required */
 
 // @ts-expect-error delivery is required in otp config
-void makeAuth(session).withOtp({ storage: otp.storage });
+void makeAuth(config).withOtp({ storage: otp.storage });
 
-// @ts-expect-error challengeStorage is required in passkey config
-void makeAuth(session).withPasskey({
+// @ts-expect-error challenge is required in passkey config
+void makeAuth(config).withPasskey({
   storage: passkey.storage,
   registrationCodec: passkey.registrationCodec,
   webAuthn: passkey.webAuthn,
 });
 
-// @ts-expect-error debug is required in session config
-void makeAuth({
-  storage: session.storage,
-  codec: session.codec,
-  transport: session.transport,
-  ttl: session.ttl,
-});
+// @ts-expect-error debug is required in makeAuth config
+void makeAuth({ session: config.session });

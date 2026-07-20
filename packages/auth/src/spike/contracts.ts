@@ -139,13 +139,18 @@ export type SessionTransport = {
   clear: () => void;
 };
 
-/** Config for makeAuth — the session core */
-export type MakeAuthConfig = {
+/** Config for the session unit */
+export type SessionConfig = {
   storage: SessionStorage;
   codec: SessionCodec;
   transport: SessionTransport;
   /** Session TTL in ms (Infinity = forever). Inactivity timeout with sliding refresh. */
   ttl: number;
+};
+
+/** Config for makeAuth — the session unit named explicitly, since the function name can't */
+export type MakeAuthConfig = {
+  session: SessionConfig;
   /** Log expected auth failures to the console (development aid) */
   debug: boolean;
 };
@@ -248,7 +253,7 @@ export type ChallengeRecord = {
   challenge: string;
   /** Set for registration ceremonies, null for authentication */
   userId: string | null;
-  /** Stamped by core from WithPasskeyConfig.challengeTtl */
+  /** Stamped by core from WithPasskeyConfig.challenge.ttl */
   expiresAt: Date;
 };
 
@@ -298,14 +303,19 @@ export type WebAuthnConfig = {
   allowedOrigins: string[];
 };
 
+/** Config for the passkey unit's challenges */
+export type ChallengeConfig = {
+  storage: ChallengeStorage;
+  /** Challenge validity duration in ms — core stamps ChallengeRecord.expiresAt from it */
+  ttl: number;
+};
+
 /** Config for withPasskey */
 export type WithPasskeyConfig = {
   storage: CredentialStorage;
-  challengeStorage: ChallengeStorage;
   registrationCodec: RegistrationCodec;
   webAuthn: WebAuthnConfig;
-  /** Challenge validity duration in ms — core stamps ChallengeRecord.expiresAt from it */
-  challengeTtl: number;
+  challenge: ChallengeConfig;
 };
 
 /** Success data is the registration token */
