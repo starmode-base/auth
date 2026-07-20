@@ -75,6 +75,15 @@ How methods return (commands, queries, adapters, throws) is specified by the `Re
 - ALWAYS write tests based on expected behavior (spec, requirements, user input)
 - When unsure about expected behavior, ask the user
 
+## Test organization
+
+- One contract unit per test file
+- The filename identifies the unit; don't repeat it in an outer `describe`
+- Use `describe` only for meaningful behavioral groups
+- Prefer no more than one `describe` level
+- Use plain `it` when grouping adds no orientation
+- Split multiple public units into separate test files when practical
+
 ## Prose style
 
 - Use sentence case, never title case

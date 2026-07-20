@@ -64,8 +64,9 @@ Target: <contract unit>
 Questions
 - <Only genuinely unresolved requirements; omit when empty>
 
-Next claim
-- <Exactly one missing or partial claim recommended next, with a short reason>
+Recommended next test
+- <One missing or partial claim, with a short reason; or `None` when every
+  claim is covered or otherwise resolved>
 
 Parked follow-ups
 - <Cross-unit discovery; omit when empty>
@@ -75,4 +76,5 @@ Keep each entry concise, but do not cap or sample the inventory. Completeness
 is local to the target.
 
 Do not edit files, write test code, or propose implementation. Stop after the
-inventory so the user can review and select the next claim.
+inventory so the user can approve the recommended test target or choose
+another.
