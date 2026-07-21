@@ -175,4 +175,36 @@ describe("invalid or forged tokens", () => {
       expect(await codec.decode(tamper(token))).toBeNull();
     },
   );
+
+  test("decode propagates HMAC verification infrastructure failures", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const token = await codec.encode(record, { expiresAt: null });
+    const failure = new Error("HMAC verification unavailable");
+    const verification = vi
+      .spyOn(crypto.subtle, "verify")
+      .mockRejectedValueOnce(failure);
+
+    try {
+      await expect(codec.decode(token)).rejects.toBe(failure);
+    } finally {
+      verification.mockRestore();
+    }
+  });
+});
+
+describe("infrastructure failures", () => {
+  test("decode propagates an HMAC verification infrastructure failure", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const token = await codec.encode(record, { expiresAt: null });
+    const failure = new Error("verification unavailable");
+    const verify = vi
+      .spyOn(crypto.subtle, "verify")
+      .mockRejectedValueOnce(failure);
+
+    try {
+      await expect(codec.decode(token)).rejects.toBe(failure);
+    } finally {
+      verify.mockRestore();
+    }
+  });
 });
