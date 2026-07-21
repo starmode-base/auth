@@ -46,6 +46,9 @@ Give every claim exactly one status:
 - `Unclear` — no authority determines the expected behavior.
 - `Out of scope` — an authority explicitly places responsibility elsewhere.
 
+Number every claim sequentially in the report. The numbers are local references
+for selecting a claim from that report, not permanent identifiers.
+
 For covered or partial claims, cite the relevant test by name and file. For
 missing or partial claims, briefly state the defect the evidence should catch.
 Do not invent requirements or add speculative edge cases.
@@ -58,14 +61,14 @@ Use this structure:
 Target: <contract unit>
 
 <Behavior group>
-- <Status>: <claim>. <Evidence or brief gap reason>
+- [<number>] <Status>: <claim>. <Evidence or brief gap reason>
 
 Questions
 - <Only genuinely unresolved requirements; omit when empty>
 
 Recommended next test
-- <One missing or partial claim and its test oracle, with a short reason; or
-  `None` when every claim is covered or otherwise resolved>
+- [<number>] <One missing or partial claim and its test oracle, with a short
+  reason; or `None` when every claim is covered or otherwise resolved>
 
 Parked follow-ups
 - <Cross-unit discovery; omit when empty>
