@@ -187,8 +187,18 @@ describe("invalid or forged tokens", () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     vi.spyOn(crypto.subtle, "verify").mockResolvedValueOnce(true);
 
-    // Authenticated but unreadable carried data is still an invalid token.
+    // `ew` is base64url for invalid JSON `{`; `AA` is a decodable
+    // placeholder signature accepted by the mocked verifier.
     expect(await codec.decode("ew.AA")).toBeNull();
+  });
+
+  test("decode returns null for signature-valid carried data without the required fields", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    vi.spyOn(crypto.subtle, "verify").mockResolvedValueOnce(true);
+
+    // `e30` is base64url for `{}`; `AA` is a decodable placeholder signature
+    // accepted by the mocked verifier.
+    expect(await codec.decode("e30.AA")).toBeNull();
   });
 
   test("decode returns null for a token signed with another secret", async () => {
