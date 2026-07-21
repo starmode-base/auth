@@ -193,6 +193,22 @@ describe("invalid or forged tokens", () => {
 });
 
 describe("infrastructure failures", () => {
+  test("encode propagates an HMAC signing infrastructure failure", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const failure = new Error("signing unavailable");
+    const sign = vi
+      .spyOn(crypto.subtle, "sign")
+      .mockRejectedValueOnce(failure);
+
+    try {
+      await expect(
+        codec.encode(record, { expiresAt: null }),
+      ).rejects.toBe(failure);
+    } finally {
+      sign.mockRestore();
+    }
+  });
+
   test("decode propagates an HMAC verification infrastructure failure", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const token = await codec.encode(record, { expiresAt: null });
