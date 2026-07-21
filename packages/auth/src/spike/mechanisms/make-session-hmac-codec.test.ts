@@ -182,6 +182,18 @@ describe("invalid or forged tokens", () => {
     expect(await codec.decode("body.!!!not-base64url!!!")).toBeNull();
   });
 
+  test("decode returns null for a signature-valid token with undecodable carried data", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const verify = vi.spyOn(crypto.subtle, "verify").mockResolvedValueOnce(true);
+
+    try {
+      // Authenticated but unreadable carried data is still an invalid token.
+      expect(await codec.decode("ew.AA")).toBeNull();
+    } finally {
+      verify.mockRestore();
+    }
+  });
+
   test("decode returns null for a token signed with another secret", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const foreignCodec = makeSessionHmacCodec({
