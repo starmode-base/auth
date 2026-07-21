@@ -16,6 +16,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
@@ -184,14 +185,10 @@ describe("invalid or forged tokens", () => {
 
   test("decode returns null for a signature-valid token with undecodable carried data", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
-    const verify = vi.spyOn(crypto.subtle, "verify").mockResolvedValueOnce(true);
+    vi.spyOn(crypto.subtle, "verify").mockResolvedValueOnce(true);
 
-    try {
-      // Authenticated but unreadable carried data is still an invalid token.
-      expect(await codec.decode("ew.AA")).toBeNull();
-    } finally {
-      verify.mockRestore();
-    }
+    // Authenticated but unreadable carried data is still an invalid token.
+    expect(await codec.decode("ew.AA")).toBeNull();
   });
 
   test("decode returns null for a token signed with another secret", async () => {
@@ -230,15 +227,9 @@ describe("invalid or forged tokens", () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const token = await codec.encode(record, { expiresAt: null });
     const failure = new Error("HMAC verification unavailable");
-    const verification = vi
-      .spyOn(crypto.subtle, "verify")
-      .mockRejectedValueOnce(failure);
+    vi.spyOn(crypto.subtle, "verify").mockRejectedValueOnce(failure);
 
-    try {
-      await expect(codec.decode(token)).rejects.toBe(failure);
-    } finally {
-      verification.mockRestore();
-    }
+    await expect(codec.decode(token)).rejects.toBe(failure);
   });
 });
 
@@ -246,29 +237,19 @@ describe("infrastructure failures", () => {
   test("encode propagates an HMAC signing infrastructure failure", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const failure = new Error("signing unavailable");
-    const sign = vi.spyOn(crypto.subtle, "sign").mockRejectedValueOnce(failure);
+    vi.spyOn(crypto.subtle, "sign").mockRejectedValueOnce(failure);
 
-    try {
-      await expect(codec.encode(record, { expiresAt: null })).rejects.toBe(
-        failure,
-      );
-    } finally {
-      sign.mockRestore();
-    }
+    await expect(codec.encode(record, { expiresAt: null })).rejects.toBe(
+      failure,
+    );
   });
 
   test("decode propagates an HMAC verification infrastructure failure", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const token = await codec.encode(record, { expiresAt: null });
     const failure = new Error("verification unavailable");
-    const verify = vi
-      .spyOn(crypto.subtle, "verify")
-      .mockRejectedValueOnce(failure);
+    vi.spyOn(crypto.subtle, "verify").mockRejectedValueOnce(failure);
 
-    try {
-      await expect(codec.decode(token)).rejects.toBe(failure);
-    } finally {
-      verify.mockRestore();
-    }
+    await expect(codec.decode(token)).rejects.toBe(failure);
   });
 });
