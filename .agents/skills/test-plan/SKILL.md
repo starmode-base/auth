@@ -32,10 +32,11 @@ Existing tests and implementation do not determine expected behavior.
 
 ## Inventory
 
-Build the complete behavioral claim inventory for the target, grouped by
-domain behavior. Include positive behavior, denial or failure behavior,
-boundaries, side effects, time, and concurrency only where the authorities
-require them.
+Build the complete behavioral claim inventory for the target. Group claims by
+the unit's real behavioral concerns or failure modes so the groups can orient
+the test file. Reuse sibling group names where they fit; never impose a fixed
+taxonomy. Include positive behavior, denial or failure behavior, boundaries,
+side effects, time, and concurrency only where the authorities require them.
 
 Give every claim exactly one status:
 

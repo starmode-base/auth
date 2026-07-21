@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { makeSessionHmacCodec } from "./make-session-hmac-codec";
 
 const MINUTE = 60_000;
@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("session record", () => {
-  it("carries the session record through encode and decode", async () => {
+  test("encode and decode preserve the session record", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const decoded = await codec.decode(
       await codec.encode(record, { expiresAt: null }),
@@ -29,7 +29,7 @@ describe("session record", () => {
     expect(decoded?.record).toStrictEqual(record);
   });
 
-  it("round-trips a never-expiring session", async () => {
+  test("encode and decode preserve a never-expiring session", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const forever = { ...record, expiresAt: null };
     const decoded = await codec.decode(
@@ -41,7 +41,7 @@ describe("session record", () => {
 });
 
 describe("token expiry", () => {
-  it("sets token expiry from the codec TTL when expiresAt is null", async () => {
+  test("encode sets token expiry from the codec TTL when expiresAt is null", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const decoded = await codec.decode(
       await codec.encode(record, { expiresAt: null }),
@@ -53,7 +53,7 @@ describe("token expiry", () => {
     });
   });
 
-  it("preserves a supplied token expiry", async () => {
+  test("encode preserves a supplied token expiry", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const tokenExpiry = new Date(T0.getTime() + 30_000);
     const decoded = await codec.decode(
@@ -66,7 +66,7 @@ describe("token expiry", () => {
     });
   });
 
-  it("does not mark a token expired when expiresAt equals now", async () => {
+  test("decode reports the token as unexpired when expiresAt equals now", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const decoded = await codec.decode(
       await codec.encode(record, { expiresAt: T0 }),
@@ -75,11 +75,26 @@ describe("token expiry", () => {
     expect(decoded?.token.expired).toBe(false);
   });
 
+  test("decode evaluates token expiry using the current time", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+
+    // Encode while the token expiry is still in the future.
+    const expiresAt = new Date(T0.getTime() + 30_000);
+    const token = await codec.encode(record, { expiresAt });
+
+    // Move the clock one millisecond past token expiry before decoding.
+    vi.setSystemTime(new Date(expiresAt.getTime() + 1));
+
+    const decoded = await codec.decode(token);
+
+    expect(decoded?.token.expired).toBe(true);
+  });
+
   /**
    * Core checks storage for revocation when token.expired is true, so decode
    * must retain the record.
    */
-  it("marks an expired token while preserving its record", async () => {
+  test("decode reports the token as expired while preserving its record", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const past = new Date(T0.getTime() - 1);
     const decoded = await codec.decode(
@@ -98,24 +113,24 @@ describe("invalid or forged tokens", () => {
    * Shape violations fail closed instead of escaping as parsing errors.
    * This evidence licenses decode's error boundary.
    */
-  it.each([
+  test.each([
     { name: "an empty token", token: "" },
     { name: "a token without a separator", token: "not-a-token" },
     { name: "a token with too many segments", token: "a.b.c" },
     { name: "a token without a signature", token: "body." },
-  ])("decodes $name to null", async ({ token }) => {
+  ])("decode returns null for $name", async ({ token }) => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
 
     expect(await codec.decode(token)).toBeNull();
   });
 
-  it("decodes a token with an undecodable signature to null", async () => {
+  test("decode returns null for a token with an undecodable signature", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
 
     expect(await codec.decode("body.!!!not-base64url!!!")).toBeNull();
   });
 
-  it("decodes a token signed with a different secret to null", async () => {
+  test("decode returns null for a token signed with another secret", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const foreignCodec = makeSessionHmacCodec({
       secret: "secret-2",
@@ -126,7 +141,7 @@ describe("invalid or forged tokens", () => {
     expect(await codec.decode(foreign)).toBeNull();
   });
 
-  it.each([
+  test.each([
     {
       part: "body",
       tamper: (token: string) =>
@@ -137,10 +152,13 @@ describe("invalid or forged tokens", () => {
       tamper: (token: string) =>
         token.slice(0, -1) + (token.endsWith("A") ? "B" : "A"),
     },
-  ])("decodes a token with a tampered $part to null", async ({ tamper }) => {
-    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
-    const token = await codec.encode(record, { expiresAt: null });
+  ])(
+    "decode returns null for a token with a tampered $part",
+    async ({ tamper }) => {
+      const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+      const token = await codec.encode(record, { expiresAt: null });
 
-    expect(await codec.decode(tamper(token))).toBeNull();
-  });
+      expect(await codec.decode(tamper(token))).toBeNull();
+    },
+  );
 });

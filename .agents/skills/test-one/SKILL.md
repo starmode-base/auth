@@ -34,14 +34,14 @@ approval gate unless expected behavior is unclear.
 ## Write the test
 
 - Follow the test-organization and style rules in `AGENTS.md`.
-- Add exactly one `it` or `it.each` declaration.
-- Use `it.each` only when every named case is equivalent evidence for the same
+- Add exactly one `test` or `test.each` declaration.
+- Use `test.each` only when every named case is equivalent evidence for the same
   claim.
 - Match the target file's established behavioral grouping.
 - Keep setup local and deterministic.
 - Assert the exact public outcome.
-- Add a comment only when the security reason cannot be expressed by the test
-  name and assertion.
+- Use scenario comments when a non-obvious transition or sequence matters to
+  the claim; state intent, not obvious mechanics.
 
 Do not edit contracts, production code, unrelated tests, or work-queue files.
 

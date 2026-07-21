@@ -69,9 +69,9 @@ How methods return (commands, queries, adapters, throws) is specified by the `Re
 - Invariants: Never use type assertions (`as`). Throw instead — surfaces bugs immediately. Comment each invariant `Invariant: reasoning`
 - Must prove the error with a test before adding try-catch
 
-## TDD (critical)
+## Tests
 
-Test vocabulary:
+### Vocabulary
 
 - Authority — the source that determines expected behavior, following the documentation map; e.g. a contract, requirement, governing standard, or user/domain expert
   Example: The contract says a token is expired only when `expiresAt < now`
@@ -80,16 +80,18 @@ Test vocabulary:
 - Test oracle — the expected result or decision rule for a given case
   Example: `expired` is `false`, encoded as `expect(decoded?.token.expired).toBe(false)`
 
+### TDD (critical)
+
 Every test proves one behavioral claim using a test oracle derived from an authority. The implementation under test is never an authority or test oracle. When no authority determines the expected behavior, ask the user.
 
-## Test organization
+### Organization
 
-- One contract unit per test file
-- The filename identifies the unit; don't repeat it in an outer `describe`
-- Use `describe` only for meaningful behavioral groups
-- Prefer no more than one `describe` level
-- Use plain `it` when grouping adds no orientation
-- Test names use API vocabulary and observable behavior, not conceptual terminology
+- One contract unit per test file; the filename identifies it, so don't repeat it in an outer `describe`
+- Group `describe` blocks by the unit's real behavioral concerns or failure modes; reuse sibling group names where they fit, never impose a fixed taxonomy
+- Prefer no more than one `describe` level; use an ungrouped `test` when grouping adds no orientation
+- Use `test` and `test.each`, not `it`
+- Test names state complete behavioral claims using API vocabulary; name the responsible public operation or subject when the group does not
+- Use scenario comments when a non-obvious transition or sequence matters to the claim; state intent, never mechanics already clear from the code
 - Split multiple public units into separate test files when practical
 
 ## Prose style
