@@ -29,6 +29,20 @@ describe("session record", () => {
     expect(decoded?.record).toStrictEqual(record);
   });
 
+  test("decode returns the session record and token status encoded by another codec with the same secret", async () => {
+    const encoder = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const decoder = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const token = await encoder.encode(record, { expiresAt: null });
+
+    expect(await decoder.decode(token)).toStrictEqual({
+      record,
+      token: {
+        expiresAt: new Date(T0.getTime() + MINUTE),
+        expired: false,
+      },
+    });
+  });
+
   test("encode and decode preserve a never-expiring session", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const forever = { ...record, expiresAt: null };
