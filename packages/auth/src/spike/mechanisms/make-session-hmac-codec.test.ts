@@ -67,6 +67,30 @@ describe("token expiry", () => {
     });
   });
 
+  test("encode mints each fresh token expiry from its invocation time", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const firstToken = await codec.encode(record, { expiresAt: null });
+    const later = new Date(T0.getTime() + 30_000);
+
+    // A later encode must receive a full TTL instead of reusing the first deadline.
+    vi.setSystemTime(later);
+    const secondToken = await codec.encode(record, { expiresAt: null });
+
+    expect({
+      first: (await codec.decode(firstToken))?.token,
+      second: (await codec.decode(secondToken))?.token,
+    }).toStrictEqual({
+      first: {
+        expiresAt: new Date(T0.getTime() + MINUTE),
+        expired: false,
+      },
+      second: {
+        expiresAt: new Date(later.getTime() + MINUTE),
+        expired: false,
+      },
+    });
+  });
+
   test("decode uses the token expiry embedded by the encoder", async () => {
     const encoder = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const decoder = makeSessionHmacCodec({
