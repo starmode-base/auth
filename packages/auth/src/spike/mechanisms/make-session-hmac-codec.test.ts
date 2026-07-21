@@ -67,6 +67,20 @@ describe("token expiry", () => {
     });
   });
 
+  test("decode uses the token expiry embedded by the encoder", async () => {
+    const encoder = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const decoder = makeSessionHmacCodec({
+      secret: "secret-1",
+      ttl: 2 * MINUTE,
+    });
+    const token = await encoder.encode(record, { expiresAt: null });
+
+    expect((await decoder.decode(token))?.token).toStrictEqual({
+      expiresAt: new Date(T0.getTime() + MINUTE),
+      expired: false,
+    });
+  });
+
   test("encode preserves a supplied token expiry", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const tokenExpiry = new Date(T0.getTime() + 30_000);
@@ -196,14 +210,12 @@ describe("infrastructure failures", () => {
   test("encode propagates an HMAC signing infrastructure failure", async () => {
     const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
     const failure = new Error("signing unavailable");
-    const sign = vi
-      .spyOn(crypto.subtle, "sign")
-      .mockRejectedValueOnce(failure);
+    const sign = vi.spyOn(crypto.subtle, "sign").mockRejectedValueOnce(failure);
 
     try {
-      await expect(
-        codec.encode(record, { expiresAt: null }),
-      ).rejects.toBe(failure);
+      await expect(codec.encode(record, { expiresAt: null })).rejects.toBe(
+        failure,
+      );
     } finally {
       sign.mockRestore();
     }
