@@ -66,6 +66,15 @@ describe("token expiry", () => {
     });
   });
 
+  it("does not mark a token expired when expiresAt equals now", async () => {
+    const codec = makeSessionHmacCodec({ secret: "secret-1", ttl: MINUTE });
+    const decoded = await codec.decode(
+      await codec.encode(record, { expiresAt: T0 }),
+    );
+
+    expect(decoded?.token.expired).toBe(false);
+  });
+
   /**
    * Core checks storage for revocation when token.expired is true, so decode
    * must retain the record.
