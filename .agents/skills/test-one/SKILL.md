@@ -11,10 +11,14 @@ Turn one approved behavioral claim into one reviewable test.
 
 1. Require one target contract unit and one claim explicitly supplied or
    approved by the user. If either is absent or ambiguous, ask before working.
+   If the user supplies multiple claims, state that `/test-one` accepts one
+   claim and stop without presenting a questionnaire.
 2. Stay within that claim. Do not add adjacent cases, refactor unrelated tests,
    or change production code.
 3. If no authority determines the expected behavior, stop and ask rather than
    inventing it.
+4. Follow the approved plan's responsibility boundary and resolved
+   prerequisites; do not reopen or expand them.
 
 ## Before writing
 

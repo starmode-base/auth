@@ -18,6 +18,23 @@ behavioral boundary; it is not necessarily one physical file.
 3. Record cross-unit discoveries under `Parked follow-ups` without pursuing
    them.
 
+## Responsibility boundary
+
+Before inventorying claims:
+
+1. Identify the behavior the target owns and its settled, separately testable
+   collaborators from user requirements and the authoritative documentation
+   and type structure identified by `AGENTS.md`. Implementation may reveal
+   candidate boundaries, but never behavior or a test oracle; ask when
+   ownership is unclear.
+2. Inspect direct collaborator tests for delegated behavior required by the
+   target. If required behavior lacks direct evidence, report
+   `/test-plan <collaborator>` as a prerequisite and stop before the target
+   inventory.
+3. Inventory only target-owned policy, translation, validation, and observable
+   wiring. Do not count collaborator conformance as target coverage or require
+   internal call-count evidence.
+
 ## Claims and evidence
 
 Gather behavioral claims from the authorities relevant to the target:
@@ -27,8 +44,10 @@ Gather behavioral claims from the authorities relevant to the target:
    `AGENTS.md`.
 3. Relevant threat-model decisions and governing standards.
 
-Use the work queue to find known gaps and existing tests to classify evidence.
-Existing tests and implementation do not determine expected behavior.
+Use the work queue to find known gaps and target tests to classify evidence.
+Collaborator tests establish prerequisites and prevent duplication; they never
+prove a target-owned claim. Existing tests and implementation do not determine
+expected behavior.
 
 ## Inventory
 
@@ -55,10 +74,16 @@ Do not invent requirements or add speculative edge cases.
 
 ## Output
 
-Use this structure:
+Report an unresolved prerequisite after the responsibility boundary as
+`Prerequisite: /test-plan <collaborator> — <reason>`, then stop. Otherwise use
+this structure:
 
 ```text
 Target: <contract unit>
+
+Responsibility boundary
+- Owns: <target responsibilities>
+- Delegates: <collaborator → delegated responsibilities, or None>
 
 <Behavior group>
 - [<number>] <Status>: <claim>. <Evidence or brief gap reason>

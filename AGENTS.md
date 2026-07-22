@@ -84,6 +84,8 @@ How methods return (commands, queries, adapters, throws) is specified by the `Re
 
 Every test proves one behavioral claim using a test oracle derived from an authority. The implementation under test is never an authority or test oracle. When no authority determines the expected behavior, ask the user.
 
+Place each claim at the lowest contract unit that owns the behavior, and establish required collaborator coverage before wrapper tests. Wrapper tests cover the wrapper's policy, translation, validation, and observable wiring; collaborator conformance belongs in the collaborator's test file. Prove wiring through public outcomes, not internal call counts.
+
 ### Organization
 
 - One contract unit per test file; the filename identifies it, so don't repeat it in an outer `describe`
