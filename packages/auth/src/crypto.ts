@@ -7,9 +7,10 @@
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-/** Encode bytes to base64url string */
-export function base64urlEncode(data: Uint8Array): string {
-  const binary = String.fromCharCode(...data);
+/** Encode bytes or a UTF-8 string as unpadded base64url */
+export function base64urlEncode(data: Uint8Array | string): string {
+  const bytes = typeof data === "string" ? encoder.encode(data) : data;
+  const binary = String.fromCharCode(...bytes);
   return btoa(binary)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -104,7 +105,7 @@ export async function hmacVerify(
 /** Encode a JSON payload to base64url */
 // TODO: Rename to jsonToBase64Url
 export function encodePayload<T extends object>(payload: T): string {
-  return base64urlEncode(encoder.encode(JSON.stringify(payload)));
+  return base64urlEncode(JSON.stringify(payload));
 }
 
 /** Decode a base64url string to JSON payload */

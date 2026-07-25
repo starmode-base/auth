@@ -1,36 +1,40 @@
 # Agent guidelines
 
+## Commands
+
 - Use `bun run check` after edits to type check all workspaces
 
-## Development workflow
+## Session start
 
-- Use `packages/auth/README.md` as the source of intent — it documents the target API and wins over code
-- Order of work: types (signatures) → tests → implementation. Signatures make the contract concrete, tests encode it, implementation satisfies it.
-- When designing an adapter interface, ask what the lazy implementation does — it must fail closed (deny access), never open
-- Type files are split by layer (see SPEC.md "Adapter layering"): contracts, mechanisms, bindings, configs — file organization mirrors the layers
-- Generate code + tests together in small chunks
-- Human reviews for: unnecessary complexity, over-engineering, maintainability
-- Iterate until tight
-- Tests become the true spec — the README is the contract they encode
+Read before working, in order:
+
+1. `packages/auth/src/spike/contracts.ts` + `spike/mechanisms.ts`
+2. `TODO.md`
+3. `SPEC.md`
 
 ## Documentation map
 
-Roles (decided 2026-07-16): README = contract, SPEC = rationale, TODO = queue.
-
-Now:
-
-- `packages/auth/README.md` — the contract: target API, drives implementation. Where it disagrees with the code, the README wins.
+- `packages/auth/src/spike/contracts.ts` + `spike/mechanisms.ts` — the contract: the typed API spec. Wins over README and code.
 - `SPEC.md` — rationale and dated decision record. Partially stale; never treat it as the contract.
-- `TODO.md` — work queue from the 2026-07 repo review. Deliberately uncommitted.
+- `TODO.md` — the work queue. Gitignored, local to this machine. Never delete items: mark `[x]` with a resolution note; add new items for follow-on work.
+- `packages/auth/README.md` — stale. At promotion it is rewritten from the settled spike and becomes the contract.
 
-Destination (hold until the contract is finished and proven by the builder factory implementation):
+At promotion (only after the implementation has proven the contract):
 
 - `/README.md` (root, new) — rationale: philosophy, positioning, security model, dated decisions, absorbed from `SPEC.md`
 - `packages/auth/README.md` — contract plus behavioral docs (TTL/session mechanics move here or to a linked docs file)
 - `SPEC.md` — deleted once fully dissolved
 - Queue moves to issues, or `TODO.md` remains
 
-Don't start the doc reorganization ahead of that milestone — SPEC content can't be sorted into rationale vs behavioral docs until the contract settles.
+## Development workflow
+
+- Order of work: types → tests → implementation, in small chunks — one unit at a time
+- Design adapter interfaces so the laziest implementation is safe: a no-op adapter may only deny access (fail closed), never grant it. If a lazy adapter could grant access, move that obligation into core or a shipped mechanism.
+- Type files are split by layer; file organization mirrors the layers:
+  - Contracts — the adapter interfaces, the product. Semantic, never mechanical; core runs on anything satisfying them.
+  - Mechanisms — logic shipped as adapters, environment-free. No framework imports, ever.
+  - Bindings — environment glue. Zero logic — an if-statement means the logic moves down into a mechanism.
+  - Configs — pre-composed config values. Data only — composition plus literals, no functions of their own.
 
 ## Quality over speed
 
@@ -40,8 +44,7 @@ This is security-critical code.
 - Don't add edge cases that weren't asked for
 - Don't over-abstract — abstractions must earn their keep
 - Don't add "just in case" code
-- Match the style and conventions already in the codebase
-- Every test should be necessary — don't test unlikely edge cases
+- Every test should be necessary
 - Code should be simple enough to explain in a security audit
 
 ## Code style
@@ -51,28 +54,55 @@ This is security-critical code.
 - ESM only, no CommonJS
 - TypeScript only, no transpile to JS
 - Factories should be prefixed with `make` (e.g., `makeAuth`, `makeMemoryAdapters`)
+- No optional parameters and no defaults — anywhere, API or config
 - Never export local symbols
-- Use TS/JS style comments
+- Doc blocks are `/** */`, prose only — never `@param`/`@returns` tags, types carry the signatures
+- In contract/spec files doc blocks are spec text — held to completeness, state every constraint the type can't show
+- Everywhere else comments are held to necessity — only what code can't express, never narration
+- Comment tone: professional library API docs — never design rationale, internal notes, or decision history; those belong in SPEC.md
 
 ## Error handling
 
-- All public API functions return `Result<T>` — never throw
+How methods return (commands, queries, adapters, throws) is specified by the `Result` doc block in the contracts.
+
 - Use `result.ok()` for success, `result.fail()` for expected failures
 - Invariants: Never use type assertions (`as`). Throw instead — surfaces bugs immediately. Comment each invariant `Invariant: reasoning`
 - Must prove the error with a test before adding try-catch
 
-## TDD (critical)
+## Tests
 
-- NEVER write tests based on implemented code
-- ALWAYS write tests based on expected behavior (spec, requirements, user input)
-- When unsure about expected behavior, ask the user
+### Vocabulary
+
+- Authority — the source that determines expected behavior, following the documentation map; e.g. a contract, requirement, governing standard, or user/domain expert
+  Example: The contract says a token is expired only when `expiresAt < now`
+- Behavioral claim — what must be true
+  Example: A token is not expired when `expiresAt === now`
+- Test oracle — the expected result or decision rule for a given case
+  Example: `expired` is `false`, encoded as `expect(decoded?.token.expired).toBe(false)`
+
+### TDD (critical)
+
+Every test proves one behavioral claim using a test oracle derived from an authority. The implementation under test is never an authority or test oracle. When no authority determines the expected behavior, ask the user.
+
+Place each claim at the lowest contract unit that owns the behavior, and establish required collaborator coverage before wrapper tests. Wrapper tests cover the wrapper's policy, translation, validation, and observable wiring; collaborator conformance belongs in the collaborator's test file. Prove wiring through public outcomes, not internal call counts.
+
+### Organization
+
+- One contract unit per test file; the filename identifies it, so don't repeat it in an outer `describe`
+- Group `describe` blocks by the unit's real behavioral concerns or failure modes; reuse sibling group names where they fit, never impose a fixed taxonomy
+- Prefer no more than one `describe` level; use an ungrouped `test` when grouping adds no orientation
+- Use `test` and `test.each`, not `it`
+- Test names state complete behavioral claims using API vocabulary; name the responsible public operation or subject when the group does not
+- Use scenario comments when a non-obvious transition or sequence matters to the claim; state intent, never mechanics already clear from the code
+- Split multiple public units into separate test files when practical
 
 ## Prose style
 
 - Use sentence case, never title case
-- Don't use the word "code" with regards to OTP (use "otp")
+- OTP: uppercase in prose, `Otp*`/`otp` in identifiers; never call it a "code"
 
 ## Code review instructions
 
 - Look for dead code
 - Look for useless assertions in tests
+- Look for unnecessary complexity and over-engineering

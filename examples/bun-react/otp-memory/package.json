@@ -11,8 +11,8 @@
     "@starmode/auth": "workspace:*",
     "@repo/auth-react": "workspace:*",
     "bun-plugin-tailwind": "^0.1.2",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "tailwindcss": "^4.3.3",
     "zod": "^4.4.3"
   },
