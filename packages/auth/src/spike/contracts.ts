@@ -22,9 +22,9 @@
  * - *JSON — WebAuthn wire shapes, ambient from lib.dom; never redeclared here
  *
  * Adapter roles:
+ * - Session — complete session lifecycle and credential policy
  * - Storage — persistence the user owns
  * - Codec — token format (encode/decode)
- * - Transport — how the session token rides on requests (cookie, header)
  * - Delivery — out-of-band send to the user (email, SMS, console)
  *
  * Adapter verbs:
@@ -71,15 +71,14 @@ export type Result<T, E extends AuthErrorCode> =
   | ([E] extends [never] ? never : { success: false; error: E });
 
 /**
- * The token's storage-check status, as read by decode. Expiry means the
- * carried data needs a storage check; it does not make decode return null.
- * Self-contained tokens embed the expiry; lookup codecs report now — their
- * trust is per-decode, so expired is never true.
+ * A token's expiry status, as read by decode. Expiry does not make decode
+ * return null; the operation consuming the decoded token decides whether an
+ * expired token is usable.
  */
 export type TokenStatus = {
-  /** When the carried data must be checked against storage */
+  /** The token's expiry */
   expiresAt: Date;
-  /** expiresAt < now, computed by the codec — the codec owns the token clock */
+  /** expiresAt < now, computed by the codec */
   expired: boolean;
 };
 
@@ -87,86 +86,70 @@ export type TokenStatus = {
  * Session — the core.
  * ──────────────────────────────────────────────────────────────────────── */
 
-/**
- * Session record — the session's exchange shape: what SessionStorage stores
- * and the session token carries. Not a stored schema: storage maps it to and
- * from its own representation; reads must return records equivalent to what
- * store received.
- */
-export type SessionRecord = {
-  sessionId: string;
+/** Credentials issued when a session is created or refreshed */
+export type IssuedSessionCredentials = {
+  accessToken: string;
+  /** null when the session mechanism uses no separate refresh token */
+  refreshToken: string | null;
+};
+
+/** Access and refresh tokens received from the client */
+export type PresentedSessionCredentials = {
+  accessToken: string | null;
+  refreshToken: string | null;
+};
+
+/** The authenticated identity established by a session */
+export type SessionIdentity = {
+  /** Opaque application-owned identifier; the auth library does not manage users */
   userId: string;
-  /** Session expiry — slides on activity; null = never expires */
-  expiresAt: Date | null;
-};
-
-/** Session storage adapter — plain reads and writes; core enforces expiry */
-export type SessionStorage = {
-  store: (record: SessionRecord) => Promise<void>;
-  get: (sessionId: string) => Promise<SessionRecord | null>;
-  delete: (sessionId: string) => Promise<void>;
-};
-
-/** Decoded session token. Invalid or forged tokens decode to null. */
-export type SessionDecoded = {
-  /** The session record the token carries or resolves to */
-  record: SessionRecord;
-  /** Expiry is fixed (the revocation window); expired forces the storage revocation check */
-  token: TokenStatus;
 };
 
 /**
- * Session codec — token format (HMAC, opaque, or bring a JWT library).
- * Self-contained tokens carry the session record; reference (opaque) tokens
- * resolve it via lookup. Storage remains the authority on revocation. The
- * token TTL is the codec factory's own config — never core's.
+ * Complete session lifecycle adapter.
+ *
+ * The application authorizes the userId passed to create. The adapter owns
+ * session policy, credential mechanics, persistence, and revocation. It does
+ * not read or write credential transports such as cookies or headers.
  */
-export type SessionCodec = {
-  /** token.expiresAt: null mints a fresh expiry from the codec's own TTL; a Date preserves the supplied expiry */
-  encode: (
-    record: SessionRecord,
-    token: { expiresAt: Date | null },
-  ) => Promise<string>;
-  decode: (token: string) => Promise<SessionDecoded | null>;
-};
-
-/** Session transport — how the token rides on requests (cookie, header) */
-export type SessionTransport = {
-  /** Read token from the incoming request */
-  get: () => string | null;
-  /** Store token and return what goes in the response body */
-  set: (token: string) => string;
-  clear: () => void;
-};
-
-/** Config for the session unit */
-export type SessionConfig = {
-  storage: SessionStorage;
-  codec: SessionCodec;
-  transport: SessionTransport;
-  /** Session TTL in ms (Infinity = forever). Inactivity timeout with sliding refresh. */
-  ttl: number;
+export type SessionAdapter = {
+  create: (userId: string) => Promise<IssuedSessionCredentials>;
+  /** Repeatable read-only validation; invalid credentials return null */
+  validate: (
+    credentials: PresentedSessionCredentials,
+  ) => Promise<SessionIdentity | null>;
+  /** Invalid or unusable credentials return null */
+  refresh: (
+    credentials: PresentedSessionCredentials,
+  ) => Promise<IssuedSessionCredentials | null>;
+  end: (credentials: PresentedSessionCredentials) => Promise<void>;
 };
 
 /** Config for makeAuth — the session unit named explicitly, since the function name can't */
 export type MakeAuthConfig = {
-  session: SessionConfig;
+  session: SessionAdapter;
   /** Log expected auth failures to the console (development aid) */
   debug: boolean;
 };
 
 /** Session methods — the core namespace, present at every step */
 export type SessionNamespace = {
-  /**
-   * Creates a session for the given user. Success data is the session token
-   * — also delivered via the session transport; returned for header-based
-   * clients.
-   */
-  create: (args: { userId: string }) => Promise<Result<string, never>>;
-  /** The current session's user; null when signed out */
-  get: () => Promise<{ userId: string } | null>;
-  /** Ends the current session (signs the user out) */
-  end: () => Promise<Result<void, never>>;
+  /** Creates a session for an application-authorized userId */
+  create: (args: {
+    userId: string;
+  }) => Promise<Result<IssuedSessionCredentials, never>>;
+  /** Validates presented session credentials without consuming them */
+  validate: (args: {
+    credentials: PresentedSessionCredentials;
+  }) => Promise<SessionIdentity | null>;
+  /** Refreshes a session and returns the credentials the application must persist */
+  refresh: (args: {
+    credentials: PresentedSessionCredentials;
+  }) => Promise<Result<IssuedSessionCredentials, "invalid_token">>;
+  /** Ends the session identified by the presented credentials */
+  end: (args: {
+    credentials: PresentedSessionCredentials;
+  }) => Promise<Result<void, never>>;
 };
 
 /* ────────────────────────────────────────────────────────────────────────

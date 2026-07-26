@@ -13,12 +13,16 @@ import type {
   AuthOtp,
   AuthPasskey,
   AuthFull,
+  IssuedSessionCredentials,
+  PresentedSessionCredentials,
+  SessionIdentity,
 } from "./contracts";
 import { makeAuth } from "./contracts";
 
 declare const config: MakeAuthConfig;
 declare const otp: WithOtpConfig;
 declare const passkey: WithPasskeyConfig;
+declare const credentials: PresentedSessionCredentials;
 
 function expectType<T>(value: T): T {
   return value;
@@ -34,7 +38,7 @@ expectType<AuthFull>(makeAuth(config).withOtp(otp).withPasskey(passkey));
 expectType<AuthFull>(makeAuth(config).withPasskey(passkey).withOtp(otp));
 
 /* The session namespace is present at every step */
-void makeAuth(config).session.get;
+void makeAuth(config).session.validate;
 void makeAuth(config).withOtp(otp).session.end;
 void makeAuth(config).withOtp(otp).withPasskey(passkey).session.create;
 
@@ -55,8 +59,8 @@ void makeAuth(config).withOtp(otp).passkey;
 
 /* All methods live in namespaces — the root holds no methods */
 
-// @ts-expect-error getSession is not a root method — it is auth.session.get
-void makeAuth(config).getSession;
+// @ts-expect-error validateSession is not a root method — it is auth.session.validate
+void makeAuth(config).validateSession;
 
 // @ts-expect-error createSession is not a root method — it is auth.session.create
 void makeAuth(config).withOtp(otp).createSession;
@@ -93,10 +97,33 @@ if (registrationResult.success) {
 
 declare const created: Awaited<ReturnType<Auth["session"]["create"]>>;
 void created.success;
-void created.data;
+const issuedCredentials: IssuedSessionCredentials = created.data;
+void issuedCredentials;
 
 // @ts-expect-error T rides in data, never spread into the envelope
-void created.token;
+void created.accessToken;
+
+/* Session validation is a read-only query */
+
+declare const validated: Awaited<ReturnType<Auth["session"]["validate"]>>;
+const identity: SessionIdentity | null = validated;
+void identity;
+
+/* Session refresh exposes only invalid credentials as an expected failure */
+
+declare const refreshed: Awaited<ReturnType<Auth["session"]["refresh"]>>;
+
+if (refreshed.success) {
+  const refreshedCredentials: IssuedSessionCredentials = refreshed.data;
+  void refreshedCredentials;
+}
+
+declare const refreshFailure: Extract<
+  Awaited<ReturnType<Auth["session"]["refresh"]>>,
+  { success: false }
+>;
+const refreshError: "invalid_token" = refreshFailure.error;
+void refreshError;
 
 /* Void commands drop the data field entirely */
 
@@ -136,6 +163,9 @@ void makeAuth(config).withOtp(otp).withPasskey(passkey).withOtp(otp);
 // @ts-expect-error unknown key in makeAuth config
 void makeAuth({ ...config, unknown: true });
 
+// @ts-expect-error session methods take explicit values, not execution contexts
+void makeAuth(config).session.create({ userId: "user-1", context: {} });
+
 // @ts-expect-error unknown key in otp config
 void makeAuth(config).withOtp({ ...otp, unknown: true });
 
@@ -156,3 +186,19 @@ void makeAuth(config).withPasskey({
 
 // @ts-expect-error debug is required in makeAuth config
 void makeAuth({ session: config.session });
+
+void makeAuth({
+  // @ts-expect-error refresh is required on a complete session adapter
+  session: {
+    create: config.session.create,
+    validate: config.session.validate,
+    end: config.session.end,
+  },
+  debug: false,
+});
+
+/* Every session operation receives or returns explicit credentials */
+
+void makeAuth(config).session.validate({ credentials });
+void makeAuth(config).session.refresh({ credentials });
+void makeAuth(config).session.end({ credentials });
