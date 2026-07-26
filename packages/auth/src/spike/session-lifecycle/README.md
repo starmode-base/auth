@@ -20,7 +20,7 @@ inventing meaningless values, or adding mechanism-specific branches to core.
 
 | Decision               | Meaning                                                                                                                                                                                                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product structure      | `makeAuth` owns sessions; `withOtp` and `withPasskey` are separate optional units and are outside this work.                                                                                                   |
+| Product structure      | `makeAuth` creates an empty base; sessions, OTP, and passkeys are independent optional units. This work covers only the session unit.                                                                          |
 | Users                  | The application owns users and gives session creation an opaque, application-authorized `userId`. There is no user adapter.                                                                                    |
 | Authentication         | Verification proves something; the application separately decides whether to create a session.                                                                                                                 |
 | Dependency injection   | Configuration is complete and explicit. There are no defaults or optional dependencies. Convenience factories may produce complete configurations.                                                             |
@@ -99,17 +99,20 @@ The nested spike is a proof attempt, not a second contract.
 | Main risk      | The common adapter shape may be artificial, and core may become a forwarding facade                | One session algorithm becomes universal policy; variation adds core branches or contract changes |
 | Test ownership | Mechanism tests prove session policy; `makeAuth` tests its own public policy and observable wiring | Core tests prove session policy across collaborator shapes                                       |
 
-The current main spike chooses the first candidate provisionally:
+The nested spike chooses the first candidate provisionally and composes it as
+an optional unit:
 
 ```ts
-type MakeAuthConfig = {
-  session: SessionAdapter;
-  debug: boolean;
-};
+makeAuth({ debug: true }).withSession(sessionAdapter);
 ```
 
-That is a plausible direction, not a settled decision. The rule for judging it
-against the alternative is:
+Mechanism factories such as `makeOpaqueSession` and
+`makeRefreshableSession` produce the adapter; the builder does not enumerate
+session mechanisms. This also permits verification-only configurations such
+as `makeAuth({ debug: true }).withOtp(...)`.
+
+That is a plausible direction under active implementation, not a settled
+contract. The rule for judging it against the alternative is:
 
 > A behavior belongs in core only when every supported session mechanism needs
 > core to make the same decision.
@@ -148,6 +151,7 @@ itself:
 | Next.js App Router  | Constrained mixed environment: RSC can participate in session reads while credential writes require a write-capable server boundary.                                | Binding and lifecycle           | Primary   |
 | Convex              | Queries and mutations have different capabilities and receive database facilities per invocation. This is the strongest test of read/write separation and DI.       | Adapter, binding, and lifecycle | Primary   |
 | Expo                | Native clients retain and present credentials without relying on browser cookie behavior.                                                                           | Credential boundary and binding | Primary   |
+| Electron            | Desktop clients add protected OS storage plus a privileged main-process boundary that must not leak renewable credentials into the renderer.                        | Credential boundary and binding | Primary   |
 | SolidStart          | A non-React full-stack confirmation that the design has not accidentally absorbed React, Next.js, or TanStack assumptions. It adds less new architectural pressure. | Binding                         | Secondary |
 
 Compatibility means that an application can support the target through a
@@ -165,8 +169,9 @@ lifecycle, credential, and invocation-capability shapes need to be developed
 together against representative cases.
 
 Small type and implementation probes should show that the same candidate API
-can describe both session mechanisms:
+can describe verification-only auth and both session mechanisms:
 
+- An auth object with OTP or passkeys and no session unit.
 - A short-lived JWT access token with a persisted, rotating opaque refresh
   token.
 - A database-backed opaque session.
@@ -207,8 +212,16 @@ sequence.
 
 ## Current code status
 
-- `../contracts.ts` contains the provisional complete-adapter design.
-- The other files in this directory contain the earlier context-aware
-  experiment and mechanism probes.
-- Neither version should receive comprehensive tests or production
-  implementation until the boundary has survived the representative probes.
+- `../contracts.ts` still contains the earlier mandatory-session design and is
+  unchanged while this candidate is explored.
+- `contracts.ts` contains the optional-unit candidate and the shared session
+  lifecycle. Issued access and refresh credentials carry their own expiry
+  metadata.
+- `composition-probes.ts` checks sessionless composition, order independence,
+  and single-use builder steps.
+- `mechanisms.ts` minimally implements opaque sessions and signed-access,
+  rotating-refresh sessions against the same adapter.
+- `target-probes.ts` checks read-only and write-capable execution targets plus
+  client credential persistence.
+- The nested candidate should not receive comprehensive tests or production
+  hardening until the boundary has survived the representative probes.

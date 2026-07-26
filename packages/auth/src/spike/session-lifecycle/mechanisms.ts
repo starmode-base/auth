@@ -56,7 +56,7 @@ export type RefreshTokenStorage<WriteContext> = {
 };
 
 /** Input for a signed-access, opaque-refresh session mechanism */
-export type MakeRefreshableSessionsConfig<WriteContext> = {
+export type MakeRefreshableSessionConfig<WriteContext> = {
   accessToken: AccessTokenCodec;
   refreshTokenStorage: RefreshTokenStorage<WriteContext>;
   lifetime: SessionLifetime;
@@ -69,8 +69,8 @@ export type MakeRefreshableSessionsConfig<WriteContext> = {
  * Builds sessions with a short-lived signed access token and a rotating opaque
  * refresh token.
  */
-export function makeRefreshableSessions<ReadContext, WriteContext>(
-  config: MakeRefreshableSessionsConfig<WriteContext>,
+export function makeRefreshableSession<ReadContext, WriteContext>(
+  config: MakeRefreshableSessionConfig<WriteContext>,
 ): SessionAdapter<ReadContext, WriteContext> {
   return {
     async create(context, userId) {
@@ -102,7 +102,7 @@ export function makeRefreshableSessions<ReadContext, WriteContext>(
     },
 
     async refresh(context, credentials) {
-      if (credentials.refreshToken === null) {
+      if (credentials.refresh === null) {
         return null;
       }
 
@@ -111,7 +111,7 @@ export function makeRefreshableSessions<ReadContext, WriteContext>(
       const inactiveExpiresAt = deadline(now, config.lifetime.inactivityTtl);
       const record = await config.refreshTokenStorage.rotate(
         context,
-        credentials.refreshToken,
+        credentials.refresh,
         nextRefreshToken,
         now,
         inactiveExpiresAt,
@@ -125,11 +125,8 @@ export function makeRefreshableSessions<ReadContext, WriteContext>(
     },
 
     async end(context, credentials) {
-      if (credentials.refreshToken !== null) {
-        await config.refreshTokenStorage.delete(
-          context,
-          credentials.refreshToken,
-        );
+      if (credentials.refresh !== null) {
+        await config.refreshTokenStorage.delete(context, credentials.refresh);
       }
     },
   };
@@ -161,7 +158,7 @@ export type OpaqueSessionStorage<ReadContext, WriteContext> = {
 };
 
 /** Input for an opaque session mechanism */
-export type MakeOpaqueSessionsConfig<ReadContext, WriteContext> = {
+export type MakeOpaqueSessionConfig<ReadContext, WriteContext> = {
   storage: OpaqueSessionStorage<ReadContext, WriteContext>;
   lifetime: {
     absoluteTtl: number | null;
@@ -173,8 +170,8 @@ export type MakeOpaqueSessionsConfig<ReadContext, WriteContext> = {
 };
 
 /** Builds sessions whose access token is an opaque server-side session handle */
-export function makeOpaqueSessions<ReadContext, WriteContext>(
-  config: MakeOpaqueSessionsConfig<ReadContext, WriteContext>,
+export function makeOpaqueSession<ReadContext, WriteContext>(
+  config: MakeOpaqueSessionConfig<ReadContext, WriteContext>,
 ): SessionAdapter<ReadContext, WriteContext> {
   return {
     async create(context, userId) {
@@ -190,8 +187,14 @@ export function makeOpaqueSessions<ReadContext, WriteContext>(
       await config.storage.create(context, accessToken, record);
 
       return {
-        accessToken,
-        refreshToken: null,
+        access: {
+          token: accessToken,
+          expiresAt: earliestOptional(
+            record.absoluteExpiresAt,
+            record.inactiveExpiresAt,
+          ),
+        },
+        refresh: null,
       };
     },
 
@@ -204,14 +207,14 @@ export function makeOpaqueSessions<ReadContext, WriteContext>(
     },
 
     async refresh(context, credentials) {
-      if (credentials.accessToken === null) {
+      if (credentials.access === null) {
         return null;
       }
 
       const now = config.now();
       const record = await config.storage.refresh(
         context,
-        credentials.accessToken,
+        credentials.access,
         now,
         deadline(now, config.lifetime.inactivityTtl),
       );
@@ -219,26 +222,32 @@ export function makeOpaqueSessions<ReadContext, WriteContext>(
       return record === null
         ? null
         : {
-            accessToken: credentials.accessToken,
-            refreshToken: null,
+            access: {
+              token: credentials.access,
+              expiresAt: earliestOptional(
+                record.absoluteExpiresAt,
+                record.inactiveExpiresAt,
+              ),
+            },
+            refresh: null,
           };
     },
 
     async end(context, credentials) {
-      if (credentials.accessToken !== null) {
-        await config.storage.delete(context, credentials.accessToken);
+      if (credentials.access !== null) {
+        await config.storage.delete(context, credentials.access);
       }
     },
   };
 }
 
 async function issueRefreshableCredentials<WriteContext>(
-  config: MakeRefreshableSessionsConfig<WriteContext>,
+  config: MakeRefreshableSessionConfig<WriteContext>,
   record: SessionRecord,
   refreshToken: string,
   now: Date,
 ): Promise<IssuedSessionCredentials> {
-  const expiresAt = earliest(
+  const accessExpiresAt = earliest(
     new Date(now.getTime() + config.lifetime.accessTtl),
     record.absoluteExpiresAt,
     record.inactiveExpiresAt,
@@ -248,12 +257,21 @@ async function issueRefreshableCredentials<WriteContext>(
       sessionId: record.sessionId,
       userId: record.userId,
     },
-    expiresAt,
+    accessExpiresAt,
   );
 
   return {
-    accessToken,
-    refreshToken,
+    access: {
+      token: accessToken,
+      expiresAt: accessExpiresAt,
+    },
+    refresh: {
+      token: refreshToken,
+      expiresAt: earliestOptional(
+        record.absoluteExpiresAt,
+        record.inactiveExpiresAt,
+      ),
+    },
   };
 }
 
@@ -278,6 +296,21 @@ function earliest(
   }
 
   return result;
+}
+
+function earliestOptional(
+  first: Date | null,
+  second: Date | null,
+): Date | null {
+  if (first === null) {
+    return second;
+  }
+
+  if (second === null) {
+    return first;
+  }
+
+  return first < second ? first : second;
 }
 
 function isExpired(record: SessionRecord, now: Date): boolean {
