@@ -1,89 +1,105 @@
-# Session lifecycle
+# Session architecture
 
-> **Status:** Active design work.
->
-> **Current question:** Should `makeAuth` delegate all session behavior to one semantic `SessionAdapter`?
+> **Status:** Converging design work. The main spike contains a provisional
+> API, not a settled contract.
 
 ## Objective
 
-Settle the public session boundary for `makeAuth`.
+Settle the session boundary of `makeAuth` well enough to resume contract tests
+with confidence.
 
-We are not designing the complete session implementation yet. We are deciding what core owns and what a configured session component owns.
+This document keeps the reasoning needed to make that decision. It is not a
+transcript, and it does not reduce a group of coupled design questions to a
+contrived next action.
 
-The result should be one small typed contract that can later support different session mechanisms and environments without changing core.
+The boundary is credible when one small public API can represent the session
+mechanisms and execution environments we care about without hiding writes,
+inventing meaningless values, or adding mechanism-specific branches to core.
 
-## Scope
+## Fixed boundaries
 
-This work covers only:
+| Decision               | Meaning                                                                                                                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product structure      | `makeAuth` owns sessions; `withOtp` and `withPasskey` are separate optional units and are outside this work.                                                                                                   |
+| Users                  | The application owns users and gives session creation an opaque, application-authorized `userId`. There is no user adapter.                                                                                    |
+| Authentication         | Verification proves something; the application separately decides whether to create a session.                                                                                                                 |
+| Dependency injection   | Configuration is complete and explicit. There are no defaults or optional dependencies. Convenience factories may produce complete configurations.                                                             |
+| Transport              | Core does not read or write cookies, headers, local storage, requests, or responses. Bindings move credential values between core and an environment.                                                          |
+| Session reads          | Checking a session is repeatable and read-only. Renewal and persistence updates are explicit, separate behavior.                                                                                               |
+| Custom implementations | Core does not try to make an incorrectly written custom session implementation safe. We make shipped mechanisms correct and support custom authors with contracts, documentation, examples, tests, and skills. |
+| Target support         | The API must permit SSR, CSR, RSC, mobile, conventional servers, and Convex without core changes. We do not need to ship every binding on day one.                                                             |
 
-- `makeAuth`.
-- Session management.
-- The boundary between core and its session configuration.
-- The boundary between application-owned users and sessions.
+Legacy code, `SPEC.md`, the main spike, and the nested spike are evidence. None
+is a contract that the final design must preserve.
 
-It does not currently cover:
+## Why the design was reopened
 
-- OTP or passkeys.
-- JWT, HMAC, or opaque implementation details.
-- TTLs, expiry, or sliding sessions.
-- Cookies, headers, HTTP, or framework bindings.
-- Refresh rotation and concurrency.
-- Legacy implementation or documentation updates.
-
-## Settled decisions
-
-### `makeAuth` is the session foundation
-
-The library remains split into three semantic modules:
+The legacy `getSession()` performs this whole sequence:
 
 ```text
-makeAuth       sessions, always present
-withOtp        OTP, optional
-withPasskey    passkeys, optional
+read transport
+  → decode token, including an expired token
+  → enforce inactivity
+  → sometimes check and update persistence
+  → mint another token
+  → write transport
+  → return userId
 ```
 
-OTP and passkeys are outside this session discussion.
+It therefore places transport, token mechanics, persistence, and lifetime
+policy in core. It also makes an apparent read mutate state.
 
-### The library does not manage users
+That is troublesome for two independent reasons:
 
-The application owns users and every policy surrounding them.
+- RSC rendering, SSR reads, and Convex queries need validation without renewal
+  or writes.
+- The algorithm encodes one session design: a self-contained credential with
+  cached session data, periodic persistence checks, and sliding renewal.
 
-The library receives an opaque application-authorized `userId`. It does not create, load, verify, link, merge, suspend, or delete users.
+A conventional short-lived JWT access token with an opaque refresh token and a
+database-backed opaque session have different trust, revocation, and renewal
+mechanics. The problem is not merely how to clean up `getSession()`. The
+problem is deciding whether core should own a session algorithm at all.
 
-There will be no user adapter.
+## Evidence from the nested spike
 
-### Verification and session creation are separate
+The code in this directory tried one lifecycle against two mechanisms:
 
-Authentication or identity verification produces a fact. Application code decides whether to create a session and supplies the corresponding `userId`.
+| Concern          | JWT-like signed access plus opaque refresh                              | Opaque session                                          |
+| ---------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| Validate         | Verify the short-lived access token                                     | Look up the opaque token                                |
+| Refresh          | Atomically rotate the persisted refresh token and issue new credentials | Update server-side lifetime and retain the opaque token |
+| Revoke           | Delete the persisted refresh token                                      | Delete the opaque token                                 |
+| Read capability  | No persistence needed for access validation                             | Persistence read required                               |
+| Write capability | Required for create, refresh, and revoke                                | Required for create, refresh, and revoke                |
 
-### Configuration is complete and explicit
+The experiment established that:
 
-There are no defaults and no optional dependencies. Convenience factories may produce complete configurations for common setups.
+- Credential transport can remain outside core.
+- Validation can remain read-only.
+- Both mechanisms can resemble `create`, `validate`, `refresh`, and `end`.
+- Read-only and write-capable environments can be represented separately.
 
-### Existing artifacts are inputs, not constraints
+It did **not** establish that:
 
-Legacy code, `SPEC.md`, the main spike, and this nested spike contain useful evidence. They do not need to be preserved when the final API is chosen.
+- Those four operations are universal rather than artifacts of these examples.
+- `accessToken` plus nullable `refreshToken` is the right shared value.
+- Generic `ReadContext` and `WriteContext` belong in the public API.
+- A `makeAuth` facade that mostly forwards adapter calls earns its layer.
 
-Documents and implementation are reconciled after the typed API settles.
+The nested spike is a proof attempt, not a second contract.
 
-### A session read must be read-only
+## Candidates under consideration
 
-The legacy `getSession()` mixes validation with persistence updates, token renewal, and transport writes.
+|                | Complete semantic session adapter                                                                  | Core orchestration                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Configuration  | One component implementing the session lifecycle                                                   | Lower-level storage, codec, clock, and token-generation collaborators                            |
+| Policy owner   | The configured session component                                                                   | `makeAuth`                                                                                       |
+| Main benefit   | Custom mechanisms and policies do not require core changes                                         | Common policy is centralized and directly tested in core                                         |
+| Main risk      | The common adapter shape may be artificial, and core may become a forwarding facade                | One session algorithm becomes universal policy; variation adds core branches or contract changes |
+| Test ownership | Mechanism tests prove session policy; `makeAuth` tests its own public policy and observable wiring | Core tests prove session policy across collaborator shapes                                       |
 
-The new API must separate:
-
-- A repeatable read-only session check.
-- Any operation that renews credentials or updates session state.
-
-### Core does not perform transport I/O
-
-Core does not read or write cookies, headers, request arguments, local storage, or HTTP responses.
-
-Bindings may do that later by passing credential values into session operations and persisting returned values.
-
-## Current provisional candidate
-
-The main spike currently models:
+The current main spike chooses the first candidate provisionally:
 
 ```ts
 type MakeAuthConfig = {
@@ -92,75 +108,78 @@ type MakeAuthConfig = {
 };
 ```
 
-The proposed `SessionAdapter` owns the complete session lifecycle:
+That is a plausible direction, not a settled decision. The rule for judging it
+against the alternative is:
 
-- Creation.
-- Read-only validation.
-- Refresh.
-- Revocation.
-- Credential mechanics.
-- Persistence.
-- Time policy.
+> A behavior belongs in core only when every supported session mechanism needs
+> core to make the same decision.
 
-`makeAuth` would then be a thin public facade that owns namespaces and `Result` conventions.
+## Coupled questions
 
-This direction is promising because custom session policies and mechanisms would not require core changes.
+These questions constrain each other. Answering one without the others would
+produce another superficially neat but unproven API.
 
-It is **not settled**. Promoting it also introduced several unreviewed decisions at once:
+| Question                                     | Context needed to answer it                                                                                                                                                                                                                                                   |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who owns the lifecycle?                      | We need to know which behavior is actually universal across signed-access, opaque, database-backed, and custom sessions.                                                                                                                                                      |
+| What is the public lifecycle?                | `create`, `validate`, `refresh`, and `end` are useful only if each mechanism can implement them without fake inputs, meaningless outputs, or hidden writes.                                                                                                                   |
+| What are session credentials?                | A JWT design needs separate access and refresh tokens so a stolen access token cannot refresh the session. An opaque session may expose only one client-held value. Bindings still need to know what to store and present.                                                    |
+| How do invocation-scoped capabilities enter? | Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter public method inputs, an environment binding, or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership. |
+| Who owns lifetime and refresh policy?        | Access expiry, absolute lifetime, inactivity, renewal, rotation, replay, and concurrency affect the boundary, but specifying them first would accidentally choose the architecture.                                                                                           |
 
-- `create`, `validate`, `refresh`, and `end` as the universal operations.
-- A common access-token and nullable-refresh-token representation.
-- No public execution context.
-- Removal of storage and codec contracts from core.
+## How the design will converge
 
-The nested `session-lifecycle` implementation is evidence for this candidate, not the contract.
+There is no single context-free question to answer next. The ownership,
+lifecycle, credential, and invocation-capability shapes need to be developed
+together against representative cases.
 
-## Active open question
+Small type and implementation probes should show that the same candidate API
+can describe:
 
-### Who owns the session lifecycle?
+- A short-lived JWT access token with a persisted, rotating opaque refresh
+  token.
+- A database-backed opaque session.
+- A read-only Next.js RSC, SSR, or Convex query.
+- A write-capable Next.js, TanStack Start, SolidStart, Convex, or vanilla
+  server operation.
+- An Expo or browser client that stores credentials and presents them to a
+  server.
 
-Choose between:
+Each probe should make five boundaries visible:
 
-#### Complete semantic adapter
+1. The values entering and leaving the public session operation.
+2. The layer that validates credentials.
+3. The layer that reads or mutates persistence.
+4. The layer that owns renewal and revocation.
+5. The point where invocation-scoped capabilities enter.
 
-`makeAuth` receives one `SessionAdapter`. The adapter owns all session behavior, while core exposes a stable public facade.
+A candidate is not ready to land if a representative case requires:
 
-#### Core orchestration
+- A framework-specific change to core.
+- A write during validation.
+- A meaningless credential field.
+- A token-format branch in core.
+- Session policy with no clear owner or test boundary.
 
-`makeAuth` receives lower-level collaborators such as storage and codecs. Core owns the behavior that coordinates them.
+Types and minimal implementation may evolve together while proving this. The
+point is to converge on one coherent boundary, not to obey an arbitrary
+sequence.
 
-The decision rule is:
+## Parked until that boundary is credible
 
-> Behavior belongs in core only if it is truly universal across signed, opaque, database-backed, and custom session designs.
-
-No other session question should be decided until this boundary is firm.
-
-## Parked questions
-
-After the active question is resolved, consider these one at a time:
-
-1. What exactly does `session.create` accept and return?
-2. What exactly does read-only session validation accept and return?
-3. Is explicit `refresh` universal?
-4. What does `session.end` receive and guarantee?
-5. Is access plus nullable refresh the right common credential shape?
-6. Where do invocation-scoped facilities such as Convex context enter?
-7. Does validation return only `userId` or also `sessionId`?
-8. How do access expiry, absolute lifetime, and inactivity lifetime work?
-9. How do bindings carry and retain credentials?
-10. How do refresh rotation, concurrency, replay, and failure recovery work?
+- Exact access, absolute, inactivity, and cookie lifetime rules.
+- Refresh rotation, replay detection, concurrency, and recovery.
+- Cookie names, attributes, and browser or mobile storage.
+- Concrete framework bindings.
+- The final JWT or HMAC codec API.
+- Migration from the legacy implementation.
+- Reconciliation of `SPEC.md`, `TODO.md`, and package documentation.
+- Resumption of the HMAC codec testing pilot.
 
 ## Current code status
 
 - `../contracts.ts` contains the provisional complete-adapter design.
-- This directory contains the earlier context-aware exploration and mechanism sketches.
-- The HMAC codec test pilot is separate and paused.
-- No additional implementation or tests should be added until the active question is answered.
-
-## Next action
-
-Answer one question:
-
-> Should `makeAuth` delegate the complete session lifecycle to `SessionAdapter`?
-
-Then update only this document and the smallest corresponding type boundary.
+- The other files in this directory contain the earlier context-aware
+  experiment and mechanism probes.
+- Neither version should receive comprehensive tests or production
+  implementation until the boundary has survived the representative probes.
