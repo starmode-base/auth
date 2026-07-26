@@ -14,10 +14,15 @@ import type {
 } from "./contracts";
 import { makeSessionUnit } from "./make-session-unit";
 import type {
-  MakeOpaqueSessionConfig,
-  MakeRefreshableSessionConfig,
+  OpaqueSessionStorage,
+  SessionAuthorityLifetime,
+  SignedSessionCodec,
 } from "./mechanisms";
-import { makeOpaqueSession, makeRefreshableSession } from "./mechanisms";
+import {
+  makeOpaqueSession,
+  makeOpaqueSessionAuthority,
+  makeSignedAccessSession,
+} from "./mechanisms";
 
 type ReadContext = {
   sessionReader: unknown;
@@ -29,15 +34,34 @@ type WriteContext = ReadContext & {
 
 type CandidateAuth = SessionUnit<ReadContext, WriteContext>;
 
-declare const refreshableConfig: MakeRefreshableSessionConfig<WriteContext>;
-declare const opaqueConfig: MakeOpaqueSessionConfig<ReadContext, WriteContext>;
+declare const storage: OpaqueSessionStorage<ReadContext, WriteContext>;
+declare const lifetime: SessionAuthorityLifetime;
+declare const signedSessionCodec: SignedSessionCodec;
+declare const makeSessionId: () => string;
+declare const makeCredential: () => string;
+declare const now: () => Date;
 
-const refreshableAuth: CandidateAuth = makeSessionUnit({
-  session: makeRefreshableSession<ReadContext, WriteContext>(refreshableConfig),
+const authority = makeOpaqueSessionAuthority({
+  storage,
+  lifetime,
+  makeSessionId,
+  makeCredential,
+  now,
+});
+
+const signedAccessAuth: CandidateAuth = makeSessionUnit({
+  session: makeSignedAccessSession({
+    authority,
+    access: {
+      codec: signedSessionCodec,
+      ttl: 10_000,
+    },
+    now,
+  }),
 });
 
 const opaqueAuth: CandidateAuth = makeSessionUnit({
-  session: makeOpaqueSession(opaqueConfig),
+  session: makeOpaqueSession({ authority }),
 });
 
 type ReadTarget = {
@@ -83,7 +107,7 @@ declare const credentials: PresentedSessionCredentials;
  * SSR loaders and ordinary API reads have the same shape.
  */
 void validateRequest({
-  auth: refreshableAuth,
+  auth: signedAccessAuth,
   context: readContext,
   accessToken,
 });
@@ -99,7 +123,7 @@ void validateRequest({
  * write-capable contexts.
  */
 void refreshRequest({
-  auth: refreshableAuth,
+  auth: signedAccessAuth,
   context: writeContext,
   credentials,
 });
@@ -194,7 +218,7 @@ async function readNativeCredentials(
 
 void refreshClientSession(
   {
-    auth: refreshableAuth,
+    auth: signedAccessAuth,
     context: writeContext,
     credentials,
   },
@@ -210,7 +234,7 @@ void refreshClientSession(
 );
 void refreshClientSession(
   {
-    auth: refreshableAuth,
+    auth: signedAccessAuth,
     context: writeContext,
     credentials,
   },
@@ -260,9 +284,9 @@ function makeConvexTokenFetcher(
   };
 }
 
-const fetchRefreshableConvexToken = makeConvexTokenFetcher(
+const fetchSignedAccessConvexToken = makeConvexTokenFetcher(
   {
-    auth: refreshableAuth,
+    auth: signedAccessAuth,
     context: writeContext,
     credentials,
   },
@@ -277,10 +301,10 @@ const fetchOpaqueConvexToken = makeConvexTokenFetcher(
   makeNativeCredentialPersistence(expoSecureStorage),
 );
 
-void fetchRefreshableConvexToken({ forceRefreshToken: true });
+void fetchSignedAccessConvexToken({ forceRefreshToken: true });
 void fetchOpaqueConvexToken({ forceRefreshToken: false });
 
-void refreshableAuth.session.refresh({
+void signedAccessAuth.session.refresh({
   // @ts-expect-error A read-only RSC or query context cannot refresh a session.
   context: readContext,
   credentials,

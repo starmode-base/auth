@@ -1,6 +1,10 @@
-import type { IssuedSessionCredentials, SessionAdapter } from "./contracts";
+import type {
+  IssuedSessionCredential,
+  IssuedSessionCredentials,
+  SessionAdapter,
+} from "./contracts";
 
-/** Session state persisted by the candidate mechanisms */
+/** Current session state held by an authoritative session store */
 export type SessionRecord = {
   sessionId: string;
   userId: string;
@@ -8,202 +12,159 @@ export type SessionRecord = {
   inactiveExpiresAt: Date | null;
 };
 
-/** The claims carried by a signed access token */
-export type AccessTokenClaims = {
+/** Session data returned by an authority or carried by signed access */
+export type SessionSnapshot = {
   sessionId: string;
   userId: string;
 };
 
-/**
- * Signed access-token codec.
- *
- * A JWT adapter maps signing to encode and full JWT verification, including
- * expiration, to validate. Invalid and expired tokens return null.
- */
-export type AccessTokenCodec = {
-  encode: (claims: AccessTokenClaims, expiresAt: Date) => Promise<string>;
-  validate: (token: string) => Promise<AccessTokenClaims | null>;
+/** An opaque authority credential together with the session it resolves */
+export type AuthoritySession = {
+  credential: IssuedSessionCredential;
+  session: SessionSnapshot;
 };
 
-/** Session lifetime policy owned by a session mechanism */
-export type SessionLifetime = {
-  accessTtl: number;
+/**
+ * Authoritative session lifecycle.
+ *
+ * The credential is an unguessable reference to current session state.
+ * resolve is read-only. renew may update server-side lifetime but does not
+ * inherently rotate the credential. end revokes the credential.
+ */
+export type SessionAuthority<ReadContext, WriteContext> = {
+  create: (context: WriteContext, userId: string) => Promise<AuthoritySession>;
+  resolve: (
+    context: ReadContext,
+    credential: string,
+  ) => Promise<SessionSnapshot | null>;
+  renew: (
+    context: WriteContext,
+    credential: string,
+  ) => Promise<AuthoritySession | null>;
+  end: (context: WriteContext, credential: string) => Promise<void>;
+};
+
+/**
+ * Signed session-snapshot codec.
+ *
+ * A JWT implementation maps issuing to encode and full signature, issuer,
+ * audience, and expiration verification to validate. Invalid and expired
+ * credentials return null.
+ */
+export type SignedSessionCodec = {
+  encode: (session: SessionSnapshot, expiresAt: Date) => Promise<string>;
+  validate: (credential: string) => Promise<SessionSnapshot | null>;
+};
+
+/** Lifetime of the authoritative session */
+export type SessionAuthorityLifetime = {
   absoluteTtl: number | null;
   inactivityTtl: number | null;
 };
 
 /**
- * Refresh-token persistence.
+ * Persistence used by the shipped opaque session authority.
  *
- * rotate must atomically reject an unknown, previously used, inactive, or
- * absolutely expired current token; otherwise it replaces the token, updates
- * inactiveExpiresAt, and returns the updated session.
+ * get is read-only. renew must atomically reject an unknown, inactive, or
+ * absolutely expired credential; otherwise it updates inactiveExpiresAt and
+ * returns the current session. renew does not rotate the credential.
  */
-export type RefreshTokenStorage<WriteContext> = {
+export type OpaqueSessionStorage<ReadContext, WriteContext> = {
   create: (
     context: WriteContext,
-    refreshToken: string,
+    credential: string,
     record: SessionRecord,
   ) => Promise<void>;
-  rotate: (
+  get: (
+    context: ReadContext,
+    credential: string,
+  ) => Promise<SessionRecord | null>;
+  renew: (
     context: WriteContext,
-    currentRefreshToken: string,
-    nextRefreshToken: string,
+    credential: string,
     now: Date,
     inactiveExpiresAt: Date | null,
   ) => Promise<SessionRecord | null>;
-  delete: (context: WriteContext, refreshToken: string) => Promise<void>;
+  delete: (context: WriteContext, credential: string) => Promise<void>;
 };
 
-/** Input for a signed-access, opaque-refresh session mechanism */
-export type MakeRefreshableSessionConfig<WriteContext> = {
-  accessToken: AccessTokenCodec;
-  refreshTokenStorage: RefreshTokenStorage<WriteContext>;
-  lifetime: SessionLifetime;
+/** Input for the shipped opaque session authority */
+export type MakeOpaqueSessionAuthorityConfig<ReadContext, WriteContext> = {
+  storage: OpaqueSessionStorage<ReadContext, WriteContext>;
+  lifetime: SessionAuthorityLifetime;
   makeSessionId: () => string;
-  makeRefreshToken: () => string;
+  makeCredential: () => string;
   now: () => Date;
 };
 
-/**
- * Builds sessions with a short-lived signed access token and a rotating opaque
- * refresh token.
- */
-export function makeRefreshableSession<ReadContext, WriteContext>(
-  config: MakeRefreshableSessionConfig<WriteContext>,
-): SessionAdapter<ReadContext, WriteContext> {
+/** Builds an authoritative database-backed session with an opaque credential */
+export function makeOpaqueSessionAuthority<ReadContext, WriteContext>(
+  config: MakeOpaqueSessionAuthorityConfig<ReadContext, WriteContext>,
+): SessionAuthority<ReadContext, WriteContext> {
   return {
     async create(context, userId) {
       const now = config.now();
+      const credential = config.makeCredential();
       const record: SessionRecord = {
         sessionId: config.makeSessionId(),
         userId,
         absoluteExpiresAt: deadline(now, config.lifetime.absoluteTtl),
         inactiveExpiresAt: deadline(now, config.lifetime.inactivityTtl),
       };
-      const refreshToken = config.makeRefreshToken();
-      const credentials = await issueRefreshableCredentials(
-        config,
-        record,
-        refreshToken,
-        now,
-      );
 
-      await config.refreshTokenStorage.create(context, refreshToken, record);
+      await config.storage.create(context, credential, record);
 
-      return credentials;
+      return makeAuthoritySession(credential, record);
     },
 
-    async validate(context, accessToken) {
-      void context;
+    async resolve(context, credential) {
+      const record = await config.storage.get(context, credential);
 
-      const claims = await config.accessToken.validate(accessToken);
-      return claims === null ? null : { userId: claims.userId };
+      return record === null || isExpired(record, config.now())
+        ? null
+        : makeSessionSnapshot(record);
     },
 
-    async refresh(context, credentials) {
-      if (credentials.refresh === null) {
-        return null;
-      }
-
+    async renew(context, credential) {
       const now = config.now();
-      const nextRefreshToken = config.makeRefreshToken();
-      const inactiveExpiresAt = deadline(now, config.lifetime.inactivityTtl);
-      const record = await config.refreshTokenStorage.rotate(
+      const record = await config.storage.renew(
         context,
-        credentials.refresh,
-        nextRefreshToken,
+        credential,
         now,
-        inactiveExpiresAt,
+        deadline(now, config.lifetime.inactivityTtl),
       );
 
-      if (record === null) {
-        return null;
-      }
-
-      return issueRefreshableCredentials(config, record, nextRefreshToken, now);
+      return record === null ? null : makeAuthoritySession(credential, record);
     },
 
-    async end(context, credentials) {
-      if (credentials.refresh !== null) {
-        await config.refreshTokenStorage.delete(context, credentials.refresh);
-      }
+    async end(context, credential) {
+      await config.storage.delete(context, credential);
     },
   };
 }
 
-/**
- * Opaque-session persistence.
- *
- * refresh must atomically reject an unknown, inactive, or absolutely expired
- * token; otherwise it updates inactiveExpiresAt and returns the session.
- */
-export type OpaqueSessionStorage<ReadContext, WriteContext> = {
-  create: (
-    context: WriteContext,
-    accessToken: string,
-    record: SessionRecord,
-  ) => Promise<void>;
-  get: (
-    context: ReadContext,
-    accessToken: string,
-  ) => Promise<SessionRecord | null>;
-  refresh: (
-    context: WriteContext,
-    accessToken: string,
-    now: Date,
-    inactiveExpiresAt: Date | null,
-  ) => Promise<SessionRecord | null>;
-  delete: (context: WriteContext, accessToken: string) => Promise<void>;
-};
-
-/** Input for an opaque session mechanism */
+/** Input for presenting an authority credential directly as access */
 export type MakeOpaqueSessionConfig<ReadContext, WriteContext> = {
-  storage: OpaqueSessionStorage<ReadContext, WriteContext>;
-  lifetime: {
-    absoluteTtl: number | null;
-    inactivityTtl: number | null;
-  };
-  makeSessionId: () => string;
-  makeAccessToken: () => string;
-  now: () => Date;
+  authority: SessionAuthority<ReadContext, WriteContext>;
 };
 
-/** Builds sessions whose access token is an opaque server-side session handle */
+/** Builds sessions that present their authority credential directly as access */
 export function makeOpaqueSession<ReadContext, WriteContext>(
   config: MakeOpaqueSessionConfig<ReadContext, WriteContext>,
 ): SessionAdapter<ReadContext, WriteContext> {
   return {
     async create(context, userId) {
-      const now = config.now();
-      const accessToken = config.makeAccessToken();
-      const record: SessionRecord = {
-        sessionId: config.makeSessionId(),
-        userId,
-        absoluteExpiresAt: deadline(now, config.lifetime.absoluteTtl),
-        inactiveExpiresAt: deadline(now, config.lifetime.inactivityTtl),
-      };
-
-      await config.storage.create(context, accessToken, record);
+      const authoritative = await config.authority.create(context, userId);
 
       return {
-        access: {
-          token: accessToken,
-          expiresAt: earliestOptional(
-            record.absoluteExpiresAt,
-            record.inactiveExpiresAt,
-          ),
-        },
+        access: authoritative.credential,
         refresh: null,
       };
     },
 
     async validate(context, accessToken) {
-      const record = await config.storage.get(context, accessToken);
-
-      return record === null || isExpired(record, config.now())
-        ? null
-        : { userId: record.userId };
+      const session = await config.authority.resolve(context, accessToken);
+      return session === null ? null : { userId: session.userId };
     },
 
     async refresh(context, credentials) {
@@ -211,67 +172,122 @@ export function makeOpaqueSession<ReadContext, WriteContext>(
         return null;
       }
 
-      const now = config.now();
-      const record = await config.storage.refresh(
+      const authoritative = await config.authority.renew(
         context,
         credentials.access,
-        now,
-        deadline(now, config.lifetime.inactivityTtl),
       );
 
-      return record === null
+      return authoritative === null
         ? null
         : {
-            access: {
-              token: credentials.access,
-              expiresAt: earliestOptional(
-                record.absoluteExpiresAt,
-                record.inactiveExpiresAt,
-              ),
-            },
+            access: authoritative.credential,
             refresh: null,
           };
     },
 
     async end(context, credentials) {
       if (credentials.access !== null) {
-        await config.storage.delete(context, credentials.access);
+        await config.authority.end(context, credentials.access);
       }
     },
   };
 }
 
-async function issueRefreshableCredentials<WriteContext>(
-  config: MakeRefreshableSessionConfig<WriteContext>,
-  record: SessionRecord,
-  refreshToken: string,
-  now: Date,
-): Promise<IssuedSessionCredentials> {
-  const accessExpiresAt = earliest(
-    new Date(now.getTime() + config.lifetime.accessTtl),
-    record.absoluteExpiresAt,
-    record.inactiveExpiresAt,
-  );
-  const accessToken = await config.accessToken.encode(
-    {
-      sessionId: record.sessionId,
-      userId: record.userId,
+/** Input for signed access over an opaque session authority */
+export type MakeSignedAccessSessionConfig<ReadContext, WriteContext> = {
+  authority: SessionAuthority<ReadContext, WriteContext>;
+  access: {
+    codec: SignedSessionCodec;
+    ttl: number;
+  };
+  now: () => Date;
+};
+
+/**
+ * Builds short-lived signed session snapshots over an opaque session
+ * authority. The authority credential is retained across access renewal.
+ */
+export function makeSignedAccessSession<ReadContext, WriteContext>(
+  config: MakeSignedAccessSessionConfig<ReadContext, WriteContext>,
+): SessionAdapter<ReadContext, WriteContext> {
+  return {
+    async create(context, userId) {
+      const authoritative = await config.authority.create(context, userId);
+      return issueSignedAccessCredentials(config, authoritative);
     },
-    accessExpiresAt,
+
+    async validate(context, accessToken) {
+      void context;
+
+      const session = await config.access.codec.validate(accessToken);
+      return session === null ? null : { userId: session.userId };
+    },
+
+    async refresh(context, credentials) {
+      if (credentials.refresh === null) {
+        return null;
+      }
+
+      const authoritative = await config.authority.renew(
+        context,
+        credentials.refresh,
+      );
+
+      return authoritative === null
+        ? null
+        : issueSignedAccessCredentials(config, authoritative);
+    },
+
+    async end(context, credentials) {
+      if (credentials.refresh !== null) {
+        await config.authority.end(context, credentials.refresh);
+      }
+    },
+  };
+}
+
+async function issueSignedAccessCredentials<ReadContext, WriteContext>(
+  config: MakeSignedAccessSessionConfig<ReadContext, WriteContext>,
+  authoritative: AuthoritySession,
+): Promise<IssuedSessionCredentials> {
+  const expiresAt = earliestRequired(
+    new Date(config.now().getTime() + config.access.ttl),
+    authoritative.credential.expiresAt,
+  );
+  const token = await config.access.codec.encode(
+    authoritative.session,
+    expiresAt,
   );
 
   return {
     access: {
-      token: accessToken,
-      expiresAt: accessExpiresAt,
+      token,
+      expiresAt,
     },
-    refresh: {
-      token: refreshToken,
+    refresh: authoritative.credential,
+  };
+}
+
+function makeAuthoritySession(
+  credential: string,
+  record: SessionRecord,
+): AuthoritySession {
+  return {
+    credential: {
+      token: credential,
       expiresAt: earliestOptional(
         record.absoluteExpiresAt,
         record.inactiveExpiresAt,
       ),
     },
+    session: makeSessionSnapshot(record),
+  };
+}
+
+function makeSessionSnapshot(record: SessionRecord): SessionSnapshot {
+  return {
+    sessionId: record.sessionId,
+    userId: record.userId,
   };
 }
 
@@ -279,23 +295,8 @@ function deadline(now: Date, ttl: number | null): Date | null {
   return ttl === null ? null : new Date(now.getTime() + ttl);
 }
 
-function earliest(
-  required: Date,
-  first: Date | null,
-  second: Date | null,
-): Date {
-  const deadlines = [required, first, second].filter(
-    (value): value is Date => value !== null,
-  );
-  let result = required;
-
-  for (const value of deadlines) {
-    if (value < result) {
-      result = value;
-    }
-  }
-
-  return result;
+function earliestRequired(required: Date, optional: Date | null): Date {
+  return optional === null || required < optional ? required : optional;
 }
 
 function earliestOptional(

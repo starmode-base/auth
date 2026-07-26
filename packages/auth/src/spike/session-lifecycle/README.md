@@ -56,22 +56,82 @@ That is troublesome for two independent reasons:
 - The algorithm encodes one session design: a self-contained credential with
   cached session data, periodic persistence checks, and sliding renewal.
 
-A conventional short-lived JWT access token with an opaque refresh token and a
-database-backed opaque session have different trust, revocation, and renewal
-mechanics. The problem is not merely how to clean up `getSession()`. The
-problem is deciding whether core should own a session algorithm at all.
+A database-backed opaque credential and a signed credential can expose the
+same session data with the same bounded-staleness policy. They differ in where
+the session snapshot is held and why it is trusted. The problem is not merely
+how to clean up `getSession()`. The problem is deciding which parts are session
+authority, access representation, and universal core behavior.
+
+## Working model
+
+An opaque credential is an unguessable reference to current session state:
+
+```text
+opaque credential → authoritative store → current session
+```
+
+A signed credential is a session snapshot carried by the client:
+
+```text
+signed credential → signature verification → issued session snapshot
+```
+
+Memoizing an opaque lookup for ten seconds and issuing a signed session
+snapshot for ten seconds make the same consistency promise: authentication may
+observe session state that is at most ten seconds stale. The cache location and
+trust mechanism differ:
+
+| Representation            | Snapshot location | Why the snapshot is trusted |
+| ------------------------- | ----------------- | --------------------------- |
+| Memoized opaque lookup    | Server cache      | The server owns the cache   |
+| Short-lived signed access | Client credential | The issuer's signature      |
+
+Signed access therefore does not need a second kind of session authority. The
+opaque authority credential that would otherwise be presented as access is
+retained as the refresh credential. Refresh resolves current authoritative
+state and issues another short-lived snapshot. It does not inherently rotate
+the authority credential.
+
+The candidate makes that relationship explicit:
+
+```ts
+const authority = makeOpaqueSessionAuthority({
+  storage,
+  lifetime,
+  makeSessionId,
+  makeCredential,
+  now,
+});
+
+makeAuth({ debug: true }).withSession(makeOpaqueSession({ authority }));
+
+makeAuth({ debug: true }).withSession(
+  makeSignedAccessSession({
+    authority,
+    access: {
+      codec: signedSessionCodec,
+      ttl: 10_000,
+    },
+    now,
+  }),
+);
+```
+
+These are convenience compositions, not two branches in `makeAuth`.
 
 ## Evidence from the nested spike
 
-The code in this directory tried one lifecycle against two mechanisms:
+The code in this directory tries one lifecycle against two access
+representations over the same opaque authority shape:
 
-| Concern          | JWT-like signed access plus opaque refresh                              | Opaque session                                          |
-| ---------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| Validate         | Verify the short-lived access token                                     | Look up the opaque token                                |
-| Refresh          | Atomically rotate the persisted refresh token and issue new credentials | Update server-side lifetime and retain the opaque token |
-| Revoke           | Delete the persisted refresh token                                      | Delete the opaque token                                 |
-| Read capability  | No persistence needed for access validation                             | Persistence read required                               |
-| Write capability | Required for create, refresh, and revoke                                | Required for create, refresh, and revoke                |
+| Concern          | Short-lived signed access                   | Direct opaque access                                     |
+| ---------------- | ------------------------------------------- | -------------------------------------------------------- |
+| Authority        | Opaque credential retained as refresh       | Opaque credential presented as access                    |
+| Validate         | Verify the signed session snapshot          | Resolve current state, optionally through a server cache |
+| Refresh          | Resolve authority and issue a new snapshot  | Update server-side lifetime and retain the credential    |
+| Revoke           | Delete the opaque authority                 | Delete the opaque authority                              |
+| Read capability  | No persistence needed for access validation | Persistence read required                                |
+| Write capability | Required for create, refresh, and revoke    | Required for create, refresh, and revoke                 |
 
 The experiment established that:
 
@@ -79,11 +139,15 @@ The experiment established that:
 - Validation can remain read-only.
 - Both mechanisms can resemble `create`, `validate`, `refresh`, and `end`.
 - Read-only and write-capable environments can be represented separately.
+- Signed and direct opaque access can use the same authoritative storage
+  contract.
+- Refresh-token rotation is independent of signed access and must not be
+  implied by every short access-token lifetime.
 
 It did **not** establish that:
 
 - Those four operations are universal rather than artifacts of these examples.
-- `accessToken` plus nullable `refreshToken` is the right shared value.
+- `access` plus nullable `refresh` is the right shared credential value.
 - Generic `ReadContext` and `WriteContext` belong in the public API.
 - A `makeAuth` facade that mostly forwards adapter calls earns its layer.
 
@@ -107,9 +171,10 @@ makeAuth({ debug: true }).withSession(sessionAdapter);
 ```
 
 Mechanism factories such as `makeOpaqueSession` and
-`makeRefreshableSession` produce the adapter; the builder does not enumerate
-session mechanisms. This also permits verification-only configurations such
-as `makeAuth({ debug: true }).withOtp(...)`.
+`makeSignedAccessSession` produce the adapter; the builder does not enumerate
+session mechanisms. The latter combines short-lived signed snapshots with the
+same opaque authority used by the former. This also permits verification-only
+configurations such as `makeAuth({ debug: true }).withOtp(...)`.
 
 That is a plausible direction under active implementation, not a settled
 contract. The rule for judging it against the alternative is:
@@ -126,7 +191,7 @@ produce another superficially neat but unproven API.
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Who owns the lifecycle?                      | We need to know which behavior is actually universal across signed-access, opaque, database-backed, and custom sessions.                                                                                                                                                      |
 | What is the public lifecycle?                | `create`, `validate`, `refresh`, and `end` are useful only if each mechanism can implement them without fake inputs, meaningless outputs, or hidden writes.                                                                                                                   |
-| What are session credentials?                | A JWT design needs separate access and refresh tokens so a stolen access token cannot refresh the session. An opaque session may expose only one client-held value. Bindings still need to know what to store and present.                                                    |
+| What are session credentials?                | Direct opaque access presents the authority credential itself. Signed access presents a short-lived snapshot and retains that same authority as its refresh credential. Bindings still need to know what to store and present.                                                |
 | How do invocation-scoped capabilities enter? | Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter public method inputs, an environment binding, or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership. |
 | Who owns lifetime and refresh policy?        | Access expiry, absolute lifetime, inactivity, renewal, rotation, replay, and concurrency affect the boundary, but specifying them first would accidentally choose the architecture.                                                                                           |
 
@@ -172,8 +237,8 @@ Small type and implementation probes should show that the same candidate API
 can describe verification-only auth and both session mechanisms:
 
 - An auth object with OTP or passkeys and no session unit.
-- A short-lived JWT access token with a persisted, rotating opaque refresh
-  token.
+- A short-lived signed session snapshot with a persisted opaque authority
+  credential.
 - A database-backed opaque session.
 
 The compatibility targets then test whether those mechanisms can be used in
@@ -202,7 +267,7 @@ sequence.
 ## Parked until that boundary is credible
 
 - Exact access, absolute, inactivity, and cookie lifetime rules.
-- Refresh rotation, replay detection, concurrency, and recovery.
+- Authority-credential rotation, replay detection, concurrency, and recovery.
 - Cookie names, attributes, and browser or mobile storage.
 - Concrete framework bindings.
 - The final JWT or HMAC codec API.
@@ -219,8 +284,8 @@ sequence.
   metadata.
 - `composition-probes.ts` checks sessionless composition, order independence,
   and single-use builder steps.
-- `mechanisms.ts` minimally implements opaque sessions and signed-access,
-  rotating-refresh sessions against the same adapter.
+- `mechanisms.ts` minimally implements direct opaque access and signed access
+  over one opaque-authority contract.
 - `target-probes.ts` checks read-only and write-capable execution targets plus
   client credential persistence.
 - The nested candidate should not receive comprehensive tests or production

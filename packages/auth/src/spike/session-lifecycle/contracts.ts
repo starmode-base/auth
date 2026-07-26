@@ -18,9 +18,10 @@ export type IssuedSessionCredential = {
 /**
  * Credentials issued when a session is created or refreshed.
  *
- * Every mechanism issues an access credential. Mechanisms that use the access
- * credential itself as the renewable server-side session handle return a null
- * refresh credential.
+ * Every mechanism issues an access credential. A refresh credential is the
+ * opaque authority used to resolve current session state and issue another
+ * access credential. It need not rotate when used. Mechanisms that present
+ * that authority directly as their access credential return null for refresh.
  */
 export type IssuedSessionCredentials = {
   access: IssuedSessionCredential;
@@ -48,9 +49,11 @@ export type SessionIdentity = {
  *
  * The adapter owns session policy and credential mechanics. ReadContext need
  * only support validation; WriteContext supplies the capabilities required by
- * session creation, refresh, and revocation. Ending a session revokes its
- * renewable authority. A previously issued self-contained access credential
- * may remain valid until its declared expiry.
+ * session creation, refresh, and revocation. Refresh resolves the mechanism's
+ * authoritative credential and issues a current access representation; it
+ * does not imply credential rotation. Ending a session revokes its authority.
+ * A previously issued self-contained access credential may remain valid until
+ * its declared expiry.
  */
 export type SessionAdapter<ReadContext, WriteContext> = {
   create: (
