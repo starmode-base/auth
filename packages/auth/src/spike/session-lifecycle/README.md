@@ -127,6 +127,37 @@ produce another superficially neat but unproven API.
 | How do invocation-scoped capabilities enter? | Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter public method inputs, an environment binding, or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership. |
 | Who owns lifetime and refresh policy?        | Access expiry, absolute lifetime, inactivity, renewal, rotation, replay, and concurrency affect the boundary, but specifying them first would accidentally choose the architecture.                                                                                           |
 
+## Compatibility targets
+
+Named targets are compatibility probes, not a promise to ship every
+integration. A target belongs in the primary set only when it introduces a
+distinct execution, persistence, transport, or rendering constraint.
+
+Framework compatibility normally tests a binding, not the `SessionAdapter`
+itself:
+
+- A session adapter owns session mechanism and policy.
+- A binding moves credential values between that API and an environment.
+- Convex may pressure both boundaries because its persistence capabilities are
+  created per invocation.
+
+| Target              | Why it was selected                                                                                                                                                 | Boundary stressed               | Role      |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------- |
+| Vanilla Node or Bun | Framework-free floor. Proves the design does not depend on a full-stack framework, a particular router, or framework-owned request context.                         | Binding                         | Primary   |
+| TanStack Start      | Representative conventional full-stack case with SSR, CSR, server functions, and server routes. Ensures the ordinary integration remains ergonomic.                 | Binding                         | Primary   |
+| Next.js App Router  | Constrained mixed environment: RSC can participate in session reads while credential writes require a write-capable server boundary.                                | Binding and lifecycle           | Primary   |
+| Convex              | Queries and mutations have different capabilities and receive database facilities per invocation. This is the strongest test of read/write separation and DI.       | Adapter, binding, and lifecycle | Primary   |
+| Expo                | Native clients retain and present credentials without relying on browser cookie behavior.                                                                           | Credential boundary and binding | Primary   |
+| SolidStart          | A non-React full-stack confirmation that the design has not accidentally absorbed React, Next.js, or TanStack assumptions. It adds less new architectural pressure. | Binding                         | Secondary |
+
+Compatibility means that an application can support the target through a
+session implementation and/or binding without changing core. It does not mean
+the library must ship or maintain that integration on day one.
+
+Other frameworks should initially be classified by the constraints above
+rather than added by name. A new target joins the primary set only when it
+reveals a capability shape that the existing representatives do not exercise.
+
 ## How the design will converge
 
 There is no single context-free question to answer next. The ownership,
@@ -134,16 +165,14 @@ lifecycle, credential, and invocation-capability shapes need to be developed
 together against representative cases.
 
 Small type and implementation probes should show that the same candidate API
-can describe:
+can describe both session mechanisms:
 
 - A short-lived JWT access token with a persisted, rotating opaque refresh
   token.
 - A database-backed opaque session.
-- A read-only Next.js RSC, SSR, or Convex query.
-- A write-capable Next.js, TanStack Start, SolidStart, Convex, or vanilla
-  server operation.
-- An Expo or browser client that stores credentials and presents them to a
-  server.
+
+The compatibility targets then test whether those mechanisms can be used in
+the required environments without changing core.
 
 Each probe should make five boundaries visible:
 
