@@ -35,26 +35,14 @@ The sending service is optional and does not exist yet. The map must be sound wi
 
 Self-hosted posture = library (1, 5) + app/infra (2, 3) + owning your ESP risk (4). The service moves 2 and 4 service-side; 3 always stays with the app.
 
-## Sending service (future — mapped ahead of build)
+## Sending service (future)
 
 A free hosted endpoint that sends a fixed-template otp email via Resend. Takes only `(email, otp)` — no subject, no body, no sender. Exists so users skip DNS/SPF/ESP setup; anyone can bypass it with their own delivery adapter.
 
-**Why the fixed template matters:** the only attacker-controlled inputs are the recipient and the otp. There is no spam-content vector — almost. The otp itself is a free-text field until validated, so the service must enforce otp shape (digits, fixed length) or that one field becomes a spam channel.
+The service's own abuse surface — provisioning flow, quotas, abuse reporting, reputation containment — is mapped in `services/email-relay/DESIGN.md`.
 
-Service-side defenses (its own abuse surface, not the library's):
+Library-facing integration points:
 
-- Per-recipient cooldown and daily cap **across all API keys** — victim protection no single app can provide
-- Per-key caps — cost and abuse isolation
-- Otp shape validation — kills content injection through the one free-text field
-- Bounce/complaint handling, disposable-domain policy — protects the shared sending domain
-- Library integration: service refusals (429) surface through delivery as `rate_limited` — requires widening `send` from `Promise<void>`, deferred until this adapter exists
-
-Known trade-off (2026-07-17): send-only means the service never sees verification outcomes, so reputation scoring is limited to volume and bounces. Accepted for launch.
-
-Open questions:
-
-- Key issuance — anonymous free keys vs sign-up
-- Actual limit numbers (cooldown, per-recipient cap, per-key cap)
-- Whether verification-outcome feedback ever gets added
+- Service refusals (429) surface through delivery as `rate_limited` — requires widening `send` from `Promise<void>`, deferred until this adapter exists
 - Forwarding the end-user IP (`requestOtp({ identifier, ip })` → delivery → service) so the service can rate limit per caller on the app's behalf. Self-reported, so it protects honest apps — never the service itself (per-key caps do that). Lands with the service adapter and the `send` widening, as `ip: string | null`
-- SMS transport later
+- Known trade-off (2026-07-17): send-only means the service never sees verification outcomes, so reputation scoring is limited to volume and bounces. Accepted for launch

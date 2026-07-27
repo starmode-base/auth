@@ -60,6 +60,7 @@ Every email carries a unique send id and a report-abuse link in the footer. The 
 - Sandbox and production send from separate subdomains; the sandbox subdomain is disposable and rotated on a schedule.
 - Resend bounce/complaint webhooks feed auto-suppression and a per-key bounce-rate kill switch. The switch must be fast and automatic — this is an ops commitment, not a checkbox.
 - 202-always keeps the API from becoming a list-washing oracle; bounces inform internal reputation only.
+- Disposable-domain recipient policy — undecided: trap addresses hurt the shared domain, but disposable addresses can be legitimate sign-ups. Decide at implementation.
 
 ## Cloudflare checklist
 
@@ -75,10 +76,11 @@ Every email carries a unique send id and a report-abuse link in the footer. The 
 - Cloudflare Workers, with Durable Objects for the atomic counters (cross-key per-recipient caps, quotas, the sandbox budget) — strong consistency where the cap state lives.
 - ESP: Resend.
 - Key format: recognizable prefix, registered with GitHub secret scanning; low sandbox quotas bound leak damage; cheap rotation.
-- Library integration: service 429s surface through the delivery adapter as `rate_limited` — requires widening `send` from `Promise<void>`; tracked in THREAT-MODEL.md's open questions.
+- Library integration: service 429s surface through the delivery adapter as `rate_limited` — requires widening `send` from `Promise<void>`; tracked in THREAT-MODEL.md's sending-service section.
 
 ## Later
 
 - Quota tiers above the production default: sustained good sending behavior (low bounce/complaint rate over N days) auto-raises limits; credit-card verification (no charge, identity signal); enterprise arrangements.
-- End-user IP forwarding (`requestOtp({ identifier, ip })` passthrough) — open question in THREAT-MODEL.md.
+- End-user IP forwarding (`requestOtp({ identifier, ip })` passthrough) — tracked in THREAT-MODEL.md's sending-service section.
+- Verification-outcome feedback from the library, sharpening reputation scoring beyond volume and bounces — the send-only trade-off accepted for launch (THREAT-MODEL.md, 2026-07-17).
 - SMS transport.
