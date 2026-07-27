@@ -39,7 +39,7 @@ Self-hosted posture = library (1, 5) + app/infra (2, 3) + owning your ESP risk (
 
 A free hosted endpoint that sends a fixed-template otp email via Resend. Takes only `(email, otp)` — no subject, no body, no sender. Exists so users skip DNS/SPF/ESP setup; anyone can bypass it with their own delivery adapter.
 
-The service's own abuse surface — provisioning flow, quotas, abuse reporting, reputation containment — is mapped in `services/email-relay/DESIGN.md`.
+The service's own abuse surface — provisioning flow, quotas, abuse reporting, reputation containment — is mapped in `service/DESIGN.md`.
 
 Library-facing integration points:
 

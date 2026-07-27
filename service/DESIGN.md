@@ -1,6 +1,6 @@
 # OTP email relay — design notes
 
-Decisions from threat modeling, 2026-07-26/27. Complements the sending-service section of `/THREAT-MODEL.md`. Service and folder name provisional.
+Decisions from threat modeling, 2026-07-26/27. Complements the sending-service section of `/THREAT-MODEL.md`.
 
 ## Invariant
 
