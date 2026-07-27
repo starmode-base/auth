@@ -18,6 +18,61 @@ authentication strategies: they own their feature-specific workflows, while
 core owns builder composition, session establishment after successful
 authentication, and current-user scoping for auth-resource management.
 
+### Microkernel boundary
+
+> **Clarified 2026-07-27:** This is a microkernel architecture, with one
+> important qualification: “feature logic lives in DI” does not mean the
+> kernel is logic-free. Injected modules own feature and mechanism logic; the
+> kernel retains the small shared control plane.
+
+The trust boundary is:
+
+```text
+strategy: prove and resolve an application user
+    ↓
+kernel: convert that successful result into a session
+    ↓
+session DI: implement that session
+```
+
+The kernel guarantees only what it controls:
+
+- A failed authentication result creates no session.
+- A successful result creates a session for exactly the userId returned by the
+  strategy, using the one session implementation configured in `makeAuth`.
+- Strategies do not receive the session implementation and cannot create
+  sessions themselves.
+- Auth-resource operations derive userId from the current session; their public
+  methods never accept an arbitrary userId.
+- Installed strategies hide direct session creation from the normal public
+  usage surface.
+
+The strategy remains a trusted authentication authority. A bespoke OTP strategy
+can return an arbitrary user without verifying an OTP; core cannot detect that
+lie. Directly implementing the strategy contract therefore replaces that
+authentication engine. Core’s guarantee begins at the strategy result: it
+controls how an authenticated identity becomes a session, not whether the
+strategy proved that identity correctly.
+
+This separation applies least authority. OTP and passkey strategies can
+authenticate but cannot issue sessions; the session DI can issue sessions but
+does not decide whether OTP or passkey proof succeeded; the kernel alone
+connects those capabilities. Giving every strategy the session DI would make
+each strategy reimplement the shared transition and would prevent the library
+from guaranteeing consistent session behavior.
+
+The admission test for kernel logic is strict:
+
+> Core owns only behavior that every session-establishing strategy or
+> current-user auth-resource operation must obey identically.
+
+OTP generation and delivery, WebAuthn verification, challenges, credential
+counters, identity binding, and feature policy remain outside the kernel. If
+strategy-specific branches begin accumulating in core, the microkernel boundary
+has been violated. Moving the shared transition into another file or helper
+would not change its architectural ownership; the component with sole control
+of that transition is the kernel.
+
 Literal objects are the contract. A one-off implementation may be written
 inline, a fixed reusable implementation is a preconfigured vanilla object, and
 a parameterized reusable implementation may be produced by a `make*` helper.
