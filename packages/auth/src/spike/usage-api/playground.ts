@@ -1,10 +1,12 @@
 /**
  * Framework-neutral playground for the candidate server usage API.
  *
- * The adapters are deliberately inert. The file exists to make the complete
- * configuration and resulting application-facing operations visible together.
+ * These literal objects are the complete DI contract. Their implementations
+ * are deliberately inert and fail closed. Object-producing helpers may replace
+ * the literals without changing makeAuth or its returned usage API.
  */
 import type {
+  PasskeySummary,
   SessionAdapter,
   SessionSummary,
   WithOtpConfig,
@@ -19,10 +21,11 @@ type CreatedSession = {
 
 type RefreshedSession = {
   accessToken: string;
-};
+} | null;
 
 type ListedSession = SessionSummary & {
   current: boolean;
+  deviceName: string;
 };
 
 type User = {
@@ -30,122 +33,96 @@ type User = {
   isNew: boolean;
 };
 
+type ListedPasskey = PasskeySummary & {
+  name: string;
+  createdAt: Date;
+};
+
+declare const registrationOptions: PublicKeyCredentialCreationOptionsJSON;
+declare const authenticationOptions: PublicKeyCredentialRequestOptionsJSON;
+
 export const session = {
   create: async (userId) => ({
     accessToken: `access:${userId}`,
     refreshToken: `refresh:${userId}`,
   }),
-  get: async () => ({ userId: "user-1" }),
-  refresh: async () => ({ accessToken: "refreshed-access" }),
+  get: async () => null,
+  refresh: async () => null,
   end: async () => undefined,
-  list: async (userId) => [
-    {
-      sessionId: `session:${userId}`,
-      current: true,
-    },
-  ],
+  list: async (userId) => {
+    void userId;
+    return [];
+  },
   endAll: async (userId) => {
     void userId;
   },
-  revoke: async (userId, sessionId) => sessionId === `session:${userId}`,
+  revoke: async (userId, sessionId) => {
+    void userId;
+    void sessionId;
+    return false;
+  },
 } satisfies SessionAdapter<CreatedSession, RefreshedSession, ListedSession>;
 
 export const otp = {
-  storage: {
-    store: async (record) => {
-      void record;
-    },
-    verify: async (identifier, submittedOtp) =>
-      identifier === "person@example.com" && submittedOtp === "123456",
+  request: async ({ identifier }) => {
+    void identifier;
+    return { success: true };
   },
-  delivery: {
-    send: async (identifier, generatedOtp) => {
-      void identifier;
-      void generatedOtp;
-    },
+  authenticate: async ({ identifier, otp: submittedOtp }) => {
+    void identifier;
+    void submittedOtp;
+    return {
+      success: false,
+      error: "authentication_disabled",
+    };
   },
-  generateOtp: () => "123456",
-  ttl: 10 * 60 * 1_000,
-  authorizeRequest: async ({ identifier }) => identifier.length > 0,
-  resolveUser: async ({ identifier }) => ({
-    userId: identifier,
-    isNew: false,
-  }),
 } satisfies WithOtpConfig<User>;
 
 export const passkey = {
-  storage: {
-    store: async (record) => {
-      void record;
-    },
-    get: async (credentialId) => {
-      void credentialId;
-      return null;
-    },
-    list: async (userId) => {
-      void userId;
-      return [];
-    },
-    setCounter: async (credentialId, counter) => {
-      void credentialId;
-      void counter;
-    },
-    delete: async (userId, credentialId) => {
-      void userId;
-      void credentialId;
-      return false;
-    },
+  createRegistrationOptions: async ({ intent, userId }) => {
+    if (intent === "sign-up" && userId === null) {
+      return {
+        success: false,
+        error: "registration_disabled",
+      };
+    }
+
+    return {
+      success: true,
+      data: registrationOptions,
+    };
   },
-  challenge: {
-    storage: {
-      store: async (record) => {
-        void record;
-      },
-      take: async (challenge) => {
-        void challenge;
-        return null;
-      },
-    },
-    ttl: 5 * 60 * 1_000,
-  },
-  webAuthn: {
-    rpId: "example.com",
-    rpName: "Example",
-    allowedOrigins: ["https://example.com"],
-  },
-  generateChallenge: () => "challenge",
-  createUser: async () => ({
-    userId: "user-1",
-    identifier: null,
-  }),
-  getUser: async (userId) => ({
-    userId,
-    identifier: null,
-  }),
-  authorizeRegistration: async ({ userId, intent }) =>
-    userId.length > 0 && (intent === "sign-up" || intent === "add"),
-  authorizeAuthentication: async ({ userId }) => userId.length > 0,
-  authorizeRemoval: async ({ userId, credentialId, credentialCount }) =>
-    userId.length > 0 && credentialId.length > 0 && credentialCount > 1,
-  verifyRegistrationCredential: async ({ credential, challenge, webAuthn }) => {
+  verifyRegistration: async ({ credential }) => {
     void credential;
-    void challenge;
-    void webAuthn;
-    return null;
+    return {
+      success: false,
+      error: "verification_failed",
+    };
   },
-  verifyAuthenticationCredential: async ({
-    credential,
-    challenge,
-    stored,
-    webAuthn,
-  }) => {
+  createAuthenticationOptions: async () => ({
+    success: true,
+    data: authenticationOptions,
+  }),
+  verifyAuthentication: async ({ credential }) => {
     void credential;
-    void challenge;
-    void stored;
-    void webAuthn;
-    return null;
+    return {
+      success: false,
+      error: "verification_failed",
+    };
   },
-} satisfies WithPasskeyConfig;
+  list: async (userId) => {
+    void userId;
+    return [];
+  },
+  remove: async (userId, credentialId) => {
+    void userId;
+    void credentialId;
+    return {
+      success: false,
+      error: "removal_disabled",
+    };
+  },
+} satisfies WithPasskeyConfig<ListedPasskey>;
 
 export const sessionOnlyAuth = makeAuth({ debug: true, session });
 

@@ -10,15 +10,12 @@ import type {
   AuthOtp,
   AuthPasskey,
   AuthUser,
-  ChallengeStorage,
-  CredentialStorage,
-  OtpDelivery,
-  OtpStorage,
   PasskeyNamespace,
+  PasskeySummary,
+  Result,
   SessionAdapter,
   SessionIdentity,
   SessionSummary,
-  WebAuthnConfig,
   WithOtpConfig,
   WithPasskeyConfig,
 } from "./contracts";
@@ -40,51 +37,79 @@ type ResolvedUser = AuthUser & {
   isNew: boolean;
 };
 
+type ListedPasskey = PasskeySummary & {
+  label: string;
+};
+
 declare const session: SessionAdapter<
   SessionCreated,
   SessionRefreshed,
   ListedSession
 >;
-declare const otpStorage: OtpStorage;
-declare const otpDelivery: OtpDelivery;
-declare const credentialStorage: CredentialStorage;
-declare const challengeStorage: ChallengeStorage;
-declare const webAuthn: WebAuthnConfig;
+declare const registrationOptions: PublicKeyCredentialCreationOptionsJSON;
+declare const authenticationOptions: PublicKeyCredentialRequestOptionsJSON;
 
 const otp = {
-  storage: otpStorage,
-  delivery: otpDelivery,
-  generateOtp: () => "123456",
-  ttl: 600_000,
-  authorizeRequest: async ({ identifier }) => identifier.length > 0,
-  resolveUser: async ({ identifier }) => ({
-    userId: identifier,
-    isNew: true,
-  }),
+  request: async ({ identifier }) => {
+    void identifier;
+    return { success: true };
+  },
+  authenticate: async ({ identifier, otp: submittedOtp }) => {
+    if (submittedOtp.length === 0) {
+      return { success: false, error: "invalid_otp" };
+    }
+
+    return {
+      success: true,
+      data: {
+        userId: identifier,
+        isNew: true,
+      },
+    };
+  },
 } satisfies WithOtpConfig<ResolvedUser>;
 
 const passkey = {
-  storage: credentialStorage,
-  challenge: {
-    storage: challengeStorage,
-    ttl: 60_000,
+  createRegistrationOptions: async ({ intent, userId }) => {
+    void intent;
+    void userId;
+    return { success: true, data: registrationOptions };
   },
-  webAuthn,
-  generateChallenge: () => "challenge",
-  createUser: async () => ({
-    userId: "user-1",
-    identifier: null,
+  verifyRegistration: async ({ credential }) => {
+    void credential;
+    return {
+      success: true,
+      data: {
+        intent: "sign-up",
+        userId: "user-1",
+      },
+    };
+  },
+  createAuthenticationOptions: async () => ({
+    success: true,
+    data: authenticationOptions,
   }),
-  getUser: async (userId) => ({
-    userId,
-    identifier: null,
-  }),
-  authorizeRegistration: async ({ userId }) => userId.length > 0,
-  authorizeAuthentication: async ({ userId }) => userId.length > 0,
-  authorizeRemoval: async ({ credentialCount }) => credentialCount > 1,
-  verifyRegistrationCredential: async () => null,
-  verifyAuthenticationCredential: async () => null,
-} satisfies WithPasskeyConfig;
+  verifyAuthentication: async ({ credential }) => {
+    void credential;
+    return {
+      success: true,
+      data: {
+        userId: "user-1",
+      },
+    };
+  },
+  list: async (userId) => [
+    {
+      credentialId: "credential-1",
+      label: userId,
+    },
+  ],
+  remove: async (userId, credentialId) => {
+    void userId;
+    void credentialId;
+    return { success: true };
+  },
+} satisfies WithPasskeyConfig<ListedPasskey>;
 
 function expectType<T>(value: T): T {
   return value;
@@ -106,14 +131,26 @@ expectType<Auth<SessionCreated, SessionRefreshed, ListedSession>>(sessionOnly);
 expectType<
   AuthOtp<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
 >(sessionOtp);
-expectType<AuthPasskey<SessionCreated, SessionRefreshed, ListedSession>>(
-  sessionPasskey,
-);
 expectType<
-  AuthFull<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
+  AuthPasskey<SessionCreated, SessionRefreshed, ListedSession, ListedPasskey>
+>(sessionPasskey);
+expectType<
+  AuthFull<
+    SessionCreated,
+    SessionRefreshed,
+    ListedSession,
+    ResolvedUser,
+    ListedPasskey
+  >
 >(otpThenPasskey);
 expectType<
-  AuthFull<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
+  AuthFull<
+    SessionCreated,
+    SessionRefreshed,
+    ListedSession,
+    ResolvedUser,
+    ListedPasskey
+  >
 >(passkeyThenOtp);
 
 /* makeAuth always requires sessions; withSession does not exist. */
@@ -216,10 +253,18 @@ void sessionPasskey.session.create;
 // @ts-expect-error complete auth establishes sessions through its strategies
 void otpThenPasskey.session.create;
 
-/* OTP public methods describe authentication, not its proof primitive. */
+/* OTP strategy establishes a user; core adds the session. */
 
 expectType<Promise<{ success: true }>>(
-  sessionOtp.otp.request({ identifier: "person@example.com" }),
+  otp.request({ identifier: "person@example.com" }),
+);
+expectType<
+  Promise<Result<ResolvedUser, "invalid_otp" | "authentication_disabled">>
+>(
+  otp.authenticate({
+    identifier: "person@example.com",
+    otp: "123456",
+  }),
 );
 
 const authenticated = sessionOtp.otp.authenticate({
@@ -237,7 +282,21 @@ if (authenticationResult.success) {
 // @ts-expect-error verify belongs to the independently exported OTP primitive
 void sessionOtp.otp.verify;
 
-/* Passkey exposes orchestrated workflows and credential management. */
+/* Passkey strategy establishes identities; core scopes and creates sessions. */
+
+void passkey.createRegistrationOptions({
+  intent: "sign-up",
+  userId: null,
+});
+void passkey.createRegistrationOptions({
+  intent: "add",
+  userId: "user-1",
+});
+void passkey.verifyRegistration;
+void passkey.createAuthenticationOptions;
+void passkey.verifyAuthentication;
+void passkey.list("user-1");
+void passkey.remove("user-1", "credential-1");
 
 void sessionPasskey.passkey.createRegistrationOptions;
 void sessionPasskey.passkey.createAdditionalRegistrationOptions;
@@ -247,47 +306,42 @@ void sessionPasskey.passkey.verifyAuthentication;
 void sessionPasskey.passkey.list;
 void sessionPasskey.passkey.remove;
 
+// @ts-expect-error core supplies registration intent and current user
+void sessionPasskey.passkey.createRegistrationOptions({
+  intent: "sign-up",
+  userId: null,
+});
+
+// @ts-expect-error core derives the current user before listing
+void sessionPasskey.passkey.list("user-1");
+
 // @ts-expect-error registration-token ceremony is internal
 void sessionPasskey.passkey.createRegistrationToken;
 
 // @ts-expect-error registration-token validation is internal
 void sessionPasskey.passkey.validateRegistrationToken;
 
-expectType<PasskeyNamespace<SessionCreated>>(sessionPasskey.passkey);
+expectType<PasskeyNamespace<SessionCreated, ListedPasskey>>(
+  sessionPasskey.passkey,
+);
+expectType<Promise<Result<ListedPasskey[], "not_authenticated">>>(
+  sessionPasskey.passkey.list(),
+);
 
-/* OTP configuration shows every required DI directly. */
+/* Literal strategy objects require every independently called operation. */
 
-void otp.storage;
-void otp.delivery;
-void otp.generateOtp;
-void otp.ttl;
-void otp.authorizeRequest;
-void otp.resolveUser;
+void otp.request;
+void otp.authenticate;
 
 const incompleteOtp = {
-  storage: otpStorage,
-  delivery: otpDelivery,
-  generateOtp: () => "123456",
-  ttl: 600_000,
-  resolveUser: async () => ({
-    userId: "user-1",
-    isNew: true,
-  }),
+  request: async () => ({ success: true }),
 };
 
-// @ts-expect-error authorizeRequest is required
+// @ts-expect-error authenticate is required
 void sessionOnly.withOtp(incompleteOtp);
 
 const otpWithUnknownConfiguration = {
-  storage: otpStorage,
-  delivery: otpDelivery,
-  generateOtp: () => "123456",
-  ttl: 600_000,
-  authorizeRequest: async () => true,
-  resolveUser: async () => ({
-    userId: "user-1",
-    isNew: true,
-  }),
+  ...otp,
   unknown: true,
 };
 
@@ -295,15 +349,8 @@ const otpWithUnknownConfiguration = {
 void sessionOnly.withOtp(otpWithUnknownConfiguration);
 
 void sessionOnly.withOtp({
-  storage: otpStorage,
-  delivery: otpDelivery,
-  generateOtp: () => "123456",
-  ttl: 600_000,
-  authorizeRequest: async () => true,
-  resolveUser: async () => ({
-    userId: "user-1",
-    isNew: true,
-  }),
+  request: otp.request,
+  authenticate: otp.authenticate,
   // @ts-expect-error unknown literal OTP configuration is rejected
   unknown: true,
 });

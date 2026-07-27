@@ -6,6 +6,46 @@ The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
 Passkeys + OTP as composable primitives. Apps choose their flow.
 
+## Current API direction
+
+> **Decided 2026-07-26:** The active usage model is specified in
+> `packages/auth/src/spike/usage-api/`. It supersedes the older pure-primitive,
+> application-orchestrated flow decisions that remain below as history.
+
+`makeAuth` is a small authentication kernel configured by literal objects.
+Sessions are mandatory. Chained OTP and passkey objects are complete trusted
+authentication strategies: they own their feature-specific workflows, while
+core owns builder composition, session establishment after successful
+authentication, and current-user scoping for auth-resource management.
+
+Literal objects are the contract. A one-off implementation may be written
+inline, a fixed reusable implementation is a preconfigured vanilla object, and
+a parameterized reusable implementation may be produced by a `make*` helper.
+Object-producing helpers add no capability; they only package construction or
+retain supplied configuration. Lower-level primitives remain independently
+importable and can be used to implement the same strategy contracts.
+
+A DI operation exists only where core needs an independent decision point:
+different public operations or requests, conditional invocation, a
+cross-strategy security boundary, current-session authority, or an atomic
+boundary. Mechanics that core would only run together belong behind one
+semantic operation. Accordingly OTP exposes complete request and authenticate
+strategy operations, passkey ceremony phases remain independent across
+requests, and credential removal is one atomic strategy operation rather than
+list followed by policy followed by delete.
+
+Strategies normalize successful authentication to at least `{ userId }`.
+Strategy-specific identity binding remains inside each strategy because OTP
+identifier resolution, passkey credential identity, and future OAuth identity
+resolution do not have the same inputs or authority. An operation that becomes
+genuinely identical across strategies moves to `makeAuth`; it is never repeated
+under every chained feature.
+
+Session and passkey management lists return generic application-defined safe
+projections extending stable identifiers. Core treats additional fields as
+opaque and passes them through. Raw storage records, secrets, cryptographic
+material, and internal policy state are never management projections.
+
 ## Core philosophy
 
 - **Primitives-first** — core API is low-level primitives, flows are composed on top
