@@ -2,279 +2,313 @@
  * Compile-time proofs for the usage API candidate.
  *
  * This file is compiled and never executed. Each @ts-expect-error proves that
- * an unsupported chain or public method remains unavailable.
+ * an unsupported chain, configuration, or public method remains unavailable.
  */
 import type {
   Auth,
   AuthFull,
   AuthOtp,
-  AuthSession,
-  AuthSessionOtp,
-  AuthSessionPasskey,
-  OtpFeature,
-  OtpNamespace,
-  PasskeyFeature,
+  AuthPasskey,
+  AuthUser,
+  ChallengeStorage,
+  CredentialStorage,
+  OtpDelivery,
+  OtpStorage,
   PasskeyNamespace,
   SessionAdapter,
   SessionIdentity,
+  SessionSummary,
+  WebAuthnConfig,
+  WithOtpConfig,
+  WithPasskeyConfig,
 } from "./contracts";
 import { makeAuth } from "./contracts";
 
 type SessionCreated = {
-  credential: "created";
+  accessToken: "created";
 };
 
 type SessionRefreshed = {
-  credential: "refreshed";
+  accessToken: "refreshed";
 };
 
-type OtherSessionCreated = {
-  credential: "other";
+type ListedSession = SessionSummary & {
+  device: string;
 };
 
-type StandaloneOtpMethods = {
-  send: (args: { identifier: string }) => Promise<"sent">;
-  verify: (args: { identifier: string; otp: string }) => Promise<"verified">;
+type ResolvedUser = AuthUser & {
+  isNew: boolean;
 };
 
-type SessionOtpMethods = {
-  send: (args: { identifier: string }) => Promise<"sent">;
-  verify: (args: {
-    identifier: string;
-    otp: string;
-  }) => Promise<"session-established">;
-};
-
-type PasskeyMethods = {
-  createRegistrationToken: (args: {
-    userId: string;
-    identifier: string | null;
-  }) => Promise<"registration-token">;
-  validateRegistrationToken: (args: {
-    registrationToken: string;
-  }) => Promise<"registration-grant">;
-  createRegistrationOptions: (args: {
-    registrationToken: string;
-  }) => Promise<"registration-options">;
-  verifyRegistration: (args: {
-    registrationToken: string;
-    credential: RegistrationResponseJSON;
-  }) => Promise<"session-established">;
-  createAuthenticationOptions: () => Promise<"authentication-options">;
-  verifyAuthentication: (args: {
-    credential: AuthenticationResponseJSON;
-  }) => Promise<"session-established">;
-};
-
-declare const session: SessionAdapter<SessionCreated, SessionRefreshed>;
-declare const otp: OtpFeature<
+declare const session: SessionAdapter<
   SessionCreated,
-  StandaloneOtpMethods,
-  SessionOtpMethods
+  SessionRefreshed,
+  ListedSession
 >;
-declare const passkey: PasskeyFeature<SessionCreated, PasskeyMethods>;
-declare const incompatibleOtp: OtpFeature<
-  OtherSessionCreated,
-  StandaloneOtpMethods,
-  SessionOtpMethods
->;
-declare const incompatiblePasskey: PasskeyFeature<
-  OtherSessionCreated,
-  PasskeyMethods
->;
+declare const otpStorage: OtpStorage;
+declare const otpDelivery: OtpDelivery;
+declare const credentialStorage: CredentialStorage;
+declare const challengeStorage: ChallengeStorage;
+declare const webAuthn: WebAuthnConfig;
+
+const otp = {
+  storage: otpStorage,
+  delivery: otpDelivery,
+  generateOtp: () => "123456",
+  ttl: 600_000,
+  authorizeRequest: async ({ identifier }) => identifier.length > 0,
+  resolveUser: async ({ identifier }) => ({
+    userId: identifier,
+    isNew: true,
+  }),
+} satisfies WithOtpConfig<ResolvedUser>;
+
+const passkey = {
+  storage: credentialStorage,
+  challenge: {
+    storage: challengeStorage,
+    ttl: 60_000,
+  },
+  webAuthn,
+  generateChallenge: () => "challenge",
+  createUser: async () => ({
+    userId: "user-1",
+    identifier: null,
+  }),
+  getUser: async (userId) => ({
+    userId,
+    identifier: null,
+  }),
+  authorizeRegistration: async ({ userId }) => userId.length > 0,
+  authorizeAuthentication: async ({ userId }) => userId.length > 0,
+  authorizeRemoval: async ({ credentialCount }) => credentialCount > 1,
+  verifyRegistrationCredential: async () => null,
+  verifyAuthenticationCredential: async () => null,
+} satisfies WithPasskeyConfig;
 
 function expectType<T>(value: T): T {
   return value;
 }
 
-const base = makeAuth({ debug: true });
-const otpOnly = makeAuth({ debug: true }).withOtp(otp);
-const sessionOnly = makeAuth({ debug: true }).withSession(session);
-const sessionOtp = makeAuth({ debug: true }).withSession(session).withOtp(otp);
-const sessionPasskey = makeAuth({ debug: true })
-  .withSession(session)
-  .withPasskey(passkey);
-const otpThenPasskey = makeAuth({ debug: true })
-  .withSession(session)
+const sessionOnly = makeAuth({ debug: true, session });
+const sessionOtp = makeAuth({ debug: true, session }).withOtp(otp);
+const sessionPasskey = makeAuth({ debug: true, session }).withPasskey(passkey);
+const otpThenPasskey = makeAuth({ debug: true, session })
   .withOtp(otp)
   .withPasskey(passkey);
-const passkeyThenOtp = makeAuth({ debug: true })
-  .withSession(session)
+const passkeyThenOtp = makeAuth({ debug: true, session })
   .withPasskey(passkey)
   .withOtp(otp);
 
-/* Every approved chain returns its exact public API. */
+/* The four approved states preserve their exact types. */
 
-expectType<Auth>(base);
-expectType<AuthOtp<StandaloneOtpMethods>>(otpOnly);
-expectType<AuthSession<SessionCreated, SessionRefreshed>>(sessionOnly);
-expectType<AuthSessionOtp<SessionCreated, SessionOtpMethods>>(sessionOtp);
-expectType<AuthSessionPasskey<SessionCreated, PasskeyMethods>>(sessionPasskey);
-expectType<AuthFull<SessionOtpMethods, PasskeyMethods>>(otpThenPasskey);
-expectType<AuthFull<SessionOtpMethods, PasskeyMethods>>(passkeyThenOtp);
+expectType<Auth<SessionCreated, SessionRefreshed, ListedSession>>(sessionOnly);
+expectType<
+  AuthOtp<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
+>(sessionOtp);
+expectType<AuthPasskey<SessionCreated, SessionRefreshed, ListedSession>>(
+  sessionPasskey,
+);
+expectType<
+  AuthFull<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
+>(otpThenPasskey);
+expectType<
+  AuthFull<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
+>(passkeyThenOtp);
 
-/* Chaining preserves the exact method results produced by each feature. */
+/* makeAuth always requires sessions; withSession does not exist. */
 
-expectType<Promise<"sent">>(
-  otpOnly.otp.send({ identifier: "person@example.com" }),
-);
-expectType<Promise<"verified">>(
-  otpOnly.otp.verify({
-    identifier: "person@example.com",
-    otp: "123456",
-  }),
-);
-expectType<Promise<"session-established">>(
-  sessionOtp.otp.verify({
-    identifier: "person@example.com",
-    otp: "123456",
-  }),
-);
-expectType<Promise<"authentication-options">>(
-  sessionPasskey.passkey.createAuthenticationOptions(),
-);
+// @ts-expect-error session is required
+void makeAuth({ debug: true });
 
-/* Session-only auth exposes the complete nested session API. */
+// @ts-expect-error debug is required
+void makeAuth({ session });
+
+// @ts-expect-error unknown base configuration is rejected
+void makeAuth({ debug: true, session, unknown: true });
+
+// @ts-expect-error sessions are configured at makeAuth
+void sessionOnly.withSession;
+
+/* Authentication strategies cannot exist outside session-based makeAuth. */
+
+// @ts-expect-error there is no standalone chained OTP builder
+void makeAuth({ debug: true }).withOtp(otp);
+
+// @ts-expect-error there is no standalone chained passkey builder
+void makeAuth({ debug: true }).withPasskey(passkey);
+
+/* Strategies can be installed once, in either order. */
+
+void sessionOnly.withOtp(otp);
+void sessionOnly.withPasskey(passkey);
+void sessionOtp.withPasskey(passkey);
+void sessionPasskey.withOtp(otp);
+
+// @ts-expect-error OTP is already installed
+void sessionOtp.withOtp;
+
+// @ts-expect-error passkeys are already installed
+void sessionPasskey.withPasskey;
+
+// @ts-expect-error the complete builder is terminal
+void otpThenPasskey.withOtp;
+
+// @ts-expect-error the complete builder is terminal
+void otpThenPasskey.withPasskey;
+
+// @ts-expect-error the complete builder is terminal in the other order
+void passkeyThenOtp.withOtp;
+
+// @ts-expect-error the complete builder is terminal in the other order
+void passkeyThenOtp.withPasskey;
+
+/* Every configured feature is nested and absent before configuration. */
+
+void sessionOnly.session.create;
+void sessionOtp.otp.authenticate;
+void sessionPasskey.passkey.createAuthenticationOptions;
+void otpThenPasskey.otp.request;
+void otpThenPasskey.passkey.list;
+
+// @ts-expect-error OTP does not exist before withOtp
+void sessionOnly.otp;
+
+// @ts-expect-error passkeys do not exist before withPasskey
+void sessionOnly.passkey;
+
+// @ts-expect-error OTP methods are nested
+void sessionOtp.authenticate;
+
+// @ts-expect-error passkey methods are nested
+void sessionPasskey.createAuthenticationOptions;
+
+/* Session-only auth exposes create for bespoke authentication. */
 
 expectType<Promise<SessionCreated>>(
   sessionOnly.session.create({ userId: "user-1" }),
 );
 expectType<Promise<SessionIdentity | null>>(sessionOnly.session.get());
 expectType<Promise<SessionRefreshed>>(sessionOnly.session.refresh());
+expectType<Promise<ListedSession[]>>(sessionOnly.session.list());
 expectType<Promise<void>>(sessionOnly.session.end());
+expectType<Promise<void>>(sessionOnly.session.endAll());
+expectType<Promise<boolean>>(
+  sessionOnly.session.revoke({ sessionId: "session-1" }),
+);
 
-// @ts-expect-error OTP is not exposed before withOtp
-void sessionOnly.otp;
+/* Installed strategies retain session management but internalize creation. */
 
-// @ts-expect-error passkeys are not exposed before withPasskey
-void sessionOnly.passkey;
+void sessionOtp.session.get;
+void sessionOtp.session.list;
+void sessionOtp.session.end;
+void sessionOtp.session.endAll;
+void sessionOtp.session.revoke;
+void sessionPasskey.session.refresh;
+void otpThenPasskey.session.get;
 
-/* Strategy methods are nested and never duplicated at the root. */
+// @ts-expect-error OTP authentication establishes sessions internally
+void sessionOtp.session.create;
 
-void otpOnly.otp.send;
+// @ts-expect-error passkey authentication establishes sessions internally
+void sessionPasskey.session.create;
+
+// @ts-expect-error complete auth establishes sessions through its strategies
+void otpThenPasskey.session.create;
+
+/* OTP public methods describe authentication, not its proof primitive. */
+
+expectType<Promise<{ success: true }>>(
+  sessionOtp.otp.request({ identifier: "person@example.com" }),
+);
+
+const authenticated = sessionOtp.otp.authenticate({
+  identifier: "person@example.com",
+  otp: "123456",
+});
+
+declare const authenticationResult: Awaited<typeof authenticated>;
+
+if (authenticationResult.success) {
+  expectType<boolean>(authenticationResult.data.user.isNew);
+  expectType<SessionCreated>(authenticationResult.data.session);
+}
+
+// @ts-expect-error verify belongs to the independently exported OTP primitive
 void sessionOtp.otp.verify;
+
+/* Passkey exposes orchestrated workflows and credential management. */
+
 void sessionPasskey.passkey.createRegistrationOptions;
-void otpThenPasskey.otp.send;
-void otpThenPasskey.passkey.verifyAuthentication;
+void sessionPasskey.passkey.createAdditionalRegistrationOptions;
+void sessionPasskey.passkey.verifyRegistration;
+void sessionPasskey.passkey.createAuthenticationOptions;
+void sessionPasskey.passkey.verifyAuthentication;
+void sessionPasskey.passkey.list;
+void sessionPasskey.passkey.remove;
 
-// @ts-expect-error OTP methods are nested under auth.otp
-void otpOnly.send;
+// @ts-expect-error registration-token ceremony is internal
+void sessionPasskey.passkey.createRegistrationToken;
 
-// @ts-expect-error session methods are nested under auth.session
-void sessionOnly.get;
+// @ts-expect-error registration-token validation is internal
+void sessionPasskey.passkey.validateRegistrationToken;
 
-// @ts-expect-error passkey methods are nested under auth.passkey
-void sessionPasskey.createAuthenticationOptions;
+expectType<PasskeyNamespace<SessionCreated>>(sessionPasskey.passkey);
 
-/* Installing any strategy hides the public session namespace. */
+/* OTP configuration shows every required DI directly. */
 
-// @ts-expect-error session is hidden by a session-aware OTP strategy
-void sessionOtp.session;
+void otp.storage;
+void otp.delivery;
+void otp.generateOtp;
+void otp.ttl;
+void otp.authorizeRequest;
+void otp.resolveUser;
 
-// @ts-expect-error passkeys are not exposed before withPasskey
-void sessionOtp.passkey;
+const incompleteOtp = {
+  storage: otpStorage,
+  delivery: otpDelivery,
+  generateOtp: () => "123456",
+  ttl: 600_000,
+  resolveUser: async () => ({
+    userId: "user-1",
+    isNew: true,
+  }),
+};
 
-// @ts-expect-error session is hidden by a passkey strategy
-void sessionPasskey.session;
+// @ts-expect-error authorizeRequest is required
+void sessionOnly.withOtp(incompleteOtp);
 
-// @ts-expect-error OTP is not exposed before withOtp
-void sessionPasskey.otp;
+const otpWithUnknownConfiguration = {
+  storage: otpStorage,
+  delivery: otpDelivery,
+  generateOtp: () => "123456",
+  ttl: 600_000,
+  authorizeRequest: async () => true,
+  resolveUser: async () => ({
+    userId: "user-1",
+    isNew: true,
+  }),
+  unknown: true,
+};
 
-// @ts-expect-error session stays hidden when every strategy is configured
-void otpThenPasskey.session;
+// Structural variables may carry additional fields; literal calls are exact.
+void sessionOnly.withOtp(otpWithUnknownConfiguration);
 
-// @ts-expect-error session stays hidden in the alternate approved order
-void passkeyThenOtp.session;
+void sessionOnly.withOtp({
+  storage: otpStorage,
+  delivery: otpDelivery,
+  generateOtp: () => "123456",
+  ttl: 600_000,
+  authorizeRequest: async () => true,
+  resolveUser: async () => ({
+    userId: "user-1",
+    isNew: true,
+  }),
+  // @ts-expect-error unknown literal OTP configuration is rejected
+  unknown: true,
+});
 
-/* A base auth value supports OTP or sessions, but never passkeys directly. */
-
-void base.withOtp;
-void base.withSession;
-
-// @ts-expect-error passkeys require a configured session
-void base.withPasskey(passkey);
-
-// @ts-expect-error no usage namespace exists before a feature is configured
-void base.otp;
-
-// @ts-expect-error no usage namespace exists before a feature is configured
-void base.session;
-
-// @ts-expect-error no usage namespace exists before a feature is configured
-void base.passkey;
-
-/* Standalone OTP is terminal in the approved dependency graph. */
-
-// @ts-expect-error standalone OTP cannot be upgraded to session auth
-void otpOnly.withSession(session);
-
-// @ts-expect-error passkeys cannot be added without first configuring sessions
-void otpOnly.withPasskey(passkey);
-
-// @ts-expect-error OTP cannot be installed twice
-void otpOnly.withOtp(otp);
-
-// @ts-expect-error standalone OTP exposes no session namespace
-void otpOnly.session;
-
-// @ts-expect-error standalone OTP exposes no passkey namespace
-void otpOnly.passkey;
-
-/* Sessions may install either strategy exactly once. */
-
-void sessionOnly.withOtp(otp);
-void sessionOnly.withPasskey(passkey);
-
-// @ts-expect-error session-aware OTP must accept this session's creation result
-void sessionOnly.withOtp(incompatibleOtp);
-
-// @ts-expect-error passkeys must accept this session's creation result
-void sessionOnly.withPasskey(incompatiblePasskey);
-
-// @ts-expect-error sessions cannot be installed twice
-void sessionOnly.withSession(session);
-
-// @ts-expect-error OTP cannot be installed twice
-void sessionOtp.withOtp(otp);
-
-// @ts-expect-error sessions cannot be installed twice
-void sessionOtp.withSession(session);
-
-// @ts-expect-error passkeys cannot be installed twice
-void sessionPasskey.withPasskey(passkey);
-
-// @ts-expect-error sessions cannot be installed twice
-void sessionPasskey.withSession(session);
-
-/* Full auth is terminal regardless of the approved strategy order. */
-
-// @ts-expect-error OTP is already installed
-void otpThenPasskey.withOtp(otp);
-
-// @ts-expect-error passkeys are already installed
-void otpThenPasskey.withPasskey(passkey);
-
-// @ts-expect-error sessions are already installed and hidden
-void otpThenPasskey.withSession(session);
-
-// @ts-expect-error OTP is already installed
-void passkeyThenOtp.withOtp(otp);
-
-// @ts-expect-error passkeys are already installed
-void passkeyThenOtp.withPasskey(passkey);
-
-// @ts-expect-error sessions are already installed and hidden
-void passkeyThenOtp.withSession(session);
-
-/* Configuration is complete and exact. */
-
-// @ts-expect-error debug is required
-void makeAuth({});
-
-// @ts-expect-error unknown base config keys are rejected
-void makeAuth({ debug: true, unknown: true });
-
-/* Public session methods accept values, never framework contexts. */
+/* Public methods accept values, never framework contexts. */
 
 // @ts-expect-error create accepts only an application-authorized userId
 void sessionOnly.session.create({ userId: "user-1", context: {} });
@@ -282,13 +316,9 @@ void sessionOnly.session.create({ userId: "user-1", context: {} });
 // @ts-expect-error get receives no public context
 void sessionOnly.session.get({ context: {} });
 
-// @ts-expect-error refresh receives no public context
-void sessionOnly.session.refresh({ context: {} });
-
-// @ts-expect-error end receives no public context
-void sessionOnly.session.end({ context: {} });
-
-/* The required namespace contracts remain structural. */
-
-expectType<OtpNamespace>(otpOnly.otp);
-expectType<PasskeyNamespace>(sessionPasskey.passkey);
+void sessionOtp.otp.authenticate({
+  identifier: "person@example.com",
+  otp: "123456",
+  // @ts-expect-error authentication receives no public context
+  context: {},
+});

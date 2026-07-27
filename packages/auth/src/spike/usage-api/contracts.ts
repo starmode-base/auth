@@ -1,202 +1,404 @@
 /**
- * Usage API candidate.
+ * Server usage API candidate.
  *
- * This spike specifies the server-side functions returned by configuration.
- * It does not specify token shapes, lifetime policy, persistence, transport,
- * framework context, or mechanism construction. Session implementations and
- * feature factories own those concerns.
+ * Names in this spike are provisional. The contract under examination is the
+ * ownership and composition model: makeAuth always has sessions, chained
+ * features are complete authentication strategies, core orchestrates their
+ * mechanisms and application DIs, and the returned namespaces expose
+ * authentication workflows rather than raw ceremony primitives.
  */
 
-/** The authenticated identity exposed by every session implementation */
+/** Expected command result; infrastructure failures throw */
+export type Result<T, E extends string> =
+  | ([T] extends [void] ? { success: true } : { success: true; data: T })
+  | ([E] extends [never] ? never : { success: false; error: E });
+
+/** The authenticated identity shared by every session implementation */
 export type SessionIdentity = {
   userId: string;
+};
+
+/** Safe session metadata exposed by session management */
+export type SessionSummary = {
+  sessionId: string;
 };
 
 /**
  * Complete injected session implementation.
  *
- * The implementation owns every credential and lifecycle decision. Its
- * operation results are preserved by the public session namespace. get is a
- * repeatable read-only operation; refresh is an explicit operation separate
- * from get.
+ * The implementation owns credential types, lifetime policy, persistence,
+ * transport, and mechanism. Invocation-scoped environment access is closed
+ * over when the adapter is constructed; no framework context enters the
+ * public usage API.
  */
-export type SessionAdapter<CreateResult, RefreshResult> = {
+export type SessionAdapter<
+  CreateResult,
+  RefreshResult,
+  Summary extends SessionSummary,
+> = {
   create: (userId: string) => Promise<CreateResult>;
+  /** Repeatable read-only lookup of the presented session */
+  get: () => Promise<SessionIdentity | null>;
+  /** Explicit renewal; get never performs it implicitly */
+  refresh: () => Promise<RefreshResult>;
+  end: () => Promise<void>;
+  list: (userId: string) => Promise<Summary[]>;
+  endAll: (userId: string) => Promise<void>;
+  /**
+   * Revokes sessionId only when it belongs to userId. False means no matching
+   * owned session existed.
+   */
+  revoke: (userId: string, sessionId: string) => Promise<boolean>;
+};
+
+/** Session management available whether or not a strategy is installed */
+export type SessionManagementNamespace<
+  RefreshResult,
+  Summary extends SessionSummary,
+> = {
   get: () => Promise<SessionIdentity | null>;
   refresh: () => Promise<RefreshResult>;
   end: () => Promise<void>;
+  /** Lists only sessions belonging to the authenticated user */
+  list: () => Promise<Summary[]>;
+  /** Ends every session belonging to the authenticated user */
+  endAll: () => Promise<void>;
+  /** Revokes an owned session; arbitrary userIds are never accepted */
+  revoke: (args: { sessionId: string }) => Promise<boolean>;
 };
 
 /**
- * The least session authority supplied to an authentication feature.
+ * Complete session-only namespace.
  *
- * A feature can establish a session for a verified user but cannot inspect,
- * refresh, or end an existing session through this capability.
+ * create is the escape hatch for applications implementing a bespoke
+ * authentication strategy. Installed strategies retain create internally and
+ * remove it from their ordinary public usage surface.
  */
-export type SessionCreator<CreateResult> = {
-  create: (userId: string) => Promise<CreateResult>;
-};
-
-/** Public session functions returned by withSession */
-export type SessionNamespace<CreateResult, RefreshResult> = {
+export type SessionNamespace<
+  CreateResult,
+  RefreshResult,
+  Summary extends SessionSummary,
+> = SessionManagementNamespace<RefreshResult, Summary> & {
   create: (args: { userId: string }) => Promise<CreateResult>;
-  get: () => Promise<SessionIdentity | null>;
-  refresh: () => Promise<RefreshResult>;
-  end: () => Promise<void>;
+};
+
+/** OTP record exchanged with storage; it does not prescribe a schema */
+export type OtpRecord = {
+  identifier: string;
+  otp: string;
+  expiresAt: Date;
+};
+
+/** OTP mechanism storage */
+export type OtpStorage = {
+  store: (record: OtpRecord) => Promise<void>;
+  /** A verification attempt consumes the OTP */
+  verify: (identifier: string, otp: string) => Promise<boolean>;
+};
+
+/** Out-of-band OTP delivery */
+export type OtpDelivery = {
+  send: (identifier: string, otp: string) => Promise<void>;
+};
+
+/** Minimum application user established by an authentication strategy */
+export type AuthUser = {
+  userId: string;
 };
 
 /**
- * Minimum public OTP surface.
+ * Complete literal configuration for OTP authentication.
  *
- * Concrete OTP features retain their exact method return types and may return
- * different implementations when installed with and without sessions.
+ * authorizeRequest decides whether an OTP may be issued. A denial is not
+ * revealed by request's result. resolveUser runs only after OTP verification;
+ * null denies authentication. Core then creates the session for the returned
+ * userId. Applications may return additional data such as isNew.
  */
-export type OtpNamespace = {
-  send: (args: { identifier: string }) => Promise<unknown>;
-  verify: (args: { identifier: string; otp: string }) => Promise<unknown>;
+export type WithOtpConfig<User extends AuthUser> = {
+  storage: OtpStorage;
+  delivery: OtpDelivery;
+  generateOtp: () => string;
+  ttl: number;
+  authorizeRequest: (args: { identifier: string }) => Promise<boolean>;
+  resolveUser: (args: { identifier: string }) => Promise<User | null>;
+};
+
+/** Result of the provisional orchestrated OTP authentication operation */
+export type OtpAuthenticateResult<
+  User extends AuthUser,
+  SessionCreateResult,
+> = Result<
+  {
+    user: User;
+    session: SessionCreateResult;
+  },
+  "invalid_otp" | "authentication_disabled"
+>;
+
+/**
+ * OTP authentication workflows.
+ *
+ * The independently exported OTP primitive may use request and verify names.
+ * This namespace deliberately names the operation authenticate because it
+ * resolves an application user and establishes a session.
+ */
+export type OtpNamespace<User extends AuthUser, SessionCreateResult> = {
+  request: (args: { identifier: string }) => Promise<Result<void, never>>;
+  authenticate: (args: {
+    identifier: string;
+    otp: string;
+  }) => Promise<OtpAuthenticateResult<User, SessionCreateResult>>;
+};
+
+/** Passkey credential exchanged with storage */
+export type CredentialRecord = {
+  credentialId: string;
+  userId: string;
+  publicKey: Uint8Array;
+  counter: number;
+  transports: AuthenticatorTransport[] | null;
+};
+
+/** Safe passkey metadata returned by management operations */
+export type PasskeySummary = {
+  credentialId: string;
+  transports: AuthenticatorTransport[] | null;
 };
 
 /**
- * Minimum public passkey surface.
+ * Passkey credential storage.
  *
- * The feature owns WebAuthn ceremony behavior and exact result types. The
- * usage API fixes only the server-side operations and their inputs.
+ * delete must scope deletion to userId and return false when credentialId is
+ * absent or belongs to another user.
  */
-export type PasskeyNamespace = {
-  createRegistrationToken: (args: {
+export type CredentialStorage = {
+  store: (record: CredentialRecord) => Promise<void>;
+  get: (credentialId: string) => Promise<CredentialRecord | null>;
+  list: (userId: string) => Promise<CredentialRecord[]>;
+  setCounter: (credentialId: string, counter: number) => Promise<void>;
+  delete: (userId: string, credentialId: string) => Promise<boolean>;
+};
+
+/** The two registration workflows have different session consequences */
+export type RegistrationIntent = "sign-up" | "add";
+
+/** Single-use WebAuthn challenge state */
+export type ChallengeRecord = {
+  challenge: string;
+  userId: string | null;
+  registrationIntent: RegistrationIntent | null;
+  expiresAt: Date;
+};
+
+/** Single-use challenge storage */
+export type ChallengeStorage = {
+  store: (record: ChallengeRecord) => Promise<void>;
+  /** Atomic fetch-and-delete */
+  take: (challenge: string) => Promise<ChallengeRecord | null>;
+};
+
+/** WebAuthn relying-party identity */
+export type WebAuthnConfig = {
+  rpId: string;
+  rpName: string;
+  allowedOrigins: string[];
+};
+
+/** Application identity required to create registration options */
+export type PasskeyUser = {
+  userId: string;
+  identifier: string | null;
+};
+
+/** Verified data persisted after registration */
+export type VerifiedRegistrationCredential = {
+  credentialId: string;
+  publicKey: Uint8Array;
+  counter: number;
+  transports: AuthenticatorTransport[] | null;
+};
+
+/** Verified authentication data persisted after an assertion */
+export type VerifiedAuthenticationCredential = {
+  counter: number;
+};
+
+/**
+ * Complete literal configuration for passkey authentication and management.
+ *
+ * Core owns registration, authentication, session establishment, current-user
+ * scoping, and management sequencing. These DIs provide application identity,
+ * policy, persistence, challenge generation, and WebAuthn verification.
+ */
+export type WithPasskeyConfig = {
+  storage: CredentialStorage;
+  challenge: {
+    storage: ChallengeStorage;
+    ttl: number;
+  };
+  webAuthn: WebAuthnConfig;
+  generateChallenge: () => string;
+  createUser: () => Promise<PasskeyUser | null>;
+  getUser: (userId: string) => Promise<PasskeyUser | null>;
+  authorizeRegistration: (args: {
     userId: string;
-    identifier: string | null;
-  }) => Promise<unknown>;
-  validateRegistrationToken: (args: {
-    registrationToken: string;
-  }) => Promise<unknown>;
-  createRegistrationOptions: (args: {
-    registrationToken: string;
-  }) => Promise<unknown>;
-  verifyRegistration: (args: {
-    registrationToken: string;
+    intent: RegistrationIntent;
+  }) => Promise<boolean>;
+  authorizeAuthentication: (args: { userId: string }) => Promise<boolean>;
+  authorizeRemoval: (args: {
+    userId: string;
+    credentialId: string;
+    credentialCount: number;
+  }) => Promise<boolean>;
+  verifyRegistrationCredential: (args: {
     credential: RegistrationResponseJSON;
-  }) => Promise<unknown>;
-  createAuthenticationOptions: () => Promise<unknown>;
+    challenge: string;
+    webAuthn: WebAuthnConfig;
+  }) => Promise<VerifiedRegistrationCredential | null>;
+  verifyAuthenticationCredential: (args: {
+    credential: AuthenticationResponseJSON;
+    challenge: string;
+    stored: CredentialRecord;
+    webAuthn: WebAuthnConfig;
+  }) => Promise<VerifiedAuthenticationCredential | null>;
+};
+
+/** Result of completing either passkey registration workflow */
+export type VerifyRegistrationResult<SessionCreateResult> = Result<
+  | {
+      intent: "sign-up";
+      userId: string;
+      session: SessionCreateResult;
+    }
+  | {
+      intent: "add";
+      userId: string;
+    },
+  "registration_disabled" | "challenge_expired" | "verification_failed"
+>;
+
+/** Passkey authentication and credential-management workflows */
+export type PasskeyNamespace<SessionCreateResult> = {
+  /** Begins passkey-first signup using createUser */
+  createRegistrationOptions: () => Promise<
+    Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
+  >;
+  /** Begins adding a passkey for the authenticated user */
+  createAdditionalRegistrationOptions: () => Promise<
+    Result<
+      PublicKeyCredentialCreationOptionsJSON,
+      "not_authenticated" | "registration_disabled"
+    >
+  >;
+  /** Challenge state determines whether completion signs in or adds a passkey */
+  verifyRegistration: (args: {
+    credential: RegistrationResponseJSON;
+  }) => Promise<VerifyRegistrationResult<SessionCreateResult>>;
+  createAuthenticationOptions: () => Promise<
+    Result<PublicKeyCredentialRequestOptionsJSON, never>
+  >;
+  /** Verifies the assertion and establishes a session */
   verifyAuthentication: (args: {
     credential: AuthenticationResponseJSON;
-  }) => Promise<unknown>;
+  }) => Promise<
+    Result<
+      {
+        userId: string;
+        session: SessionCreateResult;
+      },
+      | "authentication_disabled"
+      | "credential_not_found"
+      | "challenge_expired"
+      | "verification_failed"
+    >
+  >;
+  /** Lists only passkeys belonging to the authenticated user */
+  list: () => Promise<Result<PasskeySummary[], "not_authenticated">>;
+  /** Removes only an owned passkey after authorizeRemoval permits it */
+  remove: (args: {
+    credentialId: string;
+  }) => Promise<
+    Result<
+      void,
+      "not_authenticated" | "credential_not_found" | "removal_disabled"
+    >
+  >;
 };
 
-/**
- * OTP configuration feature.
- *
- * OTP can be installed alone for verification or after sessions for an
- * authentication flow. Each installation produces its complete public OTP
- * namespace. The builder does not inspect either implementation.
- */
-export type OtpFeature<
-  SessionCreateResult,
-  StandaloneMethods extends OtpNamespace,
-  SessionMethods extends OtpNamespace,
+/** makeAuth always configures sessions */
+export type MakeAuthConfig<
+  CreateResult,
+  RefreshResult,
+  Summary extends SessionSummary,
 > = {
-  makeStandaloneMethods: () => StandaloneMethods;
-  makeSessionMethods: (
-    session: SessionCreator<SessionCreateResult>,
-  ) => SessionMethods;
-};
-
-/**
- * Passkey configuration feature.
- *
- * Passkeys are installed only after sessions. The builder supplies the
- * session-creation capability retained from withSession and exposes the
- * returned methods as the passkey namespace.
- */
-export type PasskeyFeature<
-  SessionCreateResult,
-  Methods extends PasskeyNamespace,
-> = {
-  makeSessionMethods: (session: SessionCreator<SessionCreateResult>) => Methods;
-};
-
-/** Input for the usage API candidate */
-export type MakeAuthConfig = {
   debug: boolean;
+  session: SessionAdapter<CreateResult, RefreshResult, Summary>;
 };
 
-/** No feature configured */
-export type Auth = {
-  withOtp: <
-    SessionCreateResult,
-    StandaloneMethods extends OtpNamespace,
-    SessionMethods extends OtpNamespace,
-  >(
-    otp: OtpFeature<SessionCreateResult, StandaloneMethods, SessionMethods>,
-  ) => AuthOtp<StandaloneMethods>;
-  withSession: <CreateResult, RefreshResult>(
-    session: SessionAdapter<CreateResult, RefreshResult>,
-  ) => AuthSession<CreateResult, RefreshResult>;
-};
-
-/** Standalone OTP verification */
-export type AuthOtp<Methods extends OtpNamespace> = {
-  otp: Methods;
-};
-
-/**
- * Sessions without an authentication strategy.
- *
- * The public session namespace permits applications to build bespoke
- * authentication strategies over create. Installing any strategy hides this
- * namespace while retaining the session internally for remaining features.
- */
-export type AuthSession<CreateResult, RefreshResult> = {
-  session: SessionNamespace<CreateResult, RefreshResult>;
-  withOtp: <
-    StandaloneMethods extends OtpNamespace,
-    SessionMethods extends OtpNamespace,
-  >(
-    otp: OtpFeature<CreateResult, StandaloneMethods, SessionMethods>,
-  ) => AuthSessionOtp<CreateResult, SessionMethods>;
-  withPasskey: <Methods extends PasskeyNamespace>(
-    passkey: PasskeyFeature<CreateResult, Methods>,
-  ) => AuthSessionPasskey<CreateResult, Methods>;
-};
-
-/** Session-aware OTP with passkeys still available to configure */
-export type AuthSessionOtp<
+/** Sessions configured; either authentication strategy may be installed */
+export type Auth<
   SessionCreateResult,
-  OtpMethods extends OtpNamespace,
+  SessionRefreshResult,
+  Summary extends SessionSummary,
 > = {
-  otp: OtpMethods;
-  withPasskey: <PasskeyMethods extends PasskeyNamespace>(
-    passkey: PasskeyFeature<SessionCreateResult, PasskeyMethods>,
-  ) => AuthFull<OtpMethods, PasskeyMethods>;
+  session: SessionNamespace<SessionCreateResult, SessionRefreshResult, Summary>;
+  withOtp: <User extends AuthUser>(
+    config: WithOtpConfig<User>,
+  ) => AuthOtp<SessionCreateResult, SessionRefreshResult, Summary, User>;
+  withPasskey: (
+    config: WithPasskeyConfig,
+  ) => AuthPasskey<SessionCreateResult, SessionRefreshResult, Summary>;
 };
 
-/** Session-aware passkeys with OTP still available to configure */
-export type AuthSessionPasskey<
+/** Sessions plus OTP authentication; passkeys may still be installed */
+export type AuthOtp<
   SessionCreateResult,
-  PasskeyMethods extends PasskeyNamespace,
+  SessionRefreshResult,
+  Summary extends SessionSummary,
+  User extends AuthUser,
 > = {
-  passkey: PasskeyMethods;
-  withOtp: <
-    StandaloneMethods extends OtpNamespace,
-    SessionMethods extends OtpNamespace,
-  >(
-    otp: OtpFeature<SessionCreateResult, StandaloneMethods, SessionMethods>,
-  ) => AuthFull<SessionMethods, PasskeyMethods>;
+  session: SessionManagementNamespace<SessionRefreshResult, Summary>;
+  otp: OtpNamespace<User, SessionCreateResult>;
+  withPasskey: (
+    config: WithPasskeyConfig,
+  ) => AuthFull<SessionCreateResult, SessionRefreshResult, Summary, User>;
 };
 
-/** Sessions with both shipped authentication strategies */
+/** Sessions plus passkey authentication; OTP may still be installed */
+export type AuthPasskey<
+  SessionCreateResult,
+  SessionRefreshResult,
+  Summary extends SessionSummary,
+> = {
+  session: SessionManagementNamespace<SessionRefreshResult, Summary>;
+  passkey: PasskeyNamespace<SessionCreateResult>;
+  withOtp: <User extends AuthUser>(
+    config: WithOtpConfig<User>,
+  ) => AuthFull<SessionCreateResult, SessionRefreshResult, Summary, User>;
+};
+
+/** Sessions plus both authentication strategies; the builder is complete */
 export type AuthFull<
-  OtpMethods extends OtpNamespace,
-  PasskeyMethods extends PasskeyNamespace,
+  SessionCreateResult,
+  SessionRefreshResult,
+  Summary extends SessionSummary,
+  User extends AuthUser,
 > = {
-  otp: OtpMethods;
-  passkey: PasskeyMethods;
+  session: SessionManagementNamespace<SessionRefreshResult, Summary>;
+  otp: OtpNamespace<User, SessionCreateResult>;
+  passkey: PasskeyNamespace<SessionCreateResult>;
 };
 
 /**
  * Candidate dependency-aware builder.
  *
- * This declaration is a compile-time usage probe. Runtime construction and
- * the internal retention of configured capabilities are not specified here.
+ * This declaration proves the server usage shape only. Runtime orchestration
+ * is not implemented in this spike.
  */
-export declare function makeAuth(config: MakeAuthConfig): Auth;
+export declare function makeAuth<
+  SessionCreateResult,
+  SessionRefreshResult,
+  Summary extends SessionSummary,
+>(
+  config: MakeAuthConfig<SessionCreateResult, SessionRefreshResult, Summary>,
+): Auth<SessionCreateResult, SessionRefreshResult, Summary>;
