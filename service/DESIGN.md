@@ -10,14 +10,14 @@ The caller never controls email content: fixed template, OTP shape-locked (digit
 
 1. **Provision** — `POST /keys { email }` → disabled key + activation URL. No auth, no email sent. Unactivated keys expire in 7d.
 2. **Activate** — human opens the activation URL: Turnstile + one button → key live in sandbox. No inbox round-trip; inbox control is proven at claim instead. Turnstile prices key farming (the spray loop: one key per victim, one send each — invisible to per-key and per-recipient limits). Solver farms run ~$1–2/1k, so the caps stay.
-3. **Sandbox** — sends only to the pinned address (the provisioning email). Separate disposable subdomain. Claim link in every footer.
-4. **Claim** — the link only ever lands in the pinned inbox; receiving it is the verification. Turnstile, passkey account (dogfood the library), confirm → pin lifted, production subdomain and quotas, no expiry. Key survives unchanged (2026-07-26, reversal: rotation broke the running app at the moment of conversion; leak risk is bounded by the dead content channel + caps + kill switch; rotation is self-serve). Further keys mint from the account, born production — the account is the accountability unit.
+3. **Sandbox** — sends only to the pinned address (the provisioning email). Claim link in every footer.
+4. **Claim** — the link only ever lands in the pinned inbox; receiving it is the verification. Turnstile, passkey account (dogfood the library), confirm → pin lifted, claimed quotas, no expiry. Key survives unchanged (2026-07-26, reversal: rotation broke the running app at the moment of conversion; leak risk is bounded by the dead content channel + caps + kill switch; rotation is self-serve). Further keys mint from the account, born production — the account is the accountability unit.
 
 ## Quotas
 
-Placeholders — tune against Resend pricing before launch.
+Placeholders — final numbers under discussion.
 
-| Limit                                        | Sandbox                      | Production |
+| Limit                                        | Sandbox                      | Claimed    |
 | -------------------------------------------- | ---------------------------- | ---------- |
 | Recipients                                   | 1 (the pinned address)       | any        |
 | Sends per key per day                        | 50                           | 100        |
@@ -39,8 +39,8 @@ Unique send id per email; report link in the footer. The report is a POST button
 
 ## Reputation
 
-- Sandbox and production subdomains split; sandbox disposable, rotated.
-- Resend bounce/complaint webhooks → auto-suppression + per-key bounce-rate kill switch — fast and automatic, an ops commitment, not a config line. Bounce rate is what gets transactional senders blocked; abuse traffic targets dead addresses.
+- One sending domain (2026-07-27): `otp.auth.ax` — never the apex (subdomains are disposable; the apex will carry other mail someday). Sandbox and claimed share it. A burn rotates to a fresh subdomain — invisible to apps since the service owns the From, but reputation rewarms from zero. Split sandbox onto its own subdomain only if metrics prove it drags bounce/complaint rates. Reputation is scored per domain and per IP; shared-IP reputation is the ESP's job, the domain is the lever we own and keep across providers.
+- Bounce/complaint events (`message.bounced`/`message.complained` via Queues subscription) → auto-suppression + per-key bounce-rate kill switch — fast and automatic, an ops commitment, not a config line. Bounce rate is what gets transactional senders blocked; abuse traffic targets dead addresses.
 - 202-always; bounces feed internal reputation only.
 - Disposable-domain recipient policy — undecided: traps hurt the domain, disposables can be legit sign-ups.
 
@@ -57,13 +57,13 @@ Unique send id per email; report link in the footer. The report is a POST button
 
 - One TanStack Start app on Workers: API (server routes over plain functions), activation/claim/abuse pages, dashboard, marketing (prerendered → edge cache). No API framework — Hono was considered for later API extraction, but the API and dashboard are permanently DB-adjacent; marketing is the only piece that ever splits (to Astro, if it needs its own cadence). (2026-07-27)
 - Neon Postgres + Hyperdrive + Smart Placement (2026-07-27). Counters are single-statement conditional writes (increment-if-under-cap, `RETURNING`). One relational DB: keys, counters, send log, suppression, accounts. Durable Objects in reserve for hot counters — the global budget is the single-row candidate. Previews connect direct; Hyperdrive production-only (static configs).
-- ESP: Resend.
+- ESP: Cloudflare Email Service (2026-07-27; public beta accepted at this service's stakes). Workers binding (no API key), auto SPF/DKIM/DMARC on the zone, built-in suppression with complaint feedback loops, lifecycle events to a Queue — `bounced`/`complained` feed the kill switch. Events shipped 2026-07-15; exercise hard in dev before trusting the kill switch to them. $0.35/1k after 3k/mo included on Workers Paid. Fallback: SES ($0.10/1k, mature) — the migration surface is one fixed template and one send call.
 - Key format: recognizable prefix, registered with GitHub secret scanning. A leaked key is low-value by design — quotas bound the damage, rotation is cheap, and the content channel is dead regardless.
 - Library integration: service 429 surfaces as `rate_limited` via widened `send` — THREAT-MODEL.md.
 
 ## Later
 
-- Quota tiers: behavior-based auto-raise, card verification (no charge, identity signal), enterprise.
+- Quota raises — only if real demand appears; the intended upgrade path is graduating to your own delivery adapter, not a paid tier here.
 - End-user IP forwarding — THREAT-MODEL.md.
 - Verification-outcome feedback — send-only trade-off accepted 2026-07-17, THREAT-MODEL.md.
 - SMS transport.
