@@ -39,14 +39,14 @@ This is the central security property: a leaked or malicious key can create unwa
 
 ## Key lifecycle
 
-| State | May send | Recipient policy | Expiry |
-| --- | --- | --- | --- |
-| Provisioned | No | None | 7 days after provisioning |
-| Activated, unpinned | Yes | First admitted recipient becomes the pin | 30 days without an admitted send |
-| Activated, pinned | Yes | Exact pin only | 30 days without an admitted send |
-| Claimed | Yes | Up to 100 recipient identities | None |
-| Suspended | No | Preserved | Operator or future recovery policy |
-| Revoked or expired | No | Terminal | — |
+| State               | May send | Recipient policy                         | Expiry                             |
+| ------------------- | -------- | ---------------------------------------- | ---------------------------------- |
+| Provisioned         | No       | None                                     | 7 days after provisioning          |
+| Activated, unpinned | Yes      | First admitted recipient becomes the pin | 30 days without an admitted send   |
+| Activated, pinned   | Yes      | Exact pin only                           | 30 days without an admitted send   |
+| Claimed             | Yes      | Up to 100 recipient identities           | None                               |
+| Suspended           | No       | Preserved                                | Operator or future recovery policy |
+| Revoked or expired  | No       | Terminal                                 | —                                  |
 
 ### Provision
 
@@ -169,17 +169,17 @@ Only sends offered to the provider reserve global cost capacity. A reservation m
 
 “No delivery oracle” does not mean that every API mistake returns `202`. It means suppression and downstream recipient outcomes are hidden after the request has passed visible policy.
 
-| Status | Meaning |
-| --- | --- |
-| `202` | Accepted. The email may have been handed to the provider or silently suppressed. |
-| `400` | Invalid JSON, recipient, or OTP shape. |
-| `401` | Missing or invalid API key. |
-| `403 key_unavailable` | The key is provisioned, expired, revoked, or suspended. |
-| `403 pin_mismatch` | An unclaimed key attempted to send anywhere except its exact pin. |
-| `403 recipient_limit_reached` | A claimed key attempted to add recipient identity 101. Existing recipients still work. |
-| `429 key_daily_limit` | The key has admitted 100 sends in the current UTC day. Includes `Retry-After`. |
-| `429 global_daily_limit` | The service-wide daily cost slice is exhausted. Includes `Retry-After`. |
-| `503` | A non-recipient-specific infrastructure failure occurred. Admission state might already be committed, so the caller must not retry blindly. |
+| Status                        | Meaning                                                                                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `202`                         | Accepted. The email may have been handed to the provider or silently suppressed.                                                            |
+| `400`                         | Invalid JSON, recipient, or OTP shape.                                                                                                      |
+| `401`                         | Missing or invalid API key.                                                                                                                 |
+| `403 key_unavailable`         | The key is provisioned, expired, revoked, or suspended.                                                                                     |
+| `403 pin_mismatch`            | An unclaimed key attempted to send anywhere except its exact pin.                                                                           |
+| `403 recipient_limit_reached` | A claimed key attempted to add recipient identity 101. Existing recipients still work.                                                      |
+| `429 key_daily_limit`         | The key has admitted 100 sends in the current UTC day. Includes `Retry-After`.                                                              |
+| `429 global_daily_limit`      | The service-wide daily cost slice is exhausted. Includes `Retry-After`.                                                                     |
+| `503`                         | A non-recipient-specific infrastructure failure occurred. Admission state might already be committed, so the caller must not retry blindly. |
 
 `recipient_limit_reached` explains that the application has graduated from the relay and must replace the delivery adapter with its own sender, such as SES or Resend. It is not a paid-upgrade prompt.
 
@@ -200,12 +200,12 @@ The message has matching plain-text and HTML parts. It contains no marketing, ap
 
 ## Limits
 
-| Limit | Activated | Claimed |
-| --- | --- | --- |
-| Lifetime recipient set | Exact pin | 100 canonical recipient identities, including the pin |
-| Admitted sends per UTC day | 100 | 100 |
-| Active claimed keys per owner inbox | — | 5 |
-| Expiry | 7 days unactivated; then 30 days without an admitted send | None |
+| Limit                               | Activated                                                 | Claimed                                               |
+| ----------------------------------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| Lifetime recipient set              | Exact pin                                                 | 100 canonical recipient identities, including the pin |
+| Admitted sends per UTC day          | 100                                                       | 100                                                   |
+| Active claimed keys per owner inbox | —                                                         | 5                                                     |
+| Expiry                              | 7 days unactivated; then 30 days without an admitted send | None                                                  |
 
 The global cost ceiling is a monthly email budget of about $50, enforced as a conservative daily send allowance shared by every key. The deployed allowance is an integer configuration value derived from current provider pricing and the billing period; unused daily capacity does not roll forward.
 

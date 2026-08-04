@@ -80,30 +80,30 @@ The relay's custom recovery flow must not override provider suppression. Provide
 
 ## Load-bearing decisions
 
-| Decision | Why it is architectural |
-| --- | --- |
-| Caller content is limited to a shape-checked OTP and one recipient | This closes the spam and phishing payload channel. |
-| The key is the project; the verified inbox is the identity | Limits and enforcement need an accountable owner without introducing accounts. |
-| Activation proves a human; claim proves inbox access | Combining them would either add an unnecessary email round trip or let an unverified address become the identity. |
-| Claim uses the magic link already present in an OTP email | A second claim OTP duplicates the proof and complicates the flow. |
-| Recipient reach, daily volume, and global cost have separate limits | Each bounds a different abuse dimension and is enforced over different state. |
-| Recipient sets are append-only | Recycling slots would allow one key to rotate through unlimited victims. |
-| Existing recipients keep working when a set is full | A bot filling the set must not sign out existing users. |
-| Delivery uses the address as provided; counting and suppression use a conservative canonical identity | Alias variants must not bypass limits, but unsafe global normalization can merge different mailboxes. |
-| Suppression is invisible to key holders | Observable suppression becomes an address-membership oracle. |
-| Shared per-recipient OTP budgets are not used | An attacker could exhaust a victim's budget and block legitimate sign-in from another application. |
-| Pinning, bounded-set insertion, counters, claiming, and suspension are atomic decisions | Read-then-write implementations fail under concurrency. |
-| The relay does not trust caller-supplied end-user IPs | The relay sees application servers and cannot independently verify forwarded client identity. |
-| OTP mail has its own sending subdomain | Reputation damage must not spread to the apex or future mail categories. |
+| Decision                                                                                              | Why it is architectural                                                                                           |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Caller content is limited to a shape-checked OTP and one recipient                                    | This closes the spam and phishing payload channel.                                                                |
+| The key is the project; the verified inbox is the identity                                            | Limits and enforcement need an accountable owner without introducing accounts.                                    |
+| Activation proves a human; claim proves inbox access                                                  | Combining them would either add an unnecessary email round trip or let an unverified address become the identity. |
+| Claim uses the magic link already present in an OTP email                                             | A second claim OTP duplicates the proof and complicates the flow.                                                 |
+| Recipient reach, daily volume, and global cost have separate limits                                   | Each bounds a different abuse dimension and is enforced over different state.                                     |
+| Recipient sets are append-only                                                                        | Recycling slots would allow one key to rotate through unlimited victims.                                          |
+| Existing recipients keep working when a set is full                                                   | A bot filling the set must not sign out existing users.                                                           |
+| Delivery uses the address as provided; counting and suppression use a conservative canonical identity | Alias variants must not bypass limits, but unsafe global normalization can merge different mailboxes.             |
+| Suppression is invisible to key holders                                                               | Observable suppression becomes an address-membership oracle.                                                      |
+| Shared per-recipient OTP budgets are not used                                                         | An attacker could exhaust a victim's budget and block legitimate sign-in from another application.                |
+| Pinning, bounded-set insertion, counters, claiming, and suspension are atomic decisions               | Read-then-write implementations fail under concurrency.                                                           |
+| The relay does not trust caller-supplied end-user IPs                                                 | The relay sees application servers and cannot independently verify forwarded client identity.                     |
+| OTP mail has its own sending subdomain                                                                | Reputation damage must not spread to the apex or future mail categories.                                          |
 
 ## Current product limits
 
-| Limit | Activated | Claimed |
-| --- | --- | --- |
-| Lifetime recipient set | Exact pin | 100 recipient identities, including the pin |
-| Sends per key per day | 100 | 100 |
-| Active claimed keys per verified inbox | — | 5 |
-| Key expiry | 7 days unactivated; 30 days inactive after activation | None |
+| Limit                                  | Activated                                             | Claimed                                     |
+| -------------------------------------- | ----------------------------------------------------- | ------------------------------------------- |
+| Lifetime recipient set                 | Exact pin                                             | 100 recipient identities, including the pin |
+| Sends per key per day                  | 100                                                   | 100                                         |
+| Active claimed keys per verified inbox | —                                                     | 5                                           |
+| Key expiry                             | 7 days unactivated; 30 days inactive after activation | None                                        |
 
 These values are public and configurable in source control. They may change when running software supplies evidence, but implementations must not quietly reinterpret them.
 
@@ -123,25 +123,25 @@ Cloudflare Email Service and its event path are new enough that they must be exe
 
 These scenarios must stay visible. A scenario is resolved before implementation only when it could change a boundary or invalidate the next slice.
 
-| Scenario | Architectural constraint | When to resolve |
-| --- | --- | --- |
-| Two first sends race with different recipients | Exactly one pin may win. | Pinning slice; prove with a concurrent test. |
-| Two claims race at the five-key owner cap | The cap cannot be exceeded. | Claim slice; prove the storage boundary. |
-| Concurrent new recipients race at slot 100 | The set cannot exceed 100. | Claimed-send slice; prove the storage boundary. |
-| A claim link is fetched by a preview bot | Fetching alone must not claim. | Claim slice. |
-| A claim email is forwarded | The link is bearer authority, so forwarding delegates claim power. | Accepted property; make it explicit in UX. |
-| Alias forms bypass recipient counting or suppression | Canonicalization must close known provider aliases without merging unrelated mailboxes. | Recipient-storage slice; test provider rules. |
-| A bot fills a claimed key's recipient set through the application's signup flow | Slots cannot be recycled; re-keying is the recovery until verification feedback exists. | Key-management slice. |
-| A report is accidental | Recovery requires inbox control and cannot be initiated by the sender. | Reporting slice; research and test the flow. |
-| An unclaimed key receives a report | There is no verified inbox to strike. | Reporting slice; decide key-level containment. |
-| Custom and provider suppression disagree | Provider suppression always wins. | Reporting/event slice. |
-| Email events are duplicated, delayed, or lost | Enforcement must be idempotent and operationally observable. | Provider-event spike before public launch. |
-| A claimed key is lost or leaked | Rotation, revocation, and owner recovery must preserve the five-key and strike model. | Key-management slice. |
-| The lifetime recipient limit is surfaced through the auth library | A permanent graduation outcome must not masquerade as a temporary rate limit. | Delivery-adapter slice. |
-| The global counter becomes hot | Correctness comes before optimization; move only after measuring contention. | Load testing. |
-| Send history contains recipient data | Retention must support reports and provider events without becoming indefinite storage. | Data-model slice and privacy review. |
-| Disposable inboxes multiply claimed keys | Blocking them may reject legitimate development and privacy use cases. | Measure after launch; do not guess. |
-| The relay never sees OTP verification outcomes | Bot-triggered sends consume recipient slots even when no OTP is verified. | Accepted launch trade-off; revisit with verification feedback. |
+| Scenario                                                                        | Architectural constraint                                                                | When to resolve                                                |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Two first sends race with different recipients                                  | Exactly one pin may win.                                                                | Pinning slice; prove with a concurrent test.                   |
+| Two claims race at the five-key owner cap                                       | The cap cannot be exceeded.                                                             | Claim slice; prove the storage boundary.                       |
+| Concurrent new recipients race at slot 100                                      | The set cannot exceed 100.                                                              | Claimed-send slice; prove the storage boundary.                |
+| A claim link is fetched by a preview bot                                        | Fetching alone must not claim.                                                          | Claim slice.                                                   |
+| A claim email is forwarded                                                      | The link is bearer authority, so forwarding delegates claim power.                      | Accepted property; make it explicit in UX.                     |
+| Alias forms bypass recipient counting or suppression                            | Canonicalization must close known provider aliases without merging unrelated mailboxes. | Recipient-storage slice; test provider rules.                  |
+| A bot fills a claimed key's recipient set through the application's signup flow | Slots cannot be recycled; re-keying is the recovery until verification feedback exists. | Key-management slice.                                          |
+| A report is accidental                                                          | Recovery requires inbox control and cannot be initiated by the sender.                  | Reporting slice; research and test the flow.                   |
+| An unclaimed key receives a report                                              | There is no verified inbox to strike.                                                   | Reporting slice; decide key-level containment.                 |
+| Custom and provider suppression disagree                                        | Provider suppression always wins.                                                       | Reporting/event slice.                                         |
+| Email events are duplicated, delayed, or lost                                   | Enforcement must be idempotent and operationally observable.                            | Provider-event spike before public launch.                     |
+| A claimed key is lost or leaked                                                 | Rotation, revocation, and owner recovery must preserve the five-key and strike model.   | Key-management slice.                                          |
+| The lifetime recipient limit is surfaced through the auth library               | A permanent graduation outcome must not masquerade as a temporary rate limit.           | Delivery-adapter slice.                                        |
+| The global counter becomes hot                                                  | Correctness comes before optimization; move only after measuring contention.            | Load testing.                                                  |
+| Send history contains recipient data                                            | Retention must support reports and provider events without becoming indefinite storage. | Data-model slice and privacy review.                           |
+| Disposable inboxes multiply claimed keys                                        | Blocking them may reject legitimate development and privacy use cases.                  | Measure after launch; do not guess.                            |
+| The relay never sees OTP verification outcomes                                  | Bot-triggered sends consume recipient slots even when no OTP is verified.               | Accepted launch trade-off; revisit with verification feedback. |
 
 ## Incremental build
 
