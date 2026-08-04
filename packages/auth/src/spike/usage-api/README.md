@@ -172,6 +172,18 @@ authentication. Once a shipped strategy is installed, that strategy returns
 an authenticated user to core and core creates the session. Applications keep
 session lookup, renewal, termination, and management.
 
+| Configuration          | Public session API                                            |
+| ---------------------- | ------------------------------------------------------------- |
+| Sessions only          | `create`, `get`, `refresh`, `end`, `list`, `endAll`, `revoke` |
+| Sessions plus OTP      | `get`, `refresh`, `end`, `list`, `endAll`, `revoke`           |
+| Sessions plus passkeys | `get`, `refresh`, `end`, `list`, `endAll`, `revoke`           |
+| Sessions plus both     | `get`, `refresh`, `end`, `list`, `endAll`, `revoke`           |
+
+Strategy configuration determines whether direct session creation is public.
+The configured session mechanism determines which lifecycle and management
+operations are meaningful; that second capability question remains under
+pressure testing.
+
 The usage API exposes completed workflows:
 
 ```ts
