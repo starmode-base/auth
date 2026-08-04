@@ -29,7 +29,7 @@ At promotion (only after the implementation has proven the contract):
 ## Development workflow
 
 - Order of work: types → tests → implementation, in small chunks — one unit at a time
-- Design adapter interfaces so the laziest implementation is safe: a no-op adapter may only deny access (fail closed), never grant it. If a lazy adapter could grant access, move that obligation into core or a shipped mechanism.
+- Adapter interfaces are trust boundaries. Core relies on their documented semantics; it does not attempt to compensate for an incorrect custom implementation. Shipped adapters and mechanisms must be tested, and custom adapter authors are responsible for satisfying the contract.
 - Type files are split by layer; file organization mirrors the layers:
   - Contracts — the adapter interfaces, the product. Semantic, never mechanical; core runs on anything satisfying them.
   - Mechanisms — logic shipped as adapters, environment-free. No framework imports, ever.
