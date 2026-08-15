@@ -102,10 +102,10 @@ Place each claim at the lowest contract unit that owns the behavior, and establi
 ## Prose style
 
 - Use sentence case, never title case
+- Avoid semicolons, colons, and hyphens
+- Never hard-wrap prose in Markdown
 - OTP: uppercase in prose, `Otp*`/`otp` in identifiers; never call it a "code"
-- Never use hard line breaks for prose in markdown
 - Tone: professional, design specification style
-- Avoid semicolons
 
 ## Code review instructions
 
