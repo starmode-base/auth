@@ -16,6 +16,7 @@ Prove one small server API that is easy to wire into any framework while its con
 - Core owns composition, the transition from authenticated user to session, and current-user scoping across auth strategies.
 - The session kernel port contains only `establish` and `resolve`.
 - The session implementation exposes only the additional capabilities its mechanism supports.
+- Bindings close over invocation-scoped context and credentials before constructing either a read-only or full session projection.
 - Primitives remain independently importable.
 - Object-producing helpers are optional compression over the literal contract.
 
@@ -135,6 +136,8 @@ const auth = makeAuth({
 
 The only supported states are session-only, sessions plus OTP, sessions plus passkeys, and sessions plus both strategies. Both strategy orders produce the same complete public API.
 
+A read-only invocation is an execution projection rather than a fifth product configuration. Supplying a `SessionReader` to `makeAuth` returns only `session.get` plus the read-safe capabilities supplied by the binding. It exposes neither direct session creation nor authentication strategy builders.
+
 Session-only auth exposes session creation as the escape hatch for bespoke authentication. Once a shipped strategy is installed, that strategy returns an authenticated user to core and core creates the session. Applications retain the lookup, renewal, termination, and management capabilities exposed by the configured session implementation.
 
 | Configuration          | Public session API                                                       |
@@ -168,7 +171,26 @@ The session implementation may expose application-defined claims together with `
 
 [`session-capability-typecheck.ts`](./session-capability-typecheck.ts) pressure-tests this split against direct opaque access, signed access backed by persisted authority, a denylist-backed signed session, and a custom session with a binary credential and no lifecycle capabilities. No case introduces a credential union, nullable placeholder, token-format branch, or meaningless public method.
 
-Invocation-scoped environment capabilities remain the next boundary to settle. This candidate closes them over when the session object is constructed. The existing lifecycle target probes remain evidence for deciding whether that survives Convex read and write separation without exposing framework context in the public usage API.
+## Invocation boundary
+
+Bindings close over framework context and presented credentials when they construct the session object for one invocation. They choose the projection that their environment can actually support:
+
+- `SessionReader` contains read-only `resolve` plus any read-safe public capabilities. `makeAuth` returns a read-only auth facade.
+- `SessionAdapter` contains the complete `establish` and `resolve` kernel plus the capabilities available at a write boundary. `makeAuth` returns the normal authentication builder.
+
+```ts
+const queryAuth = makeAuth({
+  debug: true,
+  session: bindSessionRead({ context: queryContext, credentials }),
+});
+
+const mutationAuth = makeAuth({
+  debug: true,
+  session: bindSessionWrite({ context: mutationContext, credentials }),
+}).withOtp(otp);
+```
+
+Public operations remain context-free after binding. A Convex query or RSC render supplies no fake write operation, while a Convex mutation or conventional request handler retains the full authentication API. [`invocation-sandbox.ts`](./invocation-sandbox.ts) exercises both opaque and signed-access sessions across those targets.
 
 ## Application users
 
@@ -219,4 +241,4 @@ These are safe public projections, never raw storage records. This allows an ada
 
 The session-lifecycle spike is supporting evidence for session authority, access representations, and execution targets. Its mechanisms are reused by the capability pressure tests here. Its optional-session builder and fixed four-operation adapter are superseded and should not evolve as competing contracts.
 
-Once invocation-scoped capabilities survive the target probes, the settled usage model replaces the corresponding sections of the main spike contract. The session-lifecycle directory is then removed rather than maintained as a second permanent contract.
+The invocation sandbox now completes the required mechanism and execution-boundary pressure tests. After this candidate is reviewed, the settled usage model replaces the corresponding sections of the main spike contract. The session-lifecycle directory is then removed rather than maintained as a second permanent contract.

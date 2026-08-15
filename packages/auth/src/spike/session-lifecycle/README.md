@@ -177,16 +177,16 @@ The ownership rule is:
 
 ## Coupled questions
 
-These questions constrain each other. The usage API now contains candidate answers for the kernel port, capability projection, and universal credential shape. Invocation-scoped capabilities remain open.
+These questions constrain each other. The usage API now contains candidate answers for all four boundaries.
 
-| Question                                     | Current direction                                                                                                                                                                                                                                                  |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| What is the minimal internal session port?   | `establish` and read-only `resolve`. The four mechanism probes require no third universal operation.                                                                                                                                                               |
-| How are public capabilities projected?       | A separate generic capability object is preserved in `auth.session`. Session-only auth adds public creation, while installed strategies reserve establishment for core.                                                                                            |
-| What are session credentials?                | There is no universal credential shape. Establishment and capability results preserve implementation-defined values, while resolution closes over the presented session in the current candidate.                                                                  |
-| How do invocation-scoped capabilities enter? | Still open. Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter an environment binding or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership. |
+| Question                                     | Current direction                                                                                                                                                                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What is the minimal internal session port?   | `establish` and read-only `resolve`. The four mechanism probes require no third universal operation.                                                                                                                                       |
+| How are public capabilities projected?       | A separate generic capability object is preserved in `auth.session`. Session-only auth adds public creation, while installed strategies reserve establishment for core.                                                                    |
+| What are session credentials?                | There is no universal credential shape. Establishment and capability results preserve implementation-defined values, while resolution closes over the presented session in the current candidate.                                          |
+| How do invocation-scoped capabilities enter? | A binding closes over context and presented credentials, then constructs either a resolve-only `SessionReader` for a read boundary or the full `SessionAdapter` for a write boundary. Public auth operations receive no framework context. |
 
-Lifetime and refresh policy belong to the session implementation. The exact policies and configuration of shipped mechanisms remain parked until this boundary is credible.
+Lifetime and refresh policy belong to the session implementation. Their exact behavior and configuration remain parked for the shipped mechanism design rather than the kernel contract.
 
 ## Compatibility targets
 
@@ -221,7 +221,7 @@ The usage API capability probe now shows that the same candidate boundary can de
 - A longer-lived signed session with denylist-backed revocation and no refresh requirement.
 - A custom semantic session implementation without a core change.
 
-The remaining convergence work is to test whether those mechanisms can receive invocation-scoped read and write capabilities in the required environments without changing core or exposing framework context throughout the public API.
+`../usage-api/invocation-sandbox.ts` now shows direct opaque and signed-access mechanisms receiving invocation-scoped read and write capabilities in RSC, Convex query and mutation, and conventional request shapes without changing core or exposing framework context throughout the public API. The separate capability probe establishes that denylist-backed and custom mechanisms do not change that binding boundary.
 
 Each probe should make five boundaries visible:
 
@@ -241,7 +241,7 @@ A candidate is not ready to land if a representative case requires:
 
 Types and minimal implementation may evolve together while proving this. The point is to converge on one coherent boundary, not to obey an arbitrary sequence.
 
-## Parked until that boundary is credible
+## Parked until promotion or mechanism design
 
 - Exact access, absolute, inactivity, and cookie lifetime rules.
 - Authority-credential rotation, replay detection, concurrency, and recovery.
@@ -256,6 +256,7 @@ Types and minimal implementation may evolve together while proving this. The poi
 
 - `../usage-api/contracts.ts` contains the converging mandatory-session builder, two-operation session kernel port, and capability-dependent public namespace.
 - `../usage-api/session-capability-typecheck.ts` adapts the mechanisms here and probes all four required session families.
+- `../usage-api/invocation-sandbox.ts` probes read-only and write-capable bindings against RSC, Convex, and conventional request shapes.
 - `../contracts.ts` still contains the earlier mandatory-session design and remains unchanged until the usage candidate is ready to promote.
 - `contracts.ts` contains the superseded optional-unit candidate and fixed session lifecycle. Its session shapes remain evidence only.
 - `composition-probes.ts` checks the superseded optional-unit composition, order independence, and single-use builder steps.

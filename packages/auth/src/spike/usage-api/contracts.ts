@@ -23,8 +23,14 @@ export type SessionIdentity = {
   userId: string;
 };
 
+/** Read-only session port used to resolve current auth authority */
+export type SessionResolver<Identity extends SessionIdentity> = {
+  /** Repeatable read-only resolution of the presented session */
+  resolve: () => Promise<Identity | null>;
+};
+
 /**
- * Fixed session port used by the authentication kernel.
+ * Fixed session port used by the authentication microkernel.
  *
  * Core establishes the exact userId returned by a successful authentication
  * strategy and resolves the current identity when another auth workflow needs
@@ -32,10 +38,11 @@ export type SessionIdentity = {
  * transport, lifetime, renewal, and revocation decision behind these two
  * operations.
  */
-export type SessionKernel<Identity extends SessionIdentity, CreateResult> = {
+export type SessionKernel<
+  Identity extends SessionIdentity,
+  CreateResult,
+> = SessionResolver<Identity> & {
   establish: (userId: string) => Promise<CreateResult>;
-  /** Repeatable read-only resolution of the presented session */
-  resolve: () => Promise<Identity | null>;
 };
 
 /** Capability names reserved for the kernel's public projections */
@@ -46,6 +53,22 @@ export type SessionCapabilitySet<Capabilities extends object> =
   Extract<keyof Capabilities, ReservedSessionCapability> extends never
     ? Capabilities
     : never;
+
+/**
+ * Invocation-bound read-only session implementation.
+ *
+ * A binding closes over presented credentials and read capabilities, then
+ * supplies only the public operations valid in that invocation. Since this
+ * projection cannot establish sessions, it cannot install authentication
+ * strategies or expose direct session creation.
+ */
+export type SessionReader<
+  Identity extends SessionIdentity,
+  Capabilities extends object,
+> = {
+  kernel: SessionResolver<Identity>;
+  capabilities: SessionCapabilitySet<Capabilities>;
+};
 
 /**
  * Complete injected session implementation.
@@ -61,6 +84,7 @@ export type SessionAdapter<
   Capabilities extends object,
 > = {
   kernel: SessionKernel<Identity, CreateResult>;
+  /** TODO: Documentation */
   capabilities: SessionCapabilitySet<Capabilities>;
 };
 
@@ -286,6 +310,23 @@ export type MakeAuthConfig<
   session: SessionAdapter<Identity, CreateResult, Capabilities>;
 };
 
+/** makeAuth config for an invocation that can only read session state */
+export type MakeAuthReaderConfig<
+  Identity extends SessionIdentity,
+  Capabilities extends object,
+> = {
+  debug: boolean;
+  session: SessionReader<Identity, Capabilities>;
+};
+
+/** Read-only auth projection with no authentication strategy builder */
+export type AuthReader<
+  Identity extends SessionIdentity,
+  SessionCapabilities extends object,
+> = {
+  session: SessionManagementNamespace<Identity, SessionCapabilities>;
+};
+
 /** Sessions configured; either authentication strategy may be installed */
 export type Auth<
   Identity extends SessionIdentity,
@@ -367,3 +408,25 @@ export declare function makeAuth<
 >(
   config: MakeAuthConfig<Identity, SessionCreateResult, SessionCapabilities>,
 ): Auth<Identity, SessionCreateResult, SessionCapabilities>;
+
+export declare function makeAuth<
+  Identity extends SessionIdentity,
+  SessionCapabilities extends object,
+>(
+  config: MakeAuthReaderConfig<Identity, SessionCapabilities>,
+): AuthReader<Identity, SessionCapabilities>;
+
+export const auth = makeAuth({
+  debug: true,
+  session: {
+    capabilities: { x: 1 },
+    kernel: {
+      establish(userId) {
+        return Promise.resolve({ success: true, data: { userId } });
+      },
+      resolve() {
+        return Promise.resolve(null);
+      },
+    },
+  },
+});

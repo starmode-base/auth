@@ -9,12 +9,14 @@ import type {
   AuthFull,
   AuthOtp,
   AuthPasskey,
+  AuthReader,
   AuthUser,
   PasskeyNamespace,
   PasskeySummary,
   Result,
   SessionAdapter,
   SessionIdentity,
+  SessionReader,
   WithOtpConfig,
   WithPasskeyConfig,
 } from "./contracts";
@@ -45,6 +47,10 @@ type SessionCapabilities = {
   revoke: (args: { sessionId: string }) => Promise<boolean>;
 };
 
+type SessionReadCapabilities = {
+  inspect: () => Promise<{ mechanism: string }>;
+};
+
 type ResolvedUser = AuthUser & {
   isNew: boolean;
 };
@@ -57,6 +63,10 @@ declare const session: SessionAdapter<
   SessionClaims,
   SessionCreated,
   SessionCapabilities
+>;
+declare const sessionReader: SessionReader<
+  SessionClaims,
+  SessionReadCapabilities
 >;
 declare const registrationOptions: PublicKeyCredentialCreationOptionsJSON;
 declare const authenticationOptions: PublicKeyCredentialRequestOptionsJSON;
@@ -128,6 +138,7 @@ function expectType<T>(value: T): T {
 }
 
 const sessionOnly = makeAuth({ debug: true, session });
+const readOnly = makeAuth({ debug: true, session: sessionReader });
 const sessionOtp = makeAuth({ debug: true, session }).withOtp(otp);
 const sessionPasskey = makeAuth({ debug: true, session }).withPasskey(passkey);
 const otpThenPasskey = makeAuth({ debug: true, session })
@@ -137,7 +148,9 @@ const passkeyThenOtp = makeAuth({ debug: true, session })
   .withPasskey(passkey)
   .withOtp(otp);
 
-/* The four approved states preserve their exact types. */
+/* The read projection and four full builder states preserve their exact types. */
+
+expectType<AuthReader<SessionClaims, SessionReadCapabilities>>(readOnly);
 
 expectType<Auth<SessionClaims, SessionCreated, SessionCapabilities>>(
   sessionOnly,
@@ -166,6 +179,20 @@ expectType<
     ListedPasskey
   >
 >(passkeyThenOtp);
+
+/* Read-only invocation projections expose no fake write capability. */
+
+expectType<Promise<SessionClaims | null>>(readOnly.session.get());
+expectType<Promise<{ mechanism: string }>>(readOnly.session.inspect());
+
+// @ts-expect-error read-only auth cannot establish sessions
+void readOnly.session.create;
+
+// @ts-expect-error read-only auth cannot install OTP
+void readOnly.withOtp;
+
+// @ts-expect-error read-only auth cannot install passkeys
+void readOnly.withPasskey;
 
 /* makeAuth always requires sessions; withSession does not exist. */
 
@@ -301,12 +328,9 @@ expectType<
   }),
 );
 
-const authenticated = sessionOtp.otp.authenticate({
-  identifier: "person@example.com",
-  otp: "123456",
-});
-
-declare const authenticationResult: Awaited<typeof authenticated>;
+declare const authenticationResult: Awaited<
+  ReturnType<typeof sessionOtp.otp.authenticate>
+>;
 
 if (authenticationResult.success) {
   expectType<boolean>(authenticationResult.data.user.isNew);
