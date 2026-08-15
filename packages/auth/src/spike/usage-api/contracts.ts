@@ -398,8 +398,9 @@ export type AuthFull<
 /**
  * Candidate dependency-aware builder.
  *
- * This declaration proves the server usage shape only. Runtime orchestration
- * is not implemented in this spike.
+ * These declarations define the candidate public shape. The partial runtime
+ * candidate in make-auth-sandbox.ts implements the write-capable strategy
+ * builder. The read-only overload remains type-only evidence.
  */
 export declare function makeAuth<
   Identity extends SessionIdentity,
@@ -415,18 +416,3 @@ export declare function makeAuth<
 >(
   config: MakeAuthReaderConfig<Identity, SessionCapabilities>,
 ): AuthReader<Identity, SessionCapabilities>;
-
-export const auth = makeAuth({
-  debug: true,
-  session: {
-    capabilities: { x: 1 },
-    kernel: {
-      establish(userId) {
-        return Promise.resolve({ success: true, data: { userId } });
-      },
-      resolve() {
-        return Promise.resolve(null);
-      },
-    },
-  },
-});

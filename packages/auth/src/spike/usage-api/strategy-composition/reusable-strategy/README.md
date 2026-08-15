@@ -1,6 +1,6 @@
 # Reusable strategy type experiments
 
-> **Status** Type experiments complete. Operation descriptors preserve the exact session result through the accumulating builder but have not received a runtime projection proof.
+> **Status** Runtime experiment complete. A namespace factory preserves the exact session result through an assertion free accumulating builder. Operation descriptors do not have an assertion free generic projector.
 
 ## Acceptance claim
 
@@ -30,11 +30,37 @@ expectType<HeaderSessionResult>(successful(headerAuth.strategies.otp.authenticat
 
 ## Comparison
 
-| Candidate | Exact distinct session results | Strategy authoring | Kernel contract | Current assessment |
+| Candidate | Exact distinct session results | Strategy authoring | Runtime projection | Current assessment |
 | --- | --- | --- | --- | --- |
-| Operation descriptors | Yes | Plain object plus operation helpers | Three semantic operation categories | Leading |
-| `defineStrategy` | Yes | Explicit type template using `this` plus an opaque helper | Arbitrary mounted namespace | Too much type ceremony |
-| Universal session result | No distinct results by design | Plain mounted namespace | One fixed credential result | Rejected unless session design independently converges on it |
+| Namespace factory | Yes | Generic function returning its named namespace | Assertion free object merge | Runtime leader |
+| Operation descriptors | Yes | Plain object plus operation helpers | Requires an assertion or unchecked overload | Type result only |
+| `defineStrategy` | Yes | Explicit type template using `this` plus an opaque helper | Assertion free direct mount | Too much type ceremony |
+| Universal session result | No distinct results by design | Plain mounted namespace | Assertion free direct mount | Rejected unless session design independently converges on it |
+
+## Namespace factory
+
+A reusable strategy receives the narrow kernel and returns its complete named namespace.
+
+```ts
+function makeOtpStrategy<Identity extends AuthUser, SessionCreateResult>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+) {
+  return {
+    otp: {
+      request: requestOtp,
+      authenticate: args => kernel.authenticate(() => proveOtp(args)),
+    },
+  };
+}
+
+const auth = makeAuth({ session }).addStrategy(makeOtpStrategy);
+```
+
+Passing the generic function directly lets TypeScript instantiate it with the builder's concrete session result. Returning the strategy name as part of the object also lets the runtime builder merge generic objects without constructing a computed property. The complete implementation in [`namespace-factory.ts`](./namespace-factory.ts) uses no assertions, overloads, proxies, or descriptor branches.
+
+[`namespace-factory-sandbox.ts`](./namespace-factory-sandbox.ts) executes the same factory against cookie and header sessions. Both the compile time API and runtime value retain the correct result. Extracted methods also work because the installed namespace closes over the kernel rather than depending on `this`.
+
+The main cost is strategy authoring. A reusable factory must state its generic kernel signature and must return its own namespace name. The latter matches `.addStrategy(otp)` and makes duplicate names rejectable, but configurable OIDC provider instances still need a pressure test.
 
 ## Operation descriptors
 
@@ -61,7 +87,9 @@ This contract also teaches an agent where authority enters each method. That is 
 
 The cost is that the kernel understands a small fixed taxonomy of operation authority. Complex workflows must decompose cleanly into those categories. Passkey registration and account linking need additional pressure tests before promotion.
 
-The runtime projector remains deliberately undeclared. A production candidate must show that mapping a definition to its namespace stays small and requires no assertions or duplicated strategy specific branches.
+The generic runtime projector remains deliberately undeclared. Constructing its mapped result requires TypeScript to correlate every dynamic object key with a conditional operation result. `Object.keys`, `Object.entries`, and `Object.fromEntries` erase that correlation, so an implementation needs an assertion or an overload that creates the same unchecked trust boundary.
+
+A callable descriptor can technically avoid allocation by storing the session on `this`. That changes method extraction behavior and makes a reusable definition depend on invocation binding, so it is not a suitable public auth API.
 
 ## defineStrategy
 
@@ -92,11 +120,11 @@ The session work currently preserves a mechanism dependent creation result. Comp
 
 ## Next proof
 
-The operation descriptor candidate should next be exercised against complete OTP, passkey, and OIDC shaped namespaces. The proof must answer four questions.
+The namespace factory and operation descriptor candidates should next be exercised against complete OTP, passkey, and OIDC shaped namespaces. The proof must answer four questions.
 
 1. Can passkey sign up, authentication, adding, listing, and removal use the three categories without an artificial operation split?
 2. Can OIDC begin, callback authentication, and current user linking use the same categories?
-3. Can the runtime projector remain generic and assertion free?
-4. Do invalid definitions fail with errors that point an agent to the incorrect operation?
+3. Can configurable OIDC instances retain distinct names and provider types without weakening the namespace factory?
+4. Do invalid factories and definitions fail with errors that point an agent to the incorrect operation?
 
 Only after that proof should the generic builder and configuration map comparison resume. The builder remains the likely construction winner because it retains literal names incrementally and rejects known duplicates locally.

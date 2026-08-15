@@ -26,6 +26,19 @@ The primary boundary is:
 
 A direct strategy implementation replaces that authentication engine and is therefore a trusted boundary. The normal implementation may be an object produced by library helpers, but `makeAuth` does not distinguish produced objects from inline ones.
 
+## Spike boundaries
+
+Nothing in this directory is exported by the current package entry point. Candidate library export means intended for promotion after the design settles. It does not mean the symbol ships today.
+
+| Location                                                       | Role                              | Intended boundary                                                                                       |
+| -------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [`contracts.ts`](./contracts.ts)                               | Candidate public contract         | Its exported types and `makeAuth` overloads are proposed library exports                                |
+| [`make-auth-sandbox.ts`](./make-auth-sandbox.ts)               | Partial candidate library runtime | `makeAuth` is the only exported candidate. Its namespace and builder constructors are library internals |
+| [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) | Runnable consumer example         | The session adapter, strategies, WebAuthn fixtures, and calls are userland code                         |
+| [`playground.ts`](./playground.ts)                             | Consumer API sketch               | Its file exports make examples easy to inspect but are not proposed package exports                     |
+| Typecheck and invocation sandboxes                             | Design evidence                   | They are compile-time probes and framework binding examples, not package modules                        |
+| [`strategy-composition/`](./strategy-composition/)             | Competing composition experiment  | It does not change the active candidate until its open strategy model wins                              |
+
 ## Core and strategy ownership
 
 Core keeps the behavior that must remain identical across strategies:
@@ -194,7 +207,7 @@ Public operations remain context-free after binding. A Convex query or RSC rende
 
 ## Strategy orchestration
 
-[`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) contains a minimal generic `makeAuth` implementation that closes over the strategy namespace constructors. Its inert OTP and passkey implementations are installed and executed through the public builder chain. OTP authentication returns failures before session establishment. Success passes the exact strategy userId to `establish` and combines the returned user and session result.
+[`make-auth-sandbox.ts`](./make-auth-sandbox.ts) contains the partial generic library candidate and keeps its namespace constructors private. [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) imports only `makeAuth`, supplies inert userland OTP and passkey implementations, and executes them through the public builder chain. OTP authentication returns failures before session establishment. Success passes the exact strategy userId to `establish` and combines the returned user and session result.
 
 Passkey authentication and passkey-first sign-up establish sessions in the same way. Adding a passkey resolves the current session to scope the strategy call and does not establish another session. Listing and removal use the same current-user scope. Strategies receive neither the session kernel nor its public capabilities.
 
