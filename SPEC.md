@@ -12,6 +12,8 @@ Passkeys + OTP as composable primitives. Apps choose their flow.
 > `packages/auth/src/spike/usage-api/`. It supersedes the older pure-primitive,
 > application-orchestrated flow decisions that remain below as history.
 
+The main spike contract still contains the earlier fixed session surface while the replacement boundary is being designed. For builder and session work, read the usage API README together with `packages/auth/src/spike/session-lifecycle/README.md`. Those documents record the active candidate and its open questions until the surviving types are promoted into the main spike contract.
+
 `makeAuth` is a small authentication kernel configured by literal objects.
 Sessions are mandatory. Chained OTP and passkey objects are complete trusted
 authentication strategies: they own their feature-specific workflows, while

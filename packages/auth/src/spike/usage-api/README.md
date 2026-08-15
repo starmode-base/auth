@@ -203,6 +203,8 @@ workflows.
 
 The kernel's internal session dependency and the public session API are separate contracts. The kernel needs a small stable way to establish a session and resolve the current identity. The public namespace exposes only capabilities that the configured session implementation genuinely supports. Operations such as refresh, listing, bulk termination, and revocation are capabilities, not universal requirements.
 
+The session implementation may expose application-defined claims together with `userId`. Core requires only `userId`, preserves the inferred identity type where it crosses the public API, and treats all additional claims as opaque. OTP and passkey strategies neither define nor resolve session claims.
+
 The exact minimal internal port and its TypeScript projection into a mechanism-dependent public namespace remain open. The current `SessionAdapter` is a candidate being reduced, not a settled universal interface.
 
 ## Application users

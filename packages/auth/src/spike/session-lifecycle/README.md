@@ -126,7 +126,9 @@ A third mechanism can use a longer-lived signed credential with a denylist as re
 signed credential → signature verification + denylist check → issued session snapshot
 ```
 
-It has no persisted positive session authority and does not inherently need refresh. It also cannot naturally list active sessions from a store that records only revoked credentials. This mechanism is important because it exposes lifecycle operations that cannot be universal without inventing semantics.
+Each credential carries a unique identifier. Validation verifies the signature and expiry, then rejects the credential when that identifier appears in the denylist. Ending the session records the identifier only until the credential expires, after which the entry has no effect and can be removed automatically.
+
+This mechanism has no persisted positive session authority and does not inherently need refresh. Its credential lifetime may be the complete session lifetime. It also cannot naturally list active sessions from a store that records only revoked credentials. This mechanism is important because it exposes lifecycle operations that cannot be universal without inventing semantics.
 
 ## Evidence from the nested spike
 
@@ -173,6 +175,14 @@ These are levels of support, not synonyms:
 - **Recommended:** the library presents the mechanism as an appropriate default for a documented use case.
 
 All four mechanism categories must be representable. Which implementations ship or are recommended is a later decision.
+
+## Signed session claims
+
+Application-defined claims belong to the session implementation. Core requires the authenticated `userId` and treats any additional claim shape as opaque. Claim resolution, encoding, and signed-credential lifetime are mechanism and application policy rather than kernel policy.
+
+A signed-access mechanism backed by persisted authority may resolve current claims when it refreshes the access credential. The newly issued credential can therefore carry updated claims immediately, while previously issued credentials retain their earlier claims until they expire or are rejected through additional revocation state.
+
+A denylist-backed signed session has no inherent refresh operation. Changing its claims requires issuing a replacement credential and denying the previous one, or accepting the previous claims until that credential expires. Signed credentials provide integrity, not confidentiality, so claims must not rely on the token hiding their contents.
 
 ## Current ownership direction
 
