@@ -51,7 +51,7 @@ Feature strategies own everything specific to their authentication method:
   consumption, authentication policy, and identifier-to-user resolution.
 - Passkey user provisioning, policy, WebAuthn, challenges, credentials,
   counters, and atomic credential removal.
-- Future OAuth exchanges, recovery credentials, or other feature-specific
+- Future OIDC exchanges, recovery credentials, or other feature-specific
   workflows.
 
 Core creates a session from a successful strategy result. Strategies never
@@ -81,8 +81,7 @@ Consequences in this candidate:
 - Passkey removal is one strategy operation. Separating list, authorization,
   and deletion would make policies such as preserving the last credential
   vulnerable to races.
-- Session operations remain independent because each is invoked by a distinct
-  public or internal operation.
+- Session capabilities remain independent when the configured implementation exposes them because each is invoked by a distinct public or internal operation.
 
 The rule is not simply that two functions appear consecutively. The library
 may keep a boundary when it must conditionally invoke the second operation or
@@ -169,15 +168,16 @@ same complete public API.
 
 Session-only auth exposes session creation as the escape hatch for bespoke
 authentication. Once a shipped strategy is installed, that strategy returns
-an authenticated user to core and core creates the session. Applications keep
-session lookup, renewal, termination, and management.
+an authenticated user to core and core creates the session. Applications retain
+the lookup, renewal, termination, and management capabilities exposed by the
+configured session implementation.
 
-| Configuration          | Public session API                                            |
-| ---------------------- | ------------------------------------------------------------- |
-| Sessions only          | `create`, `get`, `refresh`, `end`, `list`, `endAll`, `revoke` |
-| Sessions plus OTP      | `get`, `refresh`, `end`, `list`, `endAll`, `revoke`           |
-| Sessions plus passkeys | `get`, `refresh`, `end`, `list`, `endAll`, `revoke`           |
-| Sessions plus both     | `get`, `refresh`, `end`, `list`, `endAll`, `revoke`           |
+| Configuration          | Public session API                                                       |
+| ---------------------- | ------------------------------------------------------------------------ |
+| Sessions only          | Supported mechanism capabilities, including direct session creation     |
+| Sessions plus OTP      | Supported mechanism capabilities, with session creation reserved to core |
+| Sessions plus passkeys | Supported mechanism capabilities, with session creation reserved to core |
+| Sessions plus both     | Supported mechanism capabilities, with session creation reserved to core |
 
 Strategy configuration determines whether direct session creation is public.
 The configured session mechanism determines which lifecycle and management
@@ -199,6 +199,12 @@ call into `auth`. Application actions such as `getViewer` or `changeEmail`
 consume session state or independent proof primitives and remain application
 workflows.
 
+## Session contract split
+
+The kernel's internal session dependency and the public session API are separate contracts. The kernel needs a small stable way to establish a session and resolve the current identity. The public namespace exposes only capabilities that the configured session implementation genuinely supports. Operations such as refresh, listing, bulk termination, and revocation are capabilities, not universal requirements.
+
+The exact minimal internal port and its TypeScript projection into a mechanism-dependent public namespace remain open. The current `SessionAdapter` is a candidate being reduced, not a settled universal interface.
+
 ## Application users
 
 Strategies do not repeat a generic user-lookup DI.
@@ -217,6 +223,12 @@ userId.
 If a genuinely identical operation is later required by every strategy, it
 belongs in `makeAuth` rather than being repeated by `withOtp`, `withPasskey`,
 and future strategies.
+
+## OIDC boundary
+
+Consumer-side OIDC belongs as a future authentication strategy beside OTP and passkeys. The strategy verifies the external identity, the application maps its issuer and subject to an application-owned `userId`, and core creates the local session through the configured session implementation.
+
+Making ΛUTH an OIDC or OAuth provider is a separate identity-server product and is out of scope.
 
 ## Resource ownership and projections
 
