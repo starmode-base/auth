@@ -109,6 +109,19 @@ Exact helper results retain their keys through spread. A later property intentio
 
 The map does not preserve one former builder policy. The fixed builder exposed direct `session.create` only before a strategy was installed. An assertion free one shot constructor cannot vary its runtime session object from the inferred emptiness of a callback result. The kernel map therefore exposes only session reads in this experiment. Bespoke authentication can be an explicit strategy, or session only auth can receive a separate API if it remains a requirement.
 
+## Complete workflow pressure test
+
+[`kernel-map-workflow-sandbox.ts`](./kernel-map-workflow-sandbox.ts) installs complete OTP, passkey, and OIDC shaped namespaces through one reusable map callback.
+
+- OTP request remains public and successful authentication establishes exactly the proven user.
+- Passkeys cover sign-up, authentication, adding to the current user, user mismatch, listing, and removal.
+- OIDC covers authorization start, callback authentication, current user linking, and signed-out rejection.
+- Expected authentication failures establish no session.
+- Current user operations establish no new session.
+- The same callback retains exact cookie and header session results.
+
+The two-operation kernel remains sufficient. Authentication operations use `authenticate`, while adding, management, and linking use read-only `current`. No strategy receives the session implementation and no additional mechanism-specific kernel capability is required.
+
 ## Operation descriptors
 
 A strategy describes the authority of every public operation.
