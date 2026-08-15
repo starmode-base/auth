@@ -1,6 +1,6 @@
 # Reusable strategy type experiments
 
-> **Status** Runtime experiments complete. Namespace factories preserve exact session and instance types across arbitrary caller named namespaces. Operation descriptors do not have an assertion free generic projector.
+> **Status** Runtime experiments complete. A one shot kernel map preserves the builder's strategy type guarantees without an accumulating API. Operation descriptors do not have an assertion free generic projector.
 
 ## Acceptance claim
 
@@ -88,6 +88,26 @@ const auth = makeAuth({ session }).addStrategy((kernel) => ({
   emailOtp: makeOtpNamespace(kernel, emailOtpConfig),
 }));
 ```
+
+## Kernel map parity
+
+[`kernel-map-sandbox.ts`](./kernel-map-sandbox.ts) replaces incremental installation with one callback that returns the final namespace map.
+
+```ts
+const auth = makeAuth({
+  session,
+  strategies: (kernel) => ({
+    ...makeOtpNamespaces(kernel),
+    ...makeOidcNamespaces(kernel),
+  }),
+});
+```
+
+The map preserves exact namespace keys, operation arguments, failure unions, current identity, per instance configuration, and session establishment results. The same generic callback produces exact cookie and header auth values. Unconfigured namespaces and invalid namespace values fail statically.
+
+Exact helper results retain their keys through spread. A later property intentionally replaces an earlier spread property and its replacement type wins. `satisfies Record<string, object>` validates without widening. An explicit `Record<string, object>` annotation deliberately widens the keys to `string`, matching ordinary TypeScript object behavior.
+
+The map does not preserve one former builder policy. The fixed builder exposed direct `session.create` only before a strategy was installed. An assertion free one shot constructor cannot vary its runtime session object from the inferred emptiness of a callback result. The kernel map therefore exposes only session reads in this experiment. Bespoke authentication can be an explicit strategy, or session only auth can receive a separate API if it remains a requirement.
 
 ## Operation descriptors
 
