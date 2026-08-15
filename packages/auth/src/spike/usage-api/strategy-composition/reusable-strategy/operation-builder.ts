@@ -1,7 +1,4 @@
-import type {
-  AuthUser,
-  SessionPort,
-} from "./contracts";
+import type { AuthUser, SessionPort } from "./contracts";
 import type {
   StrategyDefinition,
   StrategyNamespace,
@@ -29,11 +26,7 @@ export type OperationStrategyBuilder<
   ) => OperationStrategyBuilder<
     Identity,
     SessionCreateResult,
-    Installed &
-      Record<
-        Name,
-        StrategyNamespace<Definition, SessionCreateResult>
-      >
+    Installed & Record<Name, StrategyNamespace<Definition, SessionCreateResult>>
   >;
 };
 
@@ -43,8 +36,4 @@ export declare function makeAuth<
   SessionCreateResult,
 >(config: {
   session: SessionPort<Identity, SessionCreateResult>;
-}): OperationStrategyBuilder<
-  Identity,
-  SessionCreateResult,
-  NoStrategies
->;
+}): OperationStrategyBuilder<Identity, SessionCreateResult, NoStrategies>;

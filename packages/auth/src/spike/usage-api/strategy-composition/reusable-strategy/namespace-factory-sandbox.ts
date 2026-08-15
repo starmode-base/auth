@@ -25,9 +25,7 @@ type RequestOtpArgs = {
 type OtpError = "invalid_otp" | "authentication_disabled";
 
 type OtpNamespace<SessionCreateResult> = {
-  request: (
-    args: RequestOtpArgs,
-  ) => Promise<Result<void, never>>;
+  request: (args: RequestOtpArgs) => Promise<Result<void, never>>;
   authenticate: (args: OtpArgs) => Promise<
     Result<
       {
@@ -64,9 +62,7 @@ const headerSession = {
   }),
 } satisfies SessionPort<SessionIdentity, HeaderSessionResult>;
 
-async function proveOtp(
-  args: OtpArgs,
-): Promise<Result<OtpUser, OtpError>> {
+async function proveOtp(args: OtpArgs): Promise<Result<OtpUser, OtpError>> {
   if (args.otp !== "123456") {
     return {
       success: false,
@@ -83,17 +79,14 @@ async function proveOtp(
   };
 }
 
-async function requestOtp(
-  args: RequestOtpArgs,
-): Promise<Result<void, never>> {
+async function requestOtp(args: RequestOtpArgs): Promise<Result<void, never>> {
   void args.identifier;
   return { success: true };
 }
 
-function makeOtpStrategy<
-  Identity extends AuthUser,
-  SessionCreateResult,
->(kernel: StrategyKernel<Identity, SessionCreateResult>) {
+function makeOtpStrategy<Identity extends AuthUser, SessionCreateResult>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+) {
   return {
     otp: {
       request: requestOtp,
@@ -114,12 +107,8 @@ const headerAuth = makeAuth({ session: headerSession }).addStrategy(
   makeOtpStrategy,
 );
 
-expectType<OtpNamespace<CookieSessionResult>>(
-  cookieAuth.strategies.otp,
-);
-expectType<OtpNamespace<HeaderSessionResult>>(
-  headerAuth.strategies.otp,
-);
+expectType<OtpNamespace<CookieSessionResult>>(cookieAuth.strategies.otp);
+expectType<OtpNamespace<HeaderSessionResult>>(headerAuth.strategies.otp);
 
 const authenticateWithCookie = cookieAuth.strategies.otp.authenticate;
 const authenticateWithHeader = headerAuth.strategies.otp.authenticate;

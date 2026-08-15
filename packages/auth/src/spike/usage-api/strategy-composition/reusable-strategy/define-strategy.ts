@@ -1,8 +1,4 @@
-import type {
-  AuthUser,
-  SessionPort,
-  StrategyKernel,
-} from "./contracts";
+import type { AuthUser, SessionPort, StrategyKernel } from "./contracts";
 
 const strategyTemplate: unique symbol = Symbol("strategyTemplate");
 

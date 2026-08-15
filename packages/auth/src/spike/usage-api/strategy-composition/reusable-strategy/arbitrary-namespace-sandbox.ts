@@ -18,17 +18,9 @@ type OtpUser<Channel extends string> = AuthUser & {
   channel: Channel;
 };
 
-type OtpNamespace<
-  Channel extends string,
-  SessionCreateResult,
-> = {
-  request: (args: {
-    identifier: string;
-  }) => Promise<Result<void, never>>;
-  authenticate: (args: {
-    identifier: string;
-    otp: string;
-  }) => Promise<
+type OtpNamespace<Channel extends string, SessionCreateResult> = {
+  request: (args: { identifier: string }) => Promise<Result<void, never>>;
+  authenticate: (args: { identifier: string; otp: string }) => Promise<
     Result<
       {
         user: OtpUser<Channel>;
@@ -39,10 +31,7 @@ type OtpNamespace<
   >;
 };
 
-type OidcConfig<
-  Provider extends string,
-  Scopes extends readonly string[],
-> = {
+type OidcConfig<Provider extends string, Scopes extends readonly string[]> = {
   provider: Provider;
   clientId: string;
   scopes: Scopes;
@@ -168,19 +157,17 @@ function makeOidcNamespace<
   };
 }
 
-function makeEmailOtpStrategy<
-  Identity extends AuthUser,
-  SessionCreateResult,
->(kernel: StrategyKernel<Identity, SessionCreateResult>) {
+function makeEmailOtpStrategy<Identity extends AuthUser, SessionCreateResult>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+) {
   return {
     emailOtp: makeOtpNamespace(kernel, emailOtpConfig),
   };
 }
 
-function makeSmsOtpStrategy<
-  Identity extends AuthUser,
-  SessionCreateResult,
->(kernel: StrategyKernel<Identity, SessionCreateResult>) {
+function makeSmsOtpStrategy<Identity extends AuthUser, SessionCreateResult>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+) {
   return {
     smsOtp: makeOtpNamespace(kernel, smsOtpConfig),
   };
@@ -250,10 +237,7 @@ const inlineAuth = makeAuth({ session: cookieSession })
     loginByEmail: makeOtpNamespace(kernel, emailOtpConfig),
   }))
   .addStrategy((kernel) => ({
-    googleWithCalendar: makeOidcNamespace(
-      kernel,
-      googleCalendarConfig,
-    ),
+    googleWithCalendar: makeOidcNamespace(kernel, googleCalendarConfig),
   }));
 
 expectType<OtpNamespace<"email", CookieSessionResult>>(
@@ -262,36 +246,23 @@ expectType<OtpNamespace<"email", CookieSessionResult>>(
 expectType<OtpNamespace<"sms", HeaderSessionResult>>(
   headerAuth.strategies.smsOtp,
 );
+expectType<OidcNamespace<"google", ["openid", "profile"], CookieSessionResult>>(
+  cookieAuth.strategies.googleProfile,
+);
 expectType<
-  OidcNamespace<
-    "google",
-    ["openid", "profile"],
-    CookieSessionResult
-  >
->(cookieAuth.strategies.googleProfile);
-expectType<
-  OidcNamespace<
-    "google",
-    ["openid", "calendar"],
-    HeaderSessionResult
-  >
+  OidcNamespace<"google", ["openid", "calendar"], HeaderSessionResult>
 >(headerAuth.strategies.googleCalendar);
 expectType<OtpNamespace<"email", CookieSessionResult>>(
   inlineAuth.strategies.loginByEmail,
 );
 expectType<
-  OidcNamespace<
-    "google",
-    ["openid", "calendar"],
-    CookieSessionResult
-  >
+  OidcNamespace<"google", ["openid", "calendar"], CookieSessionResult>
 >(inlineAuth.strategies.googleWithCalendar);
 
-const emailAuthentication =
-  await cookieAuth.strategies.emailOtp.authenticate({
-    identifier: "person@example.com",
-    otp: "email-otp",
-  });
+const emailAuthentication = await cookieAuth.strategies.emailOtp.authenticate({
+  identifier: "person@example.com",
+  otp: "email-otp",
+});
 const smsAuthentication = await headerAuth.strategies.smsOtp.authenticate({
   identifier: "+15555550100",
   otp: "sms-otp",
@@ -299,10 +270,9 @@ const smsAuthentication = await headerAuth.strategies.smsOtp.authenticate({
 const googleProfile = await cookieAuth.strategies.googleProfile.callback({
   callbackUrl: "https://app.example/callback?state=valid",
 });
-const googleCalendar =
-  await headerAuth.strategies.googleCalendar.callback({
-    callbackUrl: "https://app.example/callback?state=valid",
-  });
+const googleCalendar = await headerAuth.strategies.googleCalendar.callback({
+  callbackUrl: "https://app.example/callback?state=valid",
+});
 
 if (
   !emailAuthentication.success ||
@@ -318,8 +288,7 @@ if (
   !smsAuthentication.success ||
   !("data" in smsAuthentication) ||
   smsAuthentication.data.user.channel !== "sms" ||
-  smsAuthentication.data.session.accessToken !==
-    "access:sms:+15555550100"
+  smsAuthentication.data.session.accessToken !== "access:sms:+15555550100"
 ) {
   throw new Error("SMS OTP namespace lost its instance types");
 }
@@ -353,10 +322,7 @@ if (false) {
     <Identity extends AuthUser, SessionCreateResult>(
       kernel: StrategyKernel<Identity, SessionCreateResult>,
     ) => ({
-      googleProfile: makeOidcNamespace(
-        kernel,
-        googleCalendarConfig,
-      ),
+      googleProfile: makeOidcNamespace(kernel, googleCalendarConfig),
     }),
   );
 }

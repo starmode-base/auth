@@ -1,8 +1,4 @@
-import type {
-  AuthUser,
-  Result,
-  SessionPort,
-} from "./contracts";
+import type { AuthUser, Result, SessionPort } from "./contracts";
 
 /** Ordinary strategy operation with no session authority. */
 export type PublicOperation<Args, Output> = {
@@ -23,10 +19,7 @@ export type AuthenticationOperation<
 /** Operation scoped to the user established by the current session. */
 export type CurrentUserOperation<Args, Output, E extends string> = {
   kind: "current-user";
-  run: (
-    user: AuthUser,
-    args: Args,
-  ) => Promise<Result<Output, E>>;
+  run: (user: AuthUser, args: Args) => Promise<Result<Output, E>>;
 };
 
 /** Every operation category understood by the generic kernel projector. */
@@ -57,48 +50,33 @@ export function authenticationOperation<
 }
 
 /** Defines an operation whose authority comes from the current session. */
-export function currentUserOperation<
-  Args,
-  Output,
-  E extends string,
->(
-  run: (
-    user: AuthUser,
-    args: Args,
-  ) => Promise<Result<Output, E>>,
+export function currentUserOperation<Args, Output, E extends string>(
+  run: (user: AuthUser, args: Args) => Promise<Result<Output, E>>,
 ): CurrentUserOperation<Args, Output, E> {
   return { kind: "current-user", run };
 }
 
 /** Projects one operation through the configured session type. */
-export type StrategyOperationApi<
-  Operation,
-  SessionCreateResult,
-> = Operation extends PublicOperation<infer Args, infer Output>
-  ? (args: Args) => Promise<Output>
-  : Operation extends AuthenticationOperation<
-        infer Args,
-        infer User,
-        infer E
-      >
-    ? (args: Args) => Promise<
-        Result<
-          {
-            user: User;
-            session: SessionCreateResult;
-          },
-          E
-        >
-      >
-    : Operation extends CurrentUserOperation<
-          infer Args,
-          infer Output,
-          infer E
-        >
+export type StrategyOperationApi<Operation, SessionCreateResult> =
+  Operation extends PublicOperation<infer Args, infer Output>
+    ? (args: Args) => Promise<Output>
+    : Operation extends AuthenticationOperation<infer Args, infer User, infer E>
       ? (args: Args) => Promise<
-          Result<Output, E | "not_authenticated">
+          Result<
+            {
+              user: User;
+              session: SessionCreateResult;
+            },
+            E
+          >
         >
-      : never;
+      : Operation extends CurrentUserOperation<
+            infer Args,
+            infer Output,
+            infer E
+          >
+        ? (args: Args) => Promise<Result<Output, E | "not_authenticated">>
+        : never;
 
 /** Exact public namespace produced from a reusable strategy description. */
 export type StrategyNamespace<

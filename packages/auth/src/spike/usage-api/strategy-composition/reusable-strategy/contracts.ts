@@ -11,19 +11,13 @@ export type AuthUser = {
 };
 
 /** Minimal session dependency used only by these type experiments. */
-export type SessionPort<
-  Identity extends AuthUser,
-  SessionCreateResult,
-> = {
+export type SessionPort<Identity extends AuthUser, SessionCreateResult> = {
   establish: (userId: string) => Promise<SessionCreateResult>;
   current: () => Promise<Identity | null>;
 };
 
 /** Narrow kernel authority available while mounting a strategy namespace. */
-export type StrategyKernel<
-  Identity extends AuthUser,
-  SessionCreateResult,
-> = {
+export type StrategyKernel<Identity extends AuthUser, SessionCreateResult> = {
   authenticate: <User extends AuthUser, E extends string>(
     prove: () => Promise<Result<User, E>>,
   ) => Promise<

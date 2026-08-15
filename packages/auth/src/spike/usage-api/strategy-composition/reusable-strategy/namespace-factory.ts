@@ -1,21 +1,16 @@
-import type {
-  AuthUser,
-  SessionPort,
-  StrategyKernel,
-} from "./contracts";
+import type { AuthUser, SessionPort, StrategyKernel } from "./contracts";
 
 /** A reusable strategy that constructs one or more named namespaces. */
 export type NamespaceFactory<
   Identity extends AuthUser,
   SessionCreateResult,
   Namespaces extends Record<string, object>,
-> = (
-  kernel: StrategyKernel<Identity, SessionCreateResult>,
-) => Namespaces;
+> = (kernel: StrategyKernel<Identity, SessionCreateResult>) => Namespaces;
 
-type UninstalledNamespaces<
-  Installed extends Record<string, object>,
-> = Record<string, object> & {
+type UninstalledNamespaces<Installed extends Record<string, object>> = Record<
+  string,
+  object
+> & {
   [Name in keyof Installed]?: never;
 };
 
@@ -35,10 +30,7 @@ export type NamespaceFactoryBuilder<
   >;
 };
 
-function makeStrategyKernel<
-  Identity extends AuthUser,
-  SessionCreateResult,
->(
+function makeStrategyKernel<Identity extends AuthUser, SessionCreateResult>(
   session: SessionPort<Identity, SessionCreateResult>,
 ): StrategyKernel<Identity, SessionCreateResult> {
   return {
@@ -75,11 +67,7 @@ function makeNamespaceFactoryBuilder<
 >(
   session: SessionPort<Identity, SessionCreateResult>,
   strategies: Installed,
-): NamespaceFactoryBuilder<
-  Identity,
-  SessionCreateResult,
-  Installed
-> {
+): NamespaceFactoryBuilder<Identity, SessionCreateResult, Installed> {
   const kernel = makeStrategyKernel(session);
 
   return {

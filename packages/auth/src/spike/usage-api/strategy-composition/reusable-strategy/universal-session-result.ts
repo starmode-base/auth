@@ -1,8 +1,4 @@
-import type {
-  AuthUser,
-  SessionPort,
-  StrategyKernel,
-} from "./contracts";
+import type { AuthUser, SessionPort, StrategyKernel } from "./contracts";
 
 /** One normalized result every session mechanism must return. */
 export type IssuedSessionCredentials = {

@@ -15,10 +15,7 @@ import {
 } from "./operation-descriptor";
 import type { StrategyDefinition } from "./operation-descriptor";
 import { makeAuth as makeOperationBuilderAuth } from "./operation-builder";
-import {
-  defineStrategy,
-  installDefinedStrategy,
-} from "./define-strategy";
+import { defineStrategy, installDefinedStrategy } from "./define-strategy";
 import type { StrategyApiTemplate } from "./define-strategy";
 import { installUniversalStrategy } from "./universal-session-result";
 import type {
@@ -43,9 +40,7 @@ type RequestOtpArgs = {
 type OtpError = "invalid_otp" | "authentication_disabled";
 
 type OtpNamespace<SessionCreateResult> = {
-  request: (
-    args: RequestOtpArgs,
-  ) => Promise<Result<void, never>>;
+  request: (args: RequestOtpArgs) => Promise<Result<void, never>>;
   authenticate: (args: OtpArgs) => Promise<
     Result<
       {
@@ -57,20 +52,12 @@ type OtpNamespace<SessionCreateResult> = {
   >;
 };
 
-declare const cookieSession: SessionPort<
-  SessionIdentity,
-  CookieSessionResult
->;
-declare const headerSession: SessionPort<
-  SessionIdentity,
-  HeaderSessionResult
->;
+declare const cookieSession: SessionPort<SessionIdentity, CookieSessionResult>;
+declare const headerSession: SessionPort<SessionIdentity, HeaderSessionResult>;
 declare const requestOtp: (
   args: RequestOtpArgs,
 ) => Promise<Result<void, never>>;
-declare const proveOtp: (
-  args: OtpArgs,
-) => Promise<Result<OtpUser, OtpError>>;
+declare const proveOtp: (args: OtpArgs) => Promise<Result<OtpUser, OtpError>>;
 
 function expectType<T>(value: T): T {
   return value;
@@ -199,12 +186,7 @@ const describedPasskeys = installStrategy(
 );
 
 expectType<
-  Promise<
-    Result<
-      PasskeySummary[],
-      "listing_disabled" | "not_authenticated"
-    >
-  >
+  Promise<Result<PasskeySummary[], "listing_disabled" | "not_authenticated">>
 >(describedPasskeys.list({}));
 
 const invalidDescription = {
@@ -225,13 +207,10 @@ interface OtpApiTemplate extends StrategyApiTemplate {
   readonly type: OtpNamespace<this["sessionCreateResult"]>;
 }
 
-const definedOtp = defineStrategy<OtpApiTemplate>(
-  (kernel) => ({
-    request: requestOtp,
-    authenticate: (args) =>
-      kernel.authenticate(() => proveOtp(args)),
-  }),
-);
+const definedOtp = defineStrategy<OtpApiTemplate>((kernel) => ({
+  request: requestOtp,
+  authenticate: (args) => kernel.authenticate(() => proveOtp(args)),
+}));
 
 const definedCookieOtp = installDefinedStrategy(cookieSession, definedOtp);
 const definedHeaderOtp = installDefinedStrategy(headerSession, definedOtp);
@@ -262,8 +241,7 @@ type UniversalOtpNamespace = OtpNamespace<IssuedSessionCredentials>;
 const universalOtp = {
   mount: (kernel) => ({
     request: requestOtp,
-    authenticate: (args) =>
-      kernel.authenticate(() => proveOtp(args)),
+    authenticate: (args) => kernel.authenticate(() => proveOtp(args)),
   }),
 } satisfies UniversalStrategy<UniversalOtpNamespace>;
 

@@ -23,19 +23,13 @@ export type AuthUser = {
  * establish is the private kernel transition. current is the read only
  * authority used to scope authentication resource operations.
  */
-export type SessionPort<
-  Identity extends AuthUser,
-  SessionCreateResult,
-> = {
+export type SessionPort<Identity extends AuthUser, SessionCreateResult> = {
   establish: (userId: string) => Promise<SessionCreateResult>;
   current: () => Promise<Identity | null>;
 };
 
 /** The only session capabilities granted to an installed strategy. */
-export type StrategyKernel<
-  Identity extends AuthUser,
-  SessionCreateResult,
-> = {
+export type StrategyKernel<Identity extends AuthUser, SessionCreateResult> = {
   /**
    * Runs one proof and establishes a session only for its successful userId.
    * The strategy never receives the session implementation.
@@ -66,32 +60,24 @@ export type AuthStrategy<
   SessionCreateResult,
   Api extends object,
 > = {
-  mount: (
-    kernel: StrategyKernel<Identity, SessionCreateResult>,
-  ) => Api;
+  mount: (kernel: StrategyKernel<Identity, SessionCreateResult>) => Api;
 };
 
 /** Broad strategy map for validation with satisfies. */
 export type StrategyMap<
   Identity extends AuthUser,
   SessionCreateResult,
-> = Record<
-  string,
-  AuthStrategy<Identity, SessionCreateResult, object>
->;
+> = Record<string, AuthStrategy<Identity, SessionCreateResult, object>>;
 
 /** Extracts the namespace one strategy produces for the configured session. */
 export type StrategyApiOf<
   Strategy,
   Identity extends AuthUser,
   SessionCreateResult,
-> = Strategy extends AuthStrategy<
-  Identity,
-  SessionCreateResult,
-  infer Api
->
-  ? Api
-  : never;
+> =
+  Strategy extends AuthStrategy<Identity, SessionCreateResult, infer Api>
+    ? Api
+    : never;
 
 /** Maps installed strategy names to their exact public namespaces. */
 export type StrategyApis<
@@ -135,10 +121,7 @@ export type AuthSurface<
 };
 
 /** Shared makeAuth input for the comparison. */
-export type MakeAuthConfig<
-  Identity extends AuthUser,
-  SessionCreateResult,
-> = {
+export type MakeAuthConfig<Identity extends AuthUser, SessionCreateResult> = {
   debug: boolean;
   session: SessionPort<Identity, SessionCreateResult>;
 };

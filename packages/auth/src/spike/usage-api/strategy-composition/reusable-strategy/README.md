@@ -30,12 +30,12 @@ expectType<HeaderSessionResult>(successful(headerAuth.strategies.otp.authenticat
 
 ## Comparison
 
-| Candidate | Exact distinct session results | Strategy authoring | Runtime projection | Current assessment |
-| --- | --- | --- | --- | --- |
-| Namespace factory | Yes | Generic function returning its named namespace | Assertion free object merge | Runtime leader |
-| Operation descriptors | Yes | Plain object plus operation helpers | Requires an assertion or unchecked overload | Type result only |
-| `defineStrategy` | Yes | Explicit type template using `this` plus an opaque helper | Assertion free direct mount | Too much type ceremony |
-| Universal session result | No distinct results by design | Plain mounted namespace | Assertion free direct mount | Rejected unless session design independently converges on it |
+| Candidate                | Exact distinct session results | Strategy authoring                                        | Runtime projection                          | Current assessment                                           |
+| ------------------------ | ------------------------------ | --------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ |
+| Namespace factory        | Yes                            | Generic function returning its named namespace            | Assertion free object merge                 | Runtime leader                                               |
+| Operation descriptors    | Yes                            | Plain object plus operation helpers                       | Requires an assertion or unchecked overload | Type result only                                             |
+| `defineStrategy`         | Yes                            | Explicit type template using `this` plus an opaque helper | Assertion free direct mount                 | Too much type ceremony                                       |
+| Universal session result | No distinct results by design  | Plain mounted namespace                                   | Assertion free direct mount                 | Rejected unless session design independently converges on it |
 
 ## Namespace factory
 
@@ -48,7 +48,7 @@ function makeOtpStrategy<Identity extends AuthUser, SessionCreateResult>(
   return {
     otp: {
       request: requestOtp,
-      authenticate: args => kernel.authenticate(() => proveOtp(args)),
+      authenticate: (args) => kernel.authenticate(() => proveOtp(args)),
     },
   };
 }
@@ -84,7 +84,7 @@ The namespace names are ordinary object literal keys returned by each factory. T
 The name must be written as a literal property in the factory. A helper shaped like `makeNamedStrategy(name, strategy)` encounters the same computed property limitation as the descriptor projector. User code does not need that helper. An inline factory receives a contextually typed kernel and can choose any literal name without generic annotations.
 
 ```ts
-const auth = makeAuth({ session }).addStrategy(kernel => ({
+const auth = makeAuth({ session }).addStrategy((kernel) => ({
   emailOtp: makeOtpNamespace(kernel, emailOtpConfig),
 }));
 ```
@@ -127,9 +127,9 @@ interface OtpApiTemplate extends StrategyApiTemplate {
   readonly type: OtpNamespace<this["sessionCreateResult"]>;
 }
 
-const otp = defineStrategy<OtpApiTemplate>(kernel => ({
+const otp = defineStrategy<OtpApiTemplate>((kernel) => ({
   request: requestOtp,
-  authenticate: args => kernel.authenticate(() => proveOtp(args)),
+  authenticate: (args) => kernel.authenticate(() => proveOtp(args)),
 }));
 ```
 
