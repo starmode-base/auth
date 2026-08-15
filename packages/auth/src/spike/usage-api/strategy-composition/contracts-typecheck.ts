@@ -31,13 +31,8 @@ type OtpUser = AuthUser & {
 };
 
 type OtpNamespace<SessionCreateResult> = {
-  request: (args: {
-    identifier: string;
-  }) => Promise<Result<void, never>>;
-  authenticate: (args: {
-    identifier: string;
-    otp: string;
-  }) => Promise<
+  request: (args: { identifier: string }) => Promise<Result<void, never>>;
+  authenticate: (args: { identifier: string; otp: string }) => Promise<
     Result<
       {
         user: OtpUser;
@@ -65,10 +60,7 @@ type PasskeyNamespace<SessionCreateResult> = {
   >;
 };
 
-type OidcNamespace<
-  Provider extends string,
-  SessionCreateResult,
-> = {
+type OidcNamespace<Provider extends string, SessionCreateResult> = {
   begin: () => Promise<{ authorizationUrl: string }>;
   callback: (args: { callbackUrl: string }) => Promise<
     Result<
@@ -235,9 +227,7 @@ const builderReusableOtp = builderSessionOnly.addStrategy(
   reusableOtp,
 );
 
-expectType<OtpNamespace<unknown>>(
-  builderReusableOtp.strategies.reusableOtp,
-);
+expectType<OtpNamespace<unknown>>(builderReusableOtp.strategies.reusableOtp);
 
 const configurationReusableOtp = makeConfigurationAuth({
   debug: true,
@@ -270,9 +260,7 @@ const configurationOtpGoogle = makeConfigurationAuth({
 expectType<Promise<CreatedSession>>(
   configurationSessionOnly.session.create({ userId: "user-1" }),
 );
-expectType<OtpNamespace<CreatedSession>>(
-  configurationOtpGoogle.strategies.otp,
-);
+expectType<OtpNamespace<CreatedSession>>(configurationOtpGoogle.strategies.otp);
 expectType<OidcNamespace<"google", CreatedSession>>(
   configurationOtpGoogle.strategies.google,
 );
@@ -305,19 +293,14 @@ const checkedConfiguration = makeConfigurationAuth({
   strategies: checkedStrategies,
 });
 
-expectType<OtpNamespace<CreatedSession>>(
-  checkedConfiguration.strategies.otp,
-);
+expectType<OtpNamespace<CreatedSession>>(checkedConfiguration.strategies.otp);
 
 // @ts-expect-error satisfies preserved the known names.
 void checkedConfiguration.strategies.notInstalled;
 
 /* A broad annotation deliberately loses exact strategy name information. */
 
-const widenedStrategies: StrategyMap<
-  SessionIdentity,
-  CreatedSession
-> = {
+const widenedStrategies: StrategyMap<SessionIdentity, CreatedSession> = {
   otp,
   google,
 };
@@ -328,18 +311,16 @@ const widenedConfiguration = makeConfigurationAuth({
   strategies: widenedStrategies,
 });
 
-expectType<object | undefined>(
-  widenedConfiguration.strategies.notInstalled,
-);
+expectType<object | undefined>(widenedConfiguration.strategies.notInstalled);
 
 /* Both candidates project the same shared public auth surface. */
 
-expectType<
-  AuthSurface<SessionIdentity, CreatedSession, OtpGoogleNamespaces>
->(builderOtpGoogle);
-expectType<
-  AuthSurface<SessionIdentity, CreatedSession, OtpGoogleNamespaces>
->(configurationOtpGoogle);
+expectType<AuthSurface<SessionIdentity, CreatedSession, OtpGoogleNamespaces>>(
+  builderOtpGoogle,
+);
+expectType<AuthSurface<SessionIdentity, CreatedSession, OtpGoogleNamespaces>>(
+  configurationOtpGoogle,
+);
 
 expectType<
   ConfigurationAuth<
@@ -378,6 +359,4 @@ void makeConfigurationAuth({
 /* The passkey namespace remains an arbitrary strategy specific shape. */
 
 const builderPasskey = builderSessionOnly.addStrategy("passkey", passkey);
-expectType<PasskeyNamespace<CreatedSession>>(
-  builderPasskey.strategies.passkey,
-);
+expectType<PasskeyNamespace<CreatedSession>>(builderPasskey.strategies.passkey);

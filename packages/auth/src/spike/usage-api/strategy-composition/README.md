@@ -84,3 +84,7 @@ This comparison does not choose final session credentials, lifecycle capabilitie
 ## Exit
 
 Neither construction form is ready to replace the active usage API while a reusable session independent strategy loses its session result type. After that boundary is resolved and one construction form wins, the shared open strategy model and the winning syntax replace the fixed composition section of the active usage API. This directory is then removed rather than becoming another permanent contract.
+
+## Reusable strategy follow up
+
+[`reusable-strategy/`](./reusable-strategy/) compares operation descriptors, an explicit `defineStrategy` type encoding, and one universal session result. Operation descriptors are the leading type candidate because they preserve distinct session results without requiring a strategy author to express a higher kinded namespace. Runtime projection and complete passkey and OIDC workflow pressure tests remain before this finding can change the active usage contract.
