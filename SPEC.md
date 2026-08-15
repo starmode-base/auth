@@ -8,24 +8,15 @@ Passkeys + OTP as composable primitives. Apps choose their flow.
 
 ## Current API direction
 
-> **Decided 2026-07-26:** The active usage model is specified in
-> `packages/auth/src/spike/usage-api/`. It supersedes the older pure-primitive,
-> application-orchestrated flow decisions that remain below as history.
+> **Decided 2026-07-26:** The active usage model is specified in `packages/auth/src/spike/usage-api/`. It supersedes the older pure-primitive, application-orchestrated flow decisions that remain below as history.
 
 The main spike contract still contains the earlier fixed session surface while the replacement boundary is being designed. For builder and session work, read the usage API README together with `packages/auth/src/spike/session-lifecycle/README.md`. Those documents record the active candidate and its open questions until the surviving types are promoted into the main spike contract.
 
-`makeAuth` is a small authentication kernel configured by literal objects.
-Sessions are mandatory. Chained OTP and passkey objects are complete trusted
-authentication strategies: they own their feature-specific workflows, while
-core owns builder composition, session establishment after successful
-authentication, and current-user scoping for auth-resource management.
+`makeAuth` is a small authentication kernel configured by literal objects. Sessions are mandatory. Chained OTP and passkey objects are complete trusted authentication strategies: they own their feature-specific workflows, while core owns builder composition, session establishment after successful authentication, and current-user scoping for auth-resource management.
 
 ### Microkernel boundary
 
-> **Clarified 2026-07-27:** This is a microkernel architecture, with one
-> important qualification: “feature logic lives in DI” does not mean the
-> kernel is logic-free. Injected modules own feature and mechanism logic; the
-> kernel retains the small shared control plane.
+> **Clarified 2026-07-27:** This is a microkernel architecture, with one important qualification: “feature logic lives in DI” does not mean the kernel is logic-free. Injected modules own feature and mechanism logic; the kernel retains the small shared control plane.
 
 The trust boundary is:
 
@@ -40,68 +31,28 @@ session DI: implement that session
 The kernel guarantees only what it controls:
 
 - A failed authentication result creates no session.
-- A successful result creates a session for exactly the userId returned by the
-  strategy, using the one session implementation configured in `makeAuth`.
-- Strategies do not receive the session implementation and cannot create
-  sessions themselves.
-- Auth-resource operations derive userId from the current session; their public
-  methods never accept an arbitrary userId.
-- Installed strategies hide direct session creation from the normal public
-  usage surface.
+- A successful result creates a session for exactly the userId returned by the strategy, using the one session implementation configured in `makeAuth`.
+- Strategies do not receive the session implementation and cannot create sessions themselves.
+- Auth-resource operations derive userId from the current session; their public methods never accept an arbitrary userId.
+- Installed strategies hide direct session creation from the normal public usage surface.
 
-The strategy remains a trusted authentication authority. A bespoke OTP strategy
-can return an arbitrary user without verifying an OTP; core cannot detect that
-lie. Directly implementing the strategy contract therefore replaces that
-authentication engine. Core’s guarantee begins at the strategy result: it
-controls how an authenticated identity becomes a session, not whether the
-strategy proved that identity correctly.
+The strategy remains a trusted authentication authority. A bespoke OTP strategy can return an arbitrary user without verifying an OTP; core cannot detect that lie. Directly implementing the strategy contract therefore replaces that authentication engine. Core’s guarantee begins at the strategy result: it controls how an authenticated identity becomes a session, not whether the strategy proved that identity correctly.
 
-This separation applies least authority. OTP and passkey strategies can
-authenticate but cannot issue sessions; the session DI can issue sessions but
-does not decide whether OTP or passkey proof succeeded; the kernel alone
-connects those capabilities. Giving every strategy the session DI would make
-each strategy reimplement the shared transition and would prevent the library
-from guaranteeing consistent session behavior.
+This separation applies least authority. OTP and passkey strategies can authenticate but cannot issue sessions; the session DI can issue sessions but does not decide whether OTP or passkey proof succeeded; the kernel alone connects those capabilities. Giving every strategy the session DI would make each strategy reimplement the shared transition and would prevent the library from guaranteeing consistent session behavior.
 
 The admission test for kernel logic is strict:
 
-> Core owns only behavior that every session-establishing strategy or
-> current-user auth-resource operation must obey identically.
+> Core owns only behavior that every session-establishing strategy or current-user auth-resource operation must obey identically.
 
-OTP generation and delivery, WebAuthn verification, challenges, credential
-counters, identity binding, and feature policy remain outside the kernel. If
-strategy-specific branches begin accumulating in core, the microkernel boundary
-has been violated. Moving the shared transition into another file or helper
-would not change its architectural ownership; the component with sole control
-of that transition is the kernel.
+OTP generation and delivery, WebAuthn verification, challenges, credential counters, identity binding, and feature policy remain outside the kernel. If strategy-specific branches begin accumulating in core, the microkernel boundary has been violated. Moving the shared transition into another file or helper would not change its architectural ownership; the component with sole control of that transition is the kernel.
 
-Literal objects are the contract. A one-off implementation may be written
-inline, a fixed reusable implementation is a preconfigured vanilla object, and
-a parameterized reusable implementation may be produced by a `make*` helper.
-Object-producing helpers add no capability; they only package construction or
-retain supplied configuration. Lower-level primitives remain independently
-importable and can be used to implement the same strategy contracts.
+Literal objects are the contract. A one-off implementation may be written inline, a fixed reusable implementation is a preconfigured vanilla object, and a parameterized reusable implementation may be produced by a `make*` helper. Object-producing helpers add no capability; they only package construction or retain supplied configuration. Lower-level primitives remain independently importable and can be used to implement the same strategy contracts.
 
-A DI operation exists only where core needs an independent decision point:
-different public operations or requests, conditional invocation, a
-cross-strategy security boundary, current-session authority, or an atomic
-boundary. Mechanics that core would only run together belong behind one
-semantic operation. Accordingly OTP exposes complete request and authenticate
-strategy operations, passkey ceremony phases remain independent across
-requests, and credential removal is one atomic strategy operation rather than
-list followed by policy followed by delete.
+A DI operation exists only where core needs an independent decision point: different public operations or requests, conditional invocation, a cross-strategy security boundary, current-session authority, or an atomic boundary. Mechanics that core would only run together belong behind one semantic operation. Accordingly OTP exposes complete request and authenticate strategy operations, passkey ceremony phases remain independent across requests, and credential removal is one atomic strategy operation rather than list followed by policy followed by delete.
 
-Strategies normalize successful authentication to at least `{ userId }`.
-Strategy-specific identity binding remains inside each strategy because OTP
-identifier resolution, passkey credential identity, and future OAuth identity
-resolution do not have the same inputs or authority. An operation that becomes
-genuinely identical across strategies moves to `makeAuth`; it is never repeated
-under every chained feature.
+Strategies normalize successful authentication to at least `{ userId }`. Strategy-specific identity binding remains inside each strategy because OTP identifier resolution, passkey credential identity, and future OAuth identity resolution do not have the same inputs or authority. An operation that becomes genuinely identical across strategies moves to `makeAuth`; it is never repeated under every chained feature.
 
-Session and passkey management lists return generic application-defined safe
-projections extending stable identifiers. Core treats additional fields as
-opaque and passes them through. Raw storage records, secrets, cryptographic
-material, and internal policy state are never management projections.
+Session and passkey management lists return generic application-defined safe projections extending stable identifiers. Core treats additional fields as opaque and passes them through. Raw storage records, secrets, cryptographic material, and internal policy state are never management projections.
 
 ## Core philosophy
 

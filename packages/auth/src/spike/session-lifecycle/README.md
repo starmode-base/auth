@@ -4,16 +4,11 @@
 
 ## Objective
 
-Settle the session boundary of `makeAuth` well enough to resume contract tests
-with confidence.
+Settle the session boundary of `makeAuth` well enough to resume contract tests with confidence.
 
-This document keeps the reasoning needed to make that decision. It is not a
-transcript, and it does not reduce a group of coupled design questions to a
-contrived next action.
+This document keeps the reasoning needed to make that decision. It is not a transcript, and it does not reduce a group of coupled design questions to a contrived next action.
 
-The boundary is credible when one small public API can represent the session
-mechanisms and execution environments we care about without hiding writes,
-inventing meaningless values, or adding mechanism-specific branches to core.
+The boundary is credible when one small public API can represent the session mechanisms and execution environments we care about without hiding writes, inventing meaningless values, or adding mechanism-specific branches to core.
 
 ## Fixed boundaries
 
@@ -29,8 +24,7 @@ inventing meaningless values, or adding mechanism-specific branches to core.
 | Custom implementations | Core does not try to make an incorrectly written custom session implementation safe. We make shipped mechanisms correct and support custom authors with contracts, documentation, examples, tests, and skills. |
 | Target support         | The API must permit SSR, CSR, RSC, mobile, conventional servers, and Convex without core changes. We do not need to ship every binding on day one.                                                             |
 
-Legacy code, `SPEC.md`, the main spike, and the nested spike are evidence. None
-is a contract that the final design must preserve.
+Legacy code, `SPEC.md`, the main spike, and the nested spike are evidence. None is a contract that the final design must preserve.
 
 ## Why the design was reopened
 
@@ -46,21 +40,14 @@ read transport
   → return userId
 ```
 
-It therefore places transport, token mechanics, persistence, and lifetime
-policy in core. It also makes an apparent read mutate state.
+It therefore places transport, token mechanics, persistence, and lifetime policy in core. It also makes an apparent read mutate state.
 
 That is troublesome for two independent reasons:
 
-- RSC rendering, SSR reads, and Convex queries need validation without renewal
-  or writes.
-- The algorithm encodes one session design: a self-contained credential with
-  cached session data, periodic persistence checks, and sliding renewal.
+- RSC rendering, SSR reads, and Convex queries need validation without renewal or writes.
+- The algorithm encodes one session design: a self-contained credential with cached session data, periodic persistence checks, and sliding renewal.
 
-A database-backed opaque credential and a signed credential can expose the
-same session data with the same bounded-staleness policy. They differ in where
-the session snapshot is held and why it is trusted. The problem is not merely
-how to clean up `getSession()`. The problem is deciding which parts are session
-authority, access representation, and universal core behavior.
+A database-backed opaque credential and a signed credential can expose the same session data with the same bounded-staleness policy. They differ in where the session snapshot is held and why it is trusted. The problem is not merely how to clean up `getSession()`. The problem is deciding which parts are session authority, access representation, and universal core behavior.
 
 ## Working model
 
@@ -76,21 +63,14 @@ A signed credential is a session snapshot carried by the client:
 signed credential → signature verification → issued session snapshot
 ```
 
-Memoizing an opaque lookup for ten seconds and issuing a signed session
-snapshot for ten seconds make the same consistency promise: authentication may
-observe session state that is at most ten seconds stale. The cache location and
-trust mechanism differ:
+Memoizing an opaque lookup for ten seconds and issuing a signed session snapshot for ten seconds make the same consistency promise: authentication may observe session state that is at most ten seconds stale. The cache location and trust mechanism differ:
 
 | Representation            | Snapshot location | Why the snapshot is trusted |
 | ------------------------- | ----------------- | --------------------------- |
 | Memoized opaque lookup    | Server cache      | The server owns the cache   |
 | Short-lived signed access | Client credential | The issuer's signature      |
 
-Signed access therefore does not need a second kind of session authority. The
-opaque authority credential that would otherwise be presented as access is
-retained as the refresh credential. Refresh resolves current authoritative
-state and issues another short-lived snapshot. It does not inherently rotate
-the authority credential.
+Signed access therefore does not need a second kind of session authority. The opaque authority credential that would otherwise be presented as access is retained as the refresh credential. Refresh resolves current authoritative state and issues another short-lived snapshot. It does not inherently rotate the authority credential.
 
 The candidate makes that relationship explicit:
 
@@ -132,8 +112,7 @@ This mechanism has no persisted positive session authority and does not inherent
 
 ## Evidence from the nested spike
 
-The code in this directory tries one lifecycle against two access
-representations over the same opaque authority shape:
+The code in this directory tries one lifecycle against two access representations over the same opaque authority shape:
 
 | Concern          | Short-lived signed access                   | Direct opaque access                                     |
 | ---------------- | ------------------------------------------- | -------------------------------------------------------- |
@@ -150,10 +129,8 @@ The experiment established that:
 - Validation can remain read-only.
 - Both mechanisms can resemble `create`, `validate`, `refresh`, and `end`.
 - Read-only and write-capable environments can be represented separately.
-- Signed and direct opaque access can use the same authoritative storage
-  contract.
-- Refresh-token rotation is independent of signed access and must not be
-  implied by every short access-token lifetime.
+- Signed and direct opaque access can use the same authoritative storage contract.
+- Refresh-token rotation is independent of signed access and must not be implied by every short access-token lifetime.
 
 It did **not** establish that:
 
@@ -194,13 +171,11 @@ The nested code's complete semantic session adapter remains useful evidence for 
 
 The ownership rule is:
 
-> A behavior belongs in core only when every supported session mechanism needs
-> core to make the same decision.
+> A behavior belongs in core only when every supported session mechanism needs core to make the same decision.
 
 ## Coupled questions
 
-These questions constrain each other. Answering one without the others would
-produce another superficially neat but unproven API.
+These questions constrain each other. Answering one without the others would produce another superficially neat but unproven API.
 
 | Question                                     | Context needed to answer it                                                                                                                                                                                                                                                                  |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -213,17 +188,13 @@ Lifetime and refresh policy belong to the session implementation. The exact poli
 
 ## Compatibility targets
 
-Named targets are compatibility probes, not a promise to ship every
-integration. A target belongs in the primary set only when it introduces a
-distinct execution, persistence, transport, or rendering constraint.
+Named targets are compatibility probes, not a promise to ship every integration. A target belongs in the primary set only when it introduces a distinct execution, persistence, transport, or rendering constraint.
 
-Framework compatibility normally tests a binding, not the `SessionAdapter`
-itself:
+Framework compatibility normally tests a binding, not the `SessionAdapter` itself:
 
 - A session adapter owns session mechanism and policy.
 - A binding moves credential values between that API and an environment.
-- Convex may pressure both boundaries because its persistence capabilities are
-  created per invocation.
+- Convex may pressure both boundaries because its persistence capabilities are created per invocation.
 
 | Target              | Why it was selected                                                                                                                                                 | Boundary stressed               | Role      |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | --------- |
@@ -235,19 +206,13 @@ itself:
 | Electron            | Desktop clients add protected OS storage plus a privileged main-process boundary that must not leak renewable credentials into the renderer.                        | Credential boundary and binding | Primary   |
 | SolidStart          | A non-React full-stack confirmation that the design has not accidentally absorbed React, Next.js, or TanStack assumptions. It adds less new architectural pressure. | Binding                         | Secondary |
 
-Compatibility means that an application can support the target through a
-session implementation and/or binding without changing core. It does not mean
-the library must ship or maintain that integration on day one.
+Compatibility means that an application can support the target through a session implementation and/or binding without changing core. It does not mean the library must ship or maintain that integration on day one.
 
-Other frameworks should initially be classified by the constraints above
-rather than added by name. A new target joins the primary set only when it
-reveals a capability shape that the existing representatives do not exercise.
+Other frameworks should initially be classified by the constraints above rather than added by name. A new target joins the primary set only when it reveals a capability shape that the existing representatives do not exercise.
 
 ## How the design will converge
 
-There is no single context-free question to answer next. The ownership,
-lifecycle, credential, and invocation-capability shapes need to be developed
-together against representative cases.
+There is no single context-free question to answer next. The ownership, lifecycle, credential, and invocation-capability shapes need to be developed together against representative cases.
 
 Small type and implementation probes should show that the same candidate boundary can describe:
 
@@ -256,8 +221,7 @@ Small type and implementation probes should show that the same candidate boundar
 - A longer-lived signed session with denylist-backed revocation and no refresh requirement.
 - A custom semantic session implementation without a core change.
 
-The compatibility targets then test whether those mechanisms can be used in
-the required environments without changing core.
+The compatibility targets then test whether those mechanisms can be used in the required environments without changing core.
 
 Each probe should make five boundaries visible:
 
@@ -275,9 +239,7 @@ A candidate is not ready to land if a representative case requires:
 - A token-format branch in core.
 - Session policy with no clear owner or test boundary.
 
-Types and minimal implementation may evolve together while proving this. The
-point is to converge on one coherent boundary, not to obey an arbitrary
-sequence.
+Types and minimal implementation may evolve together while proving this. The point is to converge on one coherent boundary, not to obey an arbitrary sequence.
 
 ## Parked until that boundary is credible
 
@@ -292,13 +254,9 @@ sequence.
 
 ## Current code status
 
-- `../contracts.ts` still contains the earlier mandatory-session design and is
-  unchanged while this candidate is explored.
+- `../contracts.ts` still contains the earlier mandatory-session design and is unchanged while this candidate is explored.
 - `contracts.ts` contains the earlier optional-unit candidate and shared session lifecycle. Its composition has been superseded, while its session shapes remain evidence.
 - `composition-probes.ts` checks the superseded optional-unit composition, order independence, and single-use builder steps.
-- `mechanisms.ts` minimally implements direct opaque access and signed access
-  over one opaque-authority contract.
-- `target-probes.ts` checks read-only and write-capable execution targets plus
-  client credential persistence.
-- The nested candidate should not receive comprehensive tests or production
-  hardening until the boundary has survived the representative probes.
+- `mechanisms.ts` minimally implements direct opaque access and signed access over one opaque-authority contract.
+- `target-probes.ts` checks read-only and write-capable execution targets plus client credential persistence.
+- The nested candidate should not receive comprehensive tests or production hardening until the boundary has survived the representative probes.
