@@ -15,11 +15,14 @@ import type {
   Result,
   SessionAdapter,
   SessionIdentity,
-  SessionSummary,
   WithOtpConfig,
   WithPasskeyConfig,
 } from "./contracts";
 import { makeAuth } from "./contracts";
+
+type SessionClaims = SessionIdentity & {
+  role: "member";
+};
 
 type SessionCreated = {
   accessToken: "created";
@@ -29,8 +32,17 @@ type SessionRefreshed = {
   accessToken: "refreshed";
 };
 
-type ListedSession = SessionSummary & {
+type ListedSession = {
+  sessionId: string;
   device: string;
+};
+
+type SessionCapabilities = {
+  refresh: () => Promise<SessionRefreshed>;
+  end: () => Promise<void>;
+  list: () => Promise<ListedSession[]>;
+  endAll: () => Promise<void>;
+  revoke: (args: { sessionId: string }) => Promise<boolean>;
 };
 
 type ResolvedUser = AuthUser & {
@@ -42,9 +54,9 @@ type ListedPasskey = PasskeySummary & {
 };
 
 declare const session: SessionAdapter<
+  SessionClaims,
   SessionCreated,
-  SessionRefreshed,
-  ListedSession
+  SessionCapabilities
 >;
 declare const registrationOptions: PublicKeyCredentialCreationOptionsJSON;
 declare const authenticationOptions: PublicKeyCredentialRequestOptionsJSON;
@@ -127,27 +139,29 @@ const passkeyThenOtp = makeAuth({ debug: true, session })
 
 /* The four approved states preserve their exact types. */
 
-expectType<Auth<SessionCreated, SessionRefreshed, ListedSession>>(sessionOnly);
+expectType<Auth<SessionClaims, SessionCreated, SessionCapabilities>>(
+  sessionOnly,
+);
 expectType<
-  AuthOtp<SessionCreated, SessionRefreshed, ListedSession, ResolvedUser>
+  AuthOtp<SessionClaims, SessionCreated, SessionCapabilities, ResolvedUser>
 >(sessionOtp);
 expectType<
-  AuthPasskey<SessionCreated, SessionRefreshed, ListedSession, ListedPasskey>
+  AuthPasskey<SessionClaims, SessionCreated, SessionCapabilities, ListedPasskey>
 >(sessionPasskey);
 expectType<
   AuthFull<
+    SessionClaims,
     SessionCreated,
-    SessionRefreshed,
-    ListedSession,
+    SessionCapabilities,
     ResolvedUser,
     ListedPasskey
   >
 >(otpThenPasskey);
 expectType<
   AuthFull<
+    SessionClaims,
     SessionCreated,
-    SessionRefreshed,
-    ListedSession,
+    SessionCapabilities,
     ResolvedUser,
     ListedPasskey
   >
@@ -166,6 +180,26 @@ void makeAuth({ debug: true, session, unknown: true });
 
 // @ts-expect-error sessions are configured at makeAuth
 void sessionOnly.withSession;
+
+const sessionWithPublicCreate = {
+  kernel: session.kernel,
+  capabilities: {
+    create: async () => undefined,
+  },
+};
+
+// @ts-expect-error capabilities cannot bypass core's creation projection
+void makeAuth({ debug: true, session: sessionWithPublicCreate });
+
+const sessionWithPublicGet = {
+  kernel: session.kernel,
+  capabilities: {
+    get: async () => null,
+  },
+};
+
+// @ts-expect-error capabilities cannot replace core's identity projection
+void makeAuth({ debug: true, session: sessionWithPublicGet });
 
 /* Authentication strategies cannot exist outside session-based makeAuth. */
 
@@ -225,7 +259,7 @@ void sessionPasskey.createAuthenticationOptions;
 expectType<Promise<SessionCreated>>(
   sessionOnly.session.create({ userId: "user-1" }),
 );
-expectType<Promise<SessionIdentity | null>>(sessionOnly.session.get());
+expectType<Promise<SessionClaims | null>>(sessionOnly.session.get());
 expectType<Promise<SessionRefreshed>>(sessionOnly.session.refresh());
 expectType<Promise<ListedSession[]>>(sessionOnly.session.list());
 expectType<Promise<void>>(sessionOnly.session.end());

@@ -18,75 +18,72 @@ export type AuthUser = {
   userId: string;
 };
 
-/** The authenticated identity established by a session */
+/** Minimum authenticated identity established by every session implementation */
 export type SessionIdentity = {
   userId: string;
 };
 
-/** Minimum safe session metadata exposed by session management */
-export type SessionSummary = {
-  sessionId: string;
+/**
+ * Fixed session port used by the authentication kernel.
+ *
+ * Core establishes the exact userId returned by a successful authentication
+ * strategy and resolves the current identity when another auth workflow needs
+ * that authority. The implementation owns every credential, persistence,
+ * transport, lifetime, renewal, and revocation decision behind these two
+ * operations.
+ */
+export type SessionKernel<Identity extends SessionIdentity, CreateResult> = {
+  establish: (userId: string) => Promise<CreateResult>;
+  /** Repeatable read-only resolution of the presented session */
+  resolve: () => Promise<Identity | null>;
 };
+
+/** Capability names reserved for the kernel's public projections */
+type ReservedSessionCapability = "create" | "get";
+
+/** A public capability set cannot bypass or replace the kernel projections */
+export type SessionCapabilitySet<Capabilities extends object> =
+  Extract<keyof Capabilities, ReservedSessionCapability> extends never
+    ? Capabilities
+    : never;
 
 /**
  * Complete injected session implementation.
  *
- * The implementation owns credential types, lifetime policy, persistence,
- * transport, and mechanism. Invocation-scoped environment access is closed
- * over when the object is constructed; no framework context enters the public
- * usage API.
- *
- * Summary is an application-defined safe projection. Core relies only on
- * sessionId and returns all additional fields unchanged.
+ * Capabilities contains complete current-session workflows such as refresh,
+ * renewal, revocation, or management. It accepts no arbitrary userId and is
+ * projected unchanged into the public session namespace. An implementation
+ * supplies only the operations its mechanism can perform meaningfully.
  */
 export type SessionAdapter<
+  Identity extends SessionIdentity,
   CreateResult,
-  RefreshResult,
-  Summary extends SessionSummary,
+  Capabilities extends object,
 > = {
-  create: (userId: string) => Promise<CreateResult>;
-  /** Repeatable read-only lookup of the presented session */
-  get: () => Promise<SessionIdentity | null>;
-  /** Explicit renewal; get never performs it implicitly */
-  refresh: () => Promise<RefreshResult>;
-  end: () => Promise<void>;
-  list: (userId: string) => Promise<Summary[]>;
-  endAll: (userId: string) => Promise<void>;
-  /**
-   * Revokes sessionId only when it belongs to userId. False means no matching
-   * owned session existed.
-   */
-  revoke: (userId: string, sessionId: string) => Promise<boolean>;
+  kernel: SessionKernel<Identity, CreateResult>;
+  capabilities: SessionCapabilitySet<Capabilities>;
 };
 
-/** Session management available whether or not a strategy is installed */
+/** Session access plus exactly the configured mechanism capabilities */
 export type SessionManagementNamespace<
-  RefreshResult,
-  Summary extends SessionSummary,
+  Identity extends SessionIdentity,
+  Capabilities extends object,
 > = {
-  get: () => Promise<SessionIdentity | null>;
-  refresh: () => Promise<RefreshResult>;
-  end: () => Promise<void>;
-  /** Lists only sessions belonging to the authenticated user */
-  list: () => Promise<Summary[]>;
-  /** Ends every session belonging to the authenticated user */
-  endAll: () => Promise<void>;
-  /** Revokes an owned session; arbitrary userIds are never accepted */
-  revoke: (args: { sessionId: string }) => Promise<boolean>;
-};
+  get: () => Promise<Identity | null>;
+} & SessionCapabilitySet<Capabilities>;
 
 /**
- * Complete session-only namespace.
+ * Session-only namespace.
  *
- * create is the escape hatch for applications implementing a bespoke
+ * create is the escape hatch for applications implementing a custom
  * authentication strategy. Installed strategies retain create internally and
  * remove it from their ordinary public usage surface.
  */
 export type SessionNamespace<
+  Identity extends SessionIdentity,
   CreateResult,
-  RefreshResult,
-  Summary extends SessionSummary,
-> = SessionManagementNamespace<RefreshResult, Summary> & {
+  Capabilities extends object,
+> = SessionManagementNamespace<Identity, Capabilities> & {
   create: (args: { userId: string }) => Promise<CreateResult>;
 };
 
@@ -281,44 +278,44 @@ export type PasskeyNamespace<
 
 /** makeAuth always configures sessions */
 export type MakeAuthConfig<
+  Identity extends SessionIdentity,
   CreateResult,
-  RefreshResult,
-  Summary extends SessionSummary,
+  Capabilities extends object,
 > = {
   debug: boolean;
-  session: SessionAdapter<CreateResult, RefreshResult, Summary>;
+  session: SessionAdapter<Identity, CreateResult, Capabilities>;
 };
 
 /** Sessions configured; either authentication strategy may be installed */
 export type Auth<
+  Identity extends SessionIdentity,
   SessionCreateResult,
-  SessionRefreshResult,
-  Summary extends SessionSummary,
+  SessionCapabilities extends object,
 > = {
-  session: SessionNamespace<SessionCreateResult, SessionRefreshResult, Summary>;
+  session: SessionNamespace<Identity, SessionCreateResult, SessionCapabilities>;
   withOtp: <User extends AuthUser>(
     config: WithOtpConfig<User>,
-  ) => AuthOtp<SessionCreateResult, SessionRefreshResult, Summary, User>;
+  ) => AuthOtp<Identity, SessionCreateResult, SessionCapabilities, User>;
   withPasskey: <Passkey extends PasskeySummary>(
     config: WithPasskeyConfig<Passkey>,
-  ) => AuthPasskey<SessionCreateResult, SessionRefreshResult, Summary, Passkey>;
+  ) => AuthPasskey<Identity, SessionCreateResult, SessionCapabilities, Passkey>;
 };
 
 /** Sessions plus OTP authentication; passkeys may still be installed */
 export type AuthOtp<
+  Identity extends SessionIdentity,
   SessionCreateResult,
-  SessionRefreshResult,
-  Summary extends SessionSummary,
+  SessionCapabilities extends object,
   User extends AuthUser,
 > = {
-  session: SessionManagementNamespace<SessionRefreshResult, Summary>;
+  session: SessionManagementNamespace<Identity, SessionCapabilities>;
   otp: OtpNamespace<User, SessionCreateResult>;
   withPasskey: <Passkey extends PasskeySummary>(
     config: WithPasskeyConfig<Passkey>,
   ) => AuthFull<
+    Identity,
     SessionCreateResult,
-    SessionRefreshResult,
-    Summary,
+    SessionCapabilities,
     User,
     Passkey
   >;
@@ -326,19 +323,19 @@ export type AuthOtp<
 
 /** Sessions plus passkey authentication; OTP may still be installed */
 export type AuthPasskey<
+  Identity extends SessionIdentity,
   SessionCreateResult,
-  SessionRefreshResult,
-  Summary extends SessionSummary,
+  SessionCapabilities extends object,
   Passkey extends PasskeySummary,
 > = {
-  session: SessionManagementNamespace<SessionRefreshResult, Summary>;
+  session: SessionManagementNamespace<Identity, SessionCapabilities>;
   passkey: PasskeyNamespace<SessionCreateResult, Passkey>;
   withOtp: <User extends AuthUser>(
     config: WithOtpConfig<User>,
   ) => AuthFull<
+    Identity,
     SessionCreateResult,
-    SessionRefreshResult,
-    Summary,
+    SessionCapabilities,
     User,
     Passkey
   >;
@@ -346,13 +343,13 @@ export type AuthPasskey<
 
 /** Sessions plus both authentication strategies; the builder is complete */
 export type AuthFull<
+  Identity extends SessionIdentity,
   SessionCreateResult,
-  SessionRefreshResult,
-  Summary extends SessionSummary,
+  SessionCapabilities extends object,
   User extends AuthUser,
   Passkey extends PasskeySummary,
 > = {
-  session: SessionManagementNamespace<SessionRefreshResult, Summary>;
+  session: SessionManagementNamespace<Identity, SessionCapabilities>;
   otp: OtpNamespace<User, SessionCreateResult>;
   passkey: PasskeyNamespace<SessionCreateResult, Passkey>;
 };
@@ -364,9 +361,9 @@ export type AuthFull<
  * is not implemented in this spike.
  */
 export declare function makeAuth<
+  Identity extends SessionIdentity,
   SessionCreateResult,
-  SessionRefreshResult,
-  Summary extends SessionSummary,
+  SessionCapabilities extends object,
 >(
-  config: MakeAuthConfig<SessionCreateResult, SessionRefreshResult, Summary>,
-): Auth<SessionCreateResult, SessionRefreshResult, Summary>;
+  config: MakeAuthConfig<Identity, SessionCreateResult, SessionCapabilities>,
+): Auth<Identity, SessionCreateResult, SessionCapabilities>;

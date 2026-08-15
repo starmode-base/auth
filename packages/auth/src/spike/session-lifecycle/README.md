@@ -1,10 +1,10 @@
 # Session architecture
 
-> **Status:** Active session-boundary design. The usage API spike owns builder composition. The code in this directory is supporting evidence, not a second contract.
+> **Status:** Supporting evidence. The usage API spike now owns the converging session contract as well as builder composition. The code in this directory is retained only for mechanism and execution-target probes.
 
 ## Objective
 
-Settle the session boundary of `makeAuth` well enough to resume contract tests with confidence.
+Preserve the mechanism and execution-target evidence used to settle the session boundary of `makeAuth`.
 
 This document keeps the reasoning needed to make that decision. It is not a transcript, and it does not reduce a group of coupled design questions to a contrived next action.
 
@@ -165,9 +165,9 @@ A denylist-backed signed session has no inherent refresh operation. Changing its
 
 The configured session implementation owns the complete session lifecycle and policy. Mechanism factories such as `makeOpaqueSession` and `makeSignedAccessSession` may compose lower-level storage, codecs, clocks, and credential generation, but `makeAuth` does not orchestrate those mechanism details or branch on token format.
 
-The kernel retains only the universal control plane: it establishes a session after successful authentication, resolves the current identity where another auth operation requires it, and projects the configured implementation's supported capabilities into the public session namespace. The exact minimal internal contract and capability projection remain open.
+The usage API candidate now encodes that universal control plane as `establish` and read-only `resolve`. A separate capability object is projected into the public session namespace without requiring unsupported lifecycle methods. The four required mechanism families are exercised in `../usage-api/session-capability-typecheck.ts`.
 
-The nested code's complete semantic session adapter remains useful evidence for this direction. Its optional `.withSession(...)` builder composition has been superseded by the mandatory session configuration in the usage API spike.
+The nested code's complete semantic session adapter remains useful mechanism evidence only. Its adapter contract and optional `.withSession(...)` builder composition have been superseded by the mandatory session configuration in the usage API spike.
 
 The ownership rule is:
 
@@ -175,14 +175,14 @@ The ownership rule is:
 
 ## Coupled questions
 
-These questions constrain each other. Answering one without the others would produce another superficially neat but unproven API.
+These questions constrain each other. The usage API now contains candidate answers for the kernel port, capability projection, and universal credential shape. Invocation-scoped capabilities remain open.
 
-| Question                                     | Context needed to answer it                                                                                                                                                                                                                                                                  |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What is the minimal internal session port?   | Establishing a session and resolving current identity are known kernel needs. Any additional universal operation must be justified across opaque, signed-access, denylist-backed, and custom implementations.                                                                                |
-| How are public capabilities projected?       | Session-only auth exposes direct creation, while installed strategies reserve creation for core. Other operations such as refresh, listing, bulk termination, and revocation appear only when the configured implementation supports them. The exact TypeScript representation remains open. |
-| What are session credentials?                | Direct opaque access presents its authority credential. Signed access retains an opaque authority credential for refresh. A denylist-backed signed session may have no refresh credential. Bindings still need an explicit way to know which values to store and present.                    |
-| How do invocation-scoped capabilities enter? | Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter public method inputs, an environment binding, or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership.                |
+| Question                                     | Current direction                                                                                                                                                                                                                                                  |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| What is the minimal internal session port?   | `establish` and read-only `resolve`. The four mechanism probes require no third universal operation.                                                                                                                                                               |
+| How are public capabilities projected?       | A separate generic capability object is preserved in `auth.session`. Session-only auth adds public creation, while installed strategies reserve establishment for core.                                                                                            |
+| What are session credentials?                | There is no universal credential shape. Establishment and capability results preserve implementation-defined values, while resolution closes over the presented session in the current candidate.                                                                  |
+| How do invocation-scoped capabilities enter? | Still open. Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter an environment binding or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership. |
 
 Lifetime and refresh policy belong to the session implementation. The exact policies and configuration of shipped mechanisms remain parked until this boundary is credible.
 
@@ -212,16 +212,14 @@ Other frameworks should initially be classified by the constraints above rather 
 
 ## How the design will converge
 
-There is no single context-free question to answer next. The ownership, lifecycle, credential, and invocation-capability shapes need to be developed together against representative cases.
-
-Small type and implementation probes should show that the same candidate boundary can describe:
+The usage API capability probe now shows that the same candidate boundary can describe:
 
 - A database-backed opaque session.
 - A short-lived signed session snapshot with a persisted opaque authority credential.
 - A longer-lived signed session with denylist-backed revocation and no refresh requirement.
 - A custom semantic session implementation without a core change.
 
-The compatibility targets then test whether those mechanisms can be used in the required environments without changing core.
+The remaining convergence work is to test whether those mechanisms can receive invocation-scoped read and write capabilities in the required environments without changing core or exposing framework context throughout the public API.
 
 Each probe should make five boundaries visible:
 
@@ -254,9 +252,11 @@ Types and minimal implementation may evolve together while proving this. The poi
 
 ## Current code status
 
-- `../contracts.ts` still contains the earlier mandatory-session design and is unchanged while this candidate is explored.
-- `contracts.ts` contains the earlier optional-unit candidate and shared session lifecycle. Its composition has been superseded, while its session shapes remain evidence.
+- `../usage-api/contracts.ts` contains the converging mandatory-session builder, two-operation session kernel port, and capability-dependent public namespace.
+- `../usage-api/session-capability-typecheck.ts` adapts the mechanisms here and probes all four required session families.
+- `../contracts.ts` still contains the earlier mandatory-session design and remains unchanged until the usage candidate is ready to promote.
+- `contracts.ts` contains the superseded optional-unit candidate and fixed session lifecycle. Its session shapes remain evidence only.
 - `composition-probes.ts` checks the superseded optional-unit composition, order independence, and single-use builder steps.
 - `mechanisms.ts` minimally implements direct opaque access and signed access over one opaque-authority contract.
 - `target-probes.ts` checks read-only and write-capable execution targets plus client credential persistence.
-- The nested candidate should not receive comprehensive tests or production hardening until the boundary has survived the representative probes.
+- This directory should not receive new contract work, comprehensive tests, or production hardening. Remaining convergence work belongs in the usage API spike.

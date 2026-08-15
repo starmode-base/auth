@@ -8,11 +8,15 @@
 import type {
   PasskeySummary,
   SessionAdapter,
-  SessionSummary,
+  SessionIdentity,
   WithOtpConfig,
   WithPasskeyConfig,
 } from "./contracts";
 import { makeAuth } from "./contracts";
+
+type SessionClaims = SessionIdentity & {
+  role: "member" | "admin";
+};
 
 type CreatedSession = {
   accessToken: string;
@@ -23,7 +27,8 @@ type RefreshedSession = {
   accessToken: string;
 } | null;
 
-type ListedSession = SessionSummary & {
+type ListedSession = {
+  sessionId: string;
   current: boolean;
   deviceName: string;
 };
@@ -41,27 +46,31 @@ type ListedPasskey = PasskeySummary & {
 declare const registrationOptions: PublicKeyCredentialCreationOptionsJSON;
 declare const authenticationOptions: PublicKeyCredentialRequestOptionsJSON;
 
-export const session = {
-  create: async (userId) => ({
-    accessToken: `access:${userId}`,
-    refreshToken: `refresh:${userId}`,
-  }),
-  get: async () => null,
-  refresh: async () => null,
+export const sessionCapabilities = {
+  refresh: async (): Promise<RefreshedSession> => null,
   end: async () => undefined,
-  list: async (userId) => {
-    void userId;
-    return [];
-  },
-  endAll: async (userId) => {
-    void userId;
-  },
-  revoke: async (userId, sessionId) => {
-    void userId;
+  list: async (): Promise<ListedSession[]> => [],
+  endAll: async () => undefined,
+  revoke: async ({ sessionId }: { sessionId: string }) => {
     void sessionId;
     return false;
   },
-} satisfies SessionAdapter<CreatedSession, RefreshedSession, ListedSession>;
+};
+
+export const session = {
+  kernel: {
+    establish: async (userId: string) => ({
+      accessToken: `access:${userId}`,
+      refreshToken: `refresh:${userId}`,
+    }),
+    resolve: async (): Promise<SessionClaims | null> => null,
+  },
+  capabilities: sessionCapabilities,
+} satisfies SessionAdapter<
+  SessionClaims,
+  CreatedSession,
+  typeof sessionCapabilities
+>;
 
 export const otp = {
   request: async ({ identifier }) => {

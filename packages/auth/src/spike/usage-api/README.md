@@ -8,12 +8,14 @@ Prove one small server API that is easy to wire into any framework while its con
 
 ## Mental model
 
-`makeAuth` is a small authentication kernel.
+`makeAuth` is a small authentication microkernel.
 
 - Literal objects are the DI contract.
 - OTP and passkeys chained onto `makeAuth` are complete trusted authentication strategies.
 - Strategy DIs own their feature workflows.
-- Core owns composition, session establishment, and current-user scoping.
+- Core owns composition, the transition from authenticated user to session, and current-user scoping across auth strategies.
+- The session kernel port contains only `establish` and `resolve`.
+- The session implementation exposes only the additional capabilities its mechanism supports.
 - Primitives remain independently importable.
 - Object-producing helpers are optional compression over the literal contract.
 
@@ -41,6 +43,8 @@ Feature strategies own everything specific to their authentication method:
 
 Core creates a session from a successful strategy result. Strategies never receive the session implementation and cannot create sessions themselves.
 
+The session implementation is likewise trusted. It decides whether presented credentials establish an identity and owns its complete current-session lifecycle operations. A custom session implementation can lie about identity or expose an unsafe management operation, and core cannot compensate for either violation.
+
 ## DI boundaries
 
 A DI operation exists when core must call it independently. Core may need to:
@@ -58,7 +62,8 @@ Consequences in this candidate:
 - OTP has independent `request` and `authenticate` operations because they happen in separate requests. Generation, storage, delivery, verification, policy, and user resolution are not separate builder DIs.
 - Passkey ceremony operations remain independent because starts and completions span requests.
 - Passkey removal is one strategy operation. Separating list, authorization, and deletion would make policies such as preserving the last credential vulnerable to races.
-- Session capabilities remain independent when the configured implementation exposes them because each is invoked by a distinct public or internal operation.
+- The session kernel port contains only `establish` and `resolve` because those are the only decisions shared by every session-establishing strategy and current-user auth workflow.
+- Session capabilities remain independent when the configured implementation exposes them because renewal, refresh, termination, and management are not meaningful for every mechanism.
 
 The rule is not simply that two functions appear consecutively. The library may keep a boundary when it must conditionally invoke the second operation or enforce a security invariant between them.
 
@@ -139,7 +144,7 @@ Session-only auth exposes session creation as the escape hatch for bespoke authe
 | Sessions plus passkeys | Supported mechanism capabilities, with session creation reserved to core |
 | Sessions plus both     | Supported mechanism capabilities, with session creation reserved to core |
 
-Strategy configuration determines whether direct session creation is public. The configured session mechanism determines which lifecycle and management operations are meaningful; that second capability question remains under pressure testing.
+Strategy configuration determines whether direct session creation is public. The configured session mechanism determines which lifecycle and management operations are meaningful. The exact capability object is preserved in the returned session namespace.
 
 The usage API exposes completed workflows:
 
@@ -148,18 +153,22 @@ auth.otp.request(...)
 auth.otp.authenticate(...)
 auth.passkey.createAuthenticationOptions(...)
 auth.passkey.verifyAuthentication(...)
-auth.session.end()
+auth.session.end() // when the configured session exposes end
 ```
 
 Normal authentication and auth-resource server functions should approach one call into `auth`. Application actions such as `getViewer` or `changeEmail` consume session state or independent proof primitives and remain application workflows.
 
 ## Session contract split
 
-The kernel's internal session dependency and the public session API are separate contracts. The kernel needs a small stable way to establish a session and resolve the current identity. The public namespace exposes only capabilities that the configured session implementation genuinely supports. Operations such as refresh, listing, bulk termination, and revocation are capabilities, not universal requirements.
+The kernel's internal session dependency and the public session API are separate contracts. `SessionKernel` has exactly two operations. `establish` creates the configured session for the exact userId supplied by core. `resolve` performs a repeatable read-only resolution of the currently presented session.
+
+`SessionAdapter` pairs that fixed kernel port with a capability object. Core maps `establish` to public `session.create` only for session-only auth, maps `resolve` to public `session.get`, and preserves the capability object in every builder state. Operations such as refresh, renewal, listing, bulk termination, and revocation therefore appear only when the configured implementation supplies them.
 
 The session implementation may expose application-defined claims together with `userId`. Core requires only `userId`, preserves the inferred identity type where it crosses the public API, and treats all additional claims as opaque. OTP and passkey strategies neither define nor resolve session claims.
 
-The exact minimal internal port and its TypeScript projection into a mechanism-dependent public namespace remain open. The current `SessionAdapter` is a candidate being reduced, not a settled universal interface.
+[`session-capability-typecheck.ts`](./session-capability-typecheck.ts) pressure-tests this split against direct opaque access, signed access backed by persisted authority, a denylist-backed signed session, and a custom session with a binary credential and no lifecycle capabilities. No case introduces a credential union, nullable placeholder, token-format branch, or meaningless public method.
+
+Invocation-scoped environment capabilities remain the next boundary to settle. This candidate closes them over when the session object is constructed. The existing lifecycle target probes remain evidence for deciding whether that survives Convex read and write separation without exposing framework context in the public usage API.
 
 ## Application users
 
@@ -187,10 +196,11 @@ The location of data does not determine operation ownership.
 - User profiles, email addresses, roles, onboarding, and account deletion are application data and policy.
 - Adapters may use the application's database, remote storage, or a hosted service without changing the usage API.
 
-Session and passkey lists return application-defined generic summary types. Core requires only `sessionId` or `credentialId` and passes additional fields through unchanged:
+Session and passkey lists return application-defined safe projections rather than raw storage records. A session implementation owns its optional listing capability and projection. Core requires `credentialId` from passkey projections because it scopes passkey removal itself.
 
 ```ts
-type SessionListItem = SessionSummary & {
+type SessionListItem = {
+  sessionId: string;
   deviceName: string;
   createdAt: Date;
 };
@@ -207,6 +217,6 @@ These are safe public projections, never raw storage records. This allows an ada
 
 ## Relationship to the other spikes
 
-The session-lifecycle spike explores session authority and access representations. Its mechanism findings remain useful, but its empty-builder composition model is superseded here.
+The session-lifecycle spike is supporting evidence for session authority, access representations, and execution targets. Its mechanisms are reused by the capability pressure tests here. Its optional-session builder and fixed four-operation adapter are superseded and should not evolve as competing contracts.
 
-Once this usage model survives pressure testing, its settled pieces replace the corresponding sections of the main spike contract. This directory is not intended to become a second permanent contract.
+Once invocation-scoped capabilities survive the target probes, the settled usage model replaces the corresponding sections of the main spike contract. The session-lifecycle directory is then removed rather than maintained as a second permanent contract.
