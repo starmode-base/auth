@@ -1,9 +1,10 @@
 /**
- * Userland sandbox for the candidate makeAuth implementation.
+ * Consumer composition sandbox for the candidate makeAuth implementation.
  *
- * Everything in this file represents application-owned configuration and
- * usage. None of these adapters, strategies, fixtures, or calls are candidate
- * library exports.
+ * The concrete session and strategy values are inert fixtures at the consumer
+ * boundary. Production values may be custom application implementations or
+ * objects produced by separately exported library adapters. These fixtures and
+ * calls are not candidate library exports.
  */
 import type {
   AuthUser,

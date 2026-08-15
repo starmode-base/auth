@@ -13,6 +13,12 @@ export type NamespaceFactory<
   kernel: StrategyKernel<Identity, SessionCreateResult>,
 ) => Namespaces;
 
+type UninstalledNamespaces<
+  Installed extends Record<string, object>,
+> = Record<string, object> & {
+  [Name in keyof Installed]?: never;
+};
+
 /** Runtime builder that accumulates complete named namespaces. */
 export type NamespaceFactoryBuilder<
   Identity extends AuthUser,
@@ -20,10 +26,8 @@ export type NamespaceFactoryBuilder<
   Installed extends Record<string, object>,
 > = {
   strategies: Installed;
-  addStrategy: <Added extends Record<string, object>>(
-    strategy: Extract<keyof Installed, keyof Added> extends never
-      ? NamespaceFactory<Identity, SessionCreateResult, Added>
-      : never,
+  addStrategy: <Added extends UninstalledNamespaces<Installed>>(
+    strategy: NamespaceFactory<Identity, SessionCreateResult, Added>,
   ) => NamespaceFactoryBuilder<
     Identity,
     SessionCreateResult,

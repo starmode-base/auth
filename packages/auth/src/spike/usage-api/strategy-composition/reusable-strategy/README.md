@@ -1,6 +1,6 @@
 # Reusable strategy type experiments
 
-> **Status** Runtime experiment complete. A namespace factory preserves the exact session result through an assertion free accumulating builder. Operation descriptors do not have an assertion free generic projector.
+> **Status** Runtime experiments complete. Namespace factories preserve exact session and instance types across arbitrary caller named namespaces. Operation descriptors do not have an assertion free generic projector.
 
 ## Acceptance claim
 
@@ -60,7 +60,34 @@ Passing the generic function directly lets TypeScript instantiate it with the bu
 
 [`namespace-factory-sandbox.ts`](./namespace-factory-sandbox.ts) executes the same factory against cookie and header sessions. Both the compile time API and runtime value retain the correct result. Extracted methods also work because the installed namespace closes over the kernel rather than depending on `this`.
 
-The main cost is strategy authoring. A reusable factory must state its generic kernel signature and must return its own namespace name. The latter matches `.addStrategy(otp)` and makes duplicate names rejectable, but configurable OIDC provider instances still need a pressure test.
+The main cost is strategy authoring. A reusable factory must state its generic kernel signature and must return its own namespace name. The latter matches `.addStrategy(otp)` and makes duplicate names rejectable.
+
+## Arbitrary namespaces
+
+[`arbitrary-namespace-sandbox.ts`](./arbitrary-namespace-sandbox.ts) installs two independently configured OTP strategies and two independently configured Google OIDC strategies.
+
+```ts
+const auth = makeAuth({ session })
+  .addStrategy(makeEmailOtpStrategy)
+  .addStrategy(makeSmsOtpStrategy)
+  .addStrategy(makeGoogleProfileStrategy)
+  .addStrategy(makeGoogleCalendarStrategy);
+```
+
+The namespace names are ordinary object literal keys returned by each factory. They are not enumerated by core and they do not need to match a strategy kind. The experiment preserves all of these distinctions.
+
+- `emailOtp` and `smsOtp` retain their channel types.
+- `googleProfile` and `googleCalendar` both retain `provider: "google"` while preserving different scope tuples.
+- All four namespaces retain the configured cookie or header session result.
+- A duplicate or colliding namespace is rejected at the `.addStrategy()` call.
+
+The name must be written as a literal property in the factory. A helper shaped like `makeNamedStrategy(name, strategy)` encounters the same computed property limitation as the descriptor projector. User code does not need that helper. An inline factory receives a contextually typed kernel and can choose any literal name without generic annotations.
+
+```ts
+const auth = makeAuth({ session }).addStrategy(kernel => ({
+  emailOtp: makeOtpNamespace(kernel, emailOtpConfig),
+}));
+```
 
 ## Operation descriptors
 
@@ -124,7 +151,7 @@ The namespace factory and operation descriptor candidates should next be exercis
 
 1. Can passkey sign up, authentication, adding, listing, and removal use the three categories without an artificial operation split?
 2. Can OIDC begin, callback authentication, and current user linking use the same categories?
-3. Can configurable OIDC instances retain distinct names and provider types without weakening the namespace factory?
-4. Do invalid factories and definitions fail with errors that point an agent to the incorrect operation?
+3. Do invalid factories and definitions fail with errors that point an agent to the incorrect operation?
+4. Is the generic factory signature acceptable for reusable custom strategy authors, or should examples favor contextually typed inline factories?
 
 Only after that proof should the generic builder and configuration map comparison resume. The builder remains the likely construction winner because it retains literal names incrementally and rejects known duplicates locally.

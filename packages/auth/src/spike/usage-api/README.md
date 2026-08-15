@@ -34,10 +34,22 @@ Nothing in this directory is exported by the current package entry point. Candid
 | -------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [`contracts.ts`](./contracts.ts)                               | Candidate public contract         | Its exported types and `makeAuth` overloads are proposed library exports                                |
 | [`make-auth-sandbox.ts`](./make-auth-sandbox.ts)               | Partial candidate library runtime | `makeAuth` is the only exported candidate. Its namespace and builder constructors are library internals |
-| [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) | Runnable consumer example         | The session adapter, strategies, WebAuthn fixtures, and calls are userland code                         |
+| [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) | Runnable composition example      | Its concrete values are fixtures. Real values may be custom or produced by shipped adapters             |
 | [`playground.ts`](./playground.ts)                             | Consumer API sketch               | Its file exports make examples easy to inspect but are not proposed package exports                     |
 | Typecheck and invocation sandboxes                             | Design evidence                   | They are compile-time probes and framework binding examples, not package modules                        |
 | [`strategy-composition/`](./strategy-composition/)             | Competing composition experiment  | It does not change the active candidate until its open strategy model wins                              |
+
+The intended library has more than one public layer.
+
+| Layer                           | Candidate library exports                                                  | Ownership                                                                                                 |
+| ------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Microkernel API                 | `makeAuth` and its contract types                                          | Composition, authenticated-user to session transition, current-user scoping, and public projection        |
+| Shipped mechanisms and adapters | Environment-free factories producing session and strategy contracts        | Token mechanics, OTP behavior, passkey behavior, persistence protocols, and other reusable auth machinery |
+| Framework bindings              | Entry points that bind request context, credentials, and framework storage | Environment glue only                                                                                     |
+| Microkernel internals           | None                                                                       | Namespace construction and builder state projection                                                       |
+| Application code                | None                                                                       | User lookup, application policy, concrete storage and delivery connections, and final composition         |
+
+The exact shipped OTP and passkey factory APIs are not settled by the strategy orchestration sandbox. That sandbox proves only that any complete object satisfying `WithOtpConfig` or `WithPasskeyConfig` composes correctly. A future shipped factory may produce the same object, while an application or third-party package may implement it directly.
 
 ## Core and strategy ownership
 
@@ -207,7 +219,7 @@ Public operations remain context-free after binding. A Convex query or RSC rende
 
 ## Strategy orchestration
 
-[`make-auth-sandbox.ts`](./make-auth-sandbox.ts) contains the partial generic library candidate and keeps its namespace constructors private. [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) imports only `makeAuth`, supplies inert userland OTP and passkey implementations, and executes them through the public builder chain. OTP authentication returns failures before session establishment. Success passes the exact strategy userId to `establish` and combines the returned user and session result.
+[`make-auth-sandbox.ts`](./make-auth-sandbox.ts) contains the partial generic library candidate and keeps its namespace constructors private. [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) imports only `makeAuth`, supplies inert consumer-side OTP and passkey fixtures, and executes them through the public builder chain. Those fixtures stand in equally for custom strategies and objects produced by shipped adapter factories. OTP authentication returns failures before session establishment. Success passes the exact strategy userId to `establish` and combines the returned user and session result.
 
 Passkey authentication and passkey-first sign-up establish sessions in the same way. Adding a passkey resolves the current session to scope the strategy call and does not establish another session. Listing and removal use the same current-user scope. Strategies receive neither the session kernel nor its public capabilities.
 
