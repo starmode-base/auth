@@ -1,6 +1,6 @@
 # Reusable strategy type experiments
 
-> **Status** Type experiments complete. Operation descriptors are the leading candidate but have not received a runtime projection proof.
+> **Status** Type experiments complete. Operation descriptors preserve the exact session result through the accumulating builder but have not received a runtime projection proof.
 
 ## Acceptance claim
 
@@ -14,7 +14,19 @@ expectType<CookieSessionResult>(successful(cookieOtp.authenticate(...)).session)
 expectType<HeaderSessionResult>(successful(headerOtp.authenticate(...)).session);
 ```
 
-[`contracts-typecheck.ts`](./contracts-typecheck.ts) proves this claim for the operation descriptor and `defineStrategy` encodings. The universal result experiment removes the distinction by requiring both mechanisms to return one credential shape.
+The operation descriptor proof also covers the intended construction path.
+
+```ts
+const cookieAuth = makeAuth({ session: cookieSession })
+  .addStrategy("otp", sameOtp);
+const headerAuth = makeAuth({ session: headerSession })
+  .addStrategy("otp", sameOtp);
+
+expectType<CookieSessionResult>(successful(cookieAuth.strategies.otp.authenticate(...)).session);
+expectType<HeaderSessionResult>(successful(headerAuth.strategies.otp.authenticate(...)).session);
+```
+
+[`contracts-typecheck.ts`](./contracts-typecheck.ts) proves both forms for operation descriptors and proves direct installation for the `defineStrategy` encoding. The universal result experiment removes the distinction by requiring both mechanisms to return one credential shape.
 
 ## Comparison
 
@@ -42,6 +54,8 @@ The kernel projects the final namespace from three categories.
 - A current user operation receives the current authenticated user and gains `not_authenticated` in its failure union.
 
 The description is independent of session identity and credential shape. Its types preserve argument values, successful data, expected failures, and the concrete session result without a generic mounted namespace.
+
+[`operation-builder.ts`](./operation-builder.ts) proves that this remains true through `.addStrategy()`. The builder retains the session result from `makeAuth` and applies it to the strategy definition while adding the named namespace. The resulting cookie and header authentication methods are exact and do not contain `unknown`.
 
 This contract also teaches an agent where authority enters each method. That is useful beyond satisfying the compiler. It makes an accidental session creating request method or an arbitrary public userId harder to express.
 

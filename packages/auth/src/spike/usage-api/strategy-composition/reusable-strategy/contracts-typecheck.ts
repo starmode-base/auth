@@ -14,6 +14,7 @@ import {
   publicOperation,
 } from "./operation-descriptor";
 import type { StrategyDefinition } from "./operation-descriptor";
+import { makeAuth as makeOperationBuilderAuth } from "./operation-builder";
 import {
   defineStrategy,
   installDefinedStrategy,
@@ -90,6 +91,62 @@ const describedHeaderOtp = installStrategy(headerSession, describedOtp);
 
 expectType<OtpNamespace<CookieSessionResult>>(describedCookieOtp);
 expectType<OtpNamespace<HeaderSessionResult>>(describedHeaderOtp);
+
+/*
+ * The accumulating builder applies the configured session result when the
+ * same reusable strategy is installed.
+ */
+
+const describedCookieAuth = makeOperationBuilderAuth({
+  session: cookieSession,
+}).addStrategy("otp", describedOtp);
+const describedHeaderAuth = makeOperationBuilderAuth({
+  session: headerSession,
+}).addStrategy("otp", describedOtp);
+
+expectType<OtpNamespace<CookieSessionResult>>(
+  describedCookieAuth.strategies.otp,
+);
+expectType<OtpNamespace<HeaderSessionResult>>(
+  describedHeaderAuth.strategies.otp,
+);
+
+const describedCookieBuilderAuthentication =
+  describedCookieAuth.strategies.otp.authenticate({
+    identifier: "person@example.com",
+    otp: "123456",
+  });
+const describedHeaderBuilderAuthentication =
+  describedHeaderAuth.strategies.otp.authenticate({
+    identifier: "person@example.com",
+    otp: "123456",
+  });
+
+expectType<
+  Promise<
+    Result<
+      {
+        user: OtpUser;
+        session: CookieSessionResult;
+      },
+      OtpError
+    >
+  >
+>(describedCookieBuilderAuthentication);
+expectType<
+  Promise<
+    Result<
+      {
+        user: OtpUser;
+        session: HeaderSessionResult;
+      },
+      OtpError
+    >
+  >
+>(describedHeaderBuilderAuthentication);
+
+// @ts-expect-error An installed strategy name cannot be added again.
+void describedCookieAuth.addStrategy("otp", describedOtp);
 
 const describedCookieAuthentication = describedCookieOtp.authenticate({
   identifier: "person@example.com",

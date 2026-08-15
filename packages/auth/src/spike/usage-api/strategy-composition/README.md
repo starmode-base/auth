@@ -45,7 +45,7 @@ The strategy contract and kernel capability are shared. Only the construction sy
 
 The local session port is a minimal fixture for these claims. It does not settle the active session lifecycle work.
 
-A strategy value in the successful comparison is specialized to the configured session identity and creation result. A separately reusable strategy with a generic `mount` method currently loses that creation result to `unknown` when either collector infers its namespace. The probes record this as an unresolved TypeScript boundary.
+A strategy value in the initial comparison is specialized to the configured session identity and creation result. A separately reusable strategy with a generic `mount` method loses that creation result to `unknown` when either collector infers its namespace. The operation descriptor follow up resolves this for the accumulating builder by applying the configured session result to a reusable strategy definition during installation. It changes the strategy contract rather than repairing arbitrary generic `mount` inference.
 
 ## Builder candidate
 
@@ -83,7 +83,7 @@ This comparison does not choose final session credentials, lifecycle capabilitie
 
 ## Exit
 
-Neither construction form is ready to replace the active usage API while a reusable session independent strategy loses its session result type. After that boundary is resolved and one construction form wins, the shared open strategy model and the winning syntax replace the fixed composition section of the active usage API. This directory is then removed rather than becoming another permanent contract.
+Neither construction form is ready to replace the active usage API until the operation descriptor contract survives the remaining workflow and runtime proofs. After that boundary is settled and one construction form wins, the shared open strategy model and the winning syntax replace the fixed composition section of the active usage API. This directory is then removed rather than becoming another permanent contract.
 
 ## Reusable strategy follow up
 
