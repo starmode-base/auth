@@ -192,6 +192,12 @@ const mutationAuth = makeAuth({
 
 Public operations remain context-free after binding. A Convex query or RSC render supplies no fake write operation, while a Convex mutation or conventional request handler retains the full authentication API. [`invocation-sandbox.ts`](./invocation-sandbox.ts) exercises both opaque and signed-access sessions across those targets.
 
+## Strategy orchestration
+
+[`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) contains a minimal generic `makeAuth` implementation that closes over the strategy namespace constructors. Its inert OTP and passkey implementations are installed and executed through the public builder chain. OTP authentication returns failures before session establishment. Success passes the exact strategy userId to `establish` and combines the returned user and session result.
+
+Passkey authentication and passkey-first sign-up establish sessions in the same way. Adding a passkey resolves the current session to scope the strategy call and does not establish another session. Listing and removal use the same current-user scope. Strategies receive neither the session kernel nor its public capabilities.
+
 ## Application users
 
 Strategies do not repeat a generic user-lookup DI.
@@ -241,4 +247,4 @@ These are safe public projections, never raw storage records. This allows an ada
 
 The session-lifecycle spike is supporting evidence for session authority, access representations, and execution targets. Its mechanisms are reused by the capability pressure tests here. Its optional-session builder and fixed four-operation adapter are superseded and should not evolve as competing contracts.
 
-The invocation sandbox now completes the required mechanism and execution-boundary pressure tests. After this candidate is reviewed, the settled usage model replaces the corresponding sections of the main spike contract. The session-lifecycle directory is then removed rather than maintained as a second permanent contract.
+The capability and invocation sandboxes complete the required mechanism and execution-boundary pressure tests. The strategy orchestration sandbox completes the authentication transition proof without becoming a production implementation. After this candidate is reviewed, the settled usage model replaces the corresponding sections of the main spike contract. The session-lifecycle directory is then removed rather than maintained as a second permanent contract.
