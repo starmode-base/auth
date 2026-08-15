@@ -22,7 +22,7 @@ inventing meaningless values, or adding mechanism-specific branches to core.
 | Product structure      | `makeAuth` receives one mandatory session implementation. OTP and passkeys are optional authentication strategies. This work covers only the session boundary.                                                 |
 | Users                  | The application owns users and gives session creation an opaque, application-authorized `userId`. There is no user adapter.                                                                                    |
 | Authentication         | An installed strategy resolves an application user and core establishes that user's session. Session-only auth exposes direct creation for bespoke authentication.                                             |
-| Session ownership      | The session implementation owns credential shape, persistence, lifetime policy, and its useful lifecycle and management capabilities.                                                                         |
+| Session ownership      | The session implementation owns credential shape, persistence, lifetime policy, and its useful lifecycle and management capabilities.                                                                          |
 | Dependency injection   | Configuration is complete and explicit. There are no defaults or optional dependencies. Convenience factories may produce complete configurations.                                                             |
 | Transport              | Core does not read or write cookies, headers, local storage, requests, or responses. Bindings move credential values between core and an environment.                                                          |
 | Session reads          | Checking a session is repeatable and read-only. Renewal and persistence updates are explicit, separate behavior.                                                                                               |
@@ -202,12 +202,12 @@ The ownership rule is:
 These questions constrain each other. Answering one without the others would
 produce another superficially neat but unproven API.
 
-| Question                                     | Context needed to answer it                                                                                                                                                                                                                                                                                           |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| What is the minimal internal session port?   | Establishing a session and resolving current identity are known kernel needs. Any additional universal operation must be justified across opaque, signed-access, denylist-backed, and custom implementations.                                                                                                          |
-| How are public capabilities projected?       | Session-only auth exposes direct creation, while installed strategies reserve creation for core. Other operations such as refresh, listing, bulk termination, and revocation appear only when the configured implementation supports them. The exact TypeScript representation remains open.                          |
-| What are session credentials?                | Direct opaque access presents its authority credential. Signed access retains an opaque authority credential for refresh. A denylist-backed signed session may have no refresh credential. Bindings still need an explicit way to know which values to store and present.                                                |
-| How do invocation-scoped capabilities enter? | Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter public method inputs, an environment binding, or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership.                                         |
+| Question                                     | Context needed to answer it                                                                                                                                                                                                                                                                  |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What is the minimal internal session port?   | Establishing a session and resolving current identity are known kernel needs. Any additional universal operation must be justified across opaque, signed-access, denylist-backed, and custom implementations.                                                                                |
+| How are public capabilities projected?       | Session-only auth exposes direct creation, while installed strategies reserve creation for core. Other operations such as refresh, listing, bulk termination, and revocation appear only when the configured implementation supports them. The exact TypeScript representation remains open. |
+| What are session credentials?                | Direct opaque access presents its authority credential. Signed access retains an opaque authority credential for refresh. A denylist-backed signed session may have no refresh credential. Bindings still need an explicit way to know which values to store and present.                    |
+| How do invocation-scoped capabilities enter? | Configuration must remain complete, but Convex creates database capabilities per query or mutation. They might enter public method inputs, an environment binding, or another explicit composition boundary. The earlier generic `context` proved feasibility, not ownership.                |
 
 Lifetime and refresh policy belong to the session implementation. The exact policies and configuration of shipped mechanisms remain parked until this boundary is credible.
 
@@ -285,7 +285,7 @@ sequence.
 - Authority-credential rotation, replay detection, concurrency, and recovery.
 - Cookie names, attributes, and browser or mobile storage.
 - Concrete framework bindings.
-- The final JWT or HMAC codec API.
+- The final JWT or HMAC codec API beyond one settled naming rule: the core-facing acceptance operation is `validate`, because it decides complete credential validity including integrity, structure, and expiry. `verify` describes the narrower cryptographic check.
 - Migration from the legacy implementation.
 - Reconciliation of `SPEC.md`, `TODO.md`, and package documentation.
 - Resumption of the HMAC codec testing pilot.

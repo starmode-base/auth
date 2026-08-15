@@ -174,7 +174,7 @@ configured session implementation.
 
 | Configuration          | Public session API                                                       |
 | ---------------------- | ------------------------------------------------------------------------ |
-| Sessions only          | Supported mechanism capabilities, including direct session creation     |
+| Sessions only          | Supported mechanism capabilities, including direct session creation      |
 | Sessions plus OTP      | Supported mechanism capabilities, with session creation reserved to core |
 | Sessions plus passkeys | Supported mechanism capabilities, with session creation reserved to core |
 | Sessions plus both     | Supported mechanism capabilities, with session creation reserved to core |
