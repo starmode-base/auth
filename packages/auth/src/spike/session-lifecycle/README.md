@@ -153,6 +153,8 @@ These are levels of support, not synonyms:
 
 All four mechanism categories must be representable. Which implementations ship or are recommended is a later decision.
 
+Self-contained signed tokens remain useful as assertions and capabilities. A session with neither persisted authority nor denylist-backed revocation is outside required production coverage because it provides no per-session revocation before expiry.
+
 ## Signed session claims
 
 Application-defined claims belong to the session implementation. Core requires the authenticated `userId` and treats any additional claim shape as opaque. Claim resolution, encoding, and signed-credential lifetime are mechanism and application policy rather than kernel policy.
