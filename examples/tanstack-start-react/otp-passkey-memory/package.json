@@ -1,6 +1,7 @@
 {
   "name": "@repo/example-tanstack-otp-passkey",
   "private": true,
+  "license": "MIT-0",
   "type": "module",
   "scripts": {
     "dev": "vite dev --port 3102",

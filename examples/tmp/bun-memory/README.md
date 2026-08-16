@@ -23,3 +23,7 @@ Open http://localhost:3000
 ## Files
 
 - `index.ts` — Complete server with auth handler and HTML UI
+
+## License
+
+MIT-0, see [LICENSE.md](./LICENSE.md).

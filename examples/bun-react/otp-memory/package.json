@@ -2,6 +2,7 @@
   "name": "@repo/example-bun-otp",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT-0",
   "type": "module",
   "scripts": {
     "dev": "bun --hot src/index.ts --port 3101",

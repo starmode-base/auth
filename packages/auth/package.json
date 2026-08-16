@@ -1,5 +1,7 @@
 {
   "name": "@starmode/auth",
+  "private": false,
+  "license": "MIT",
   "version": "0.0.1",
   "type": "module",
   "exports": {
