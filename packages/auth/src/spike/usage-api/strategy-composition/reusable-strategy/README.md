@@ -32,7 +32,8 @@ expectType<HeaderSessionResult>(successful(headerAuth.strategies.otp.authenticat
 
 | Candidate                | Exact distinct session results | Strategy authoring                                        | Runtime projection                          | Current assessment                                           |
 | ------------------------ | ------------------------------ | --------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ |
-| Namespace factory        | Yes                            | Generic function returning its named namespace            | Assertion free object merge                 | Runtime leader                                               |
+| One shot kernel map      | Yes                            | One callback returning the final namespace map             | Assertion free direct construction          | Current leader                                               |
+| Namespace factory        | Yes                            | Generic function returning its named namespace            | Assertion free object merge                 | Useful builder helper                                        |
 | Operation descriptors    | Yes                            | Plain object plus operation helpers                       | Requires an assertion or unchecked overload | Type result only                                             |
 | `defineStrategy`         | Yes                            | Explicit type template using `this` plus an opaque helper | Assertion free direct mount                 | Too much type ceremony                                       |
 | Universal session result | No distinct results by design  | Plain mounted namespace                                   | Assertion free direct mount                 | Rejected unless session design independently converges on it |
@@ -178,13 +179,6 @@ The types are simple, but the experiment no longer satisfies the original distin
 
 The session work currently preserves a mechanism dependent creation result. Composition should not overturn that ownership decision merely to simplify its own generic types.
 
-## Next proof
+## Construction API follow up
 
-The namespace factory and operation descriptor candidates should next be exercised against complete OTP, passkey, and OIDC shaped namespaces. The proof must answer four questions.
-
-1. Can passkey sign up, authentication, adding, listing, and removal use the three categories without an artificial operation split?
-2. Can OIDC begin, callback authentication, and current user linking use the same categories?
-3. Do invalid factories and definitions fail with errors that point an agent to the incorrect operation?
-4. Is the generic factory signature acceptable for reusable custom strategy authors, or should examples favor contextually typed inline factories?
-
-Only after that proof should the generic builder and configuration map comparison resume. The builder remains the likely construction winner because it retains literal names incrementally and rejects known duplicates locally.
+The complete workflow proof establishes that the one shot kernel map can express the required OTP, passkey, and OIDC workflows. [`../construction-api/`](../construction-api/) now isolates the remaining TypeScript question. It compares the nested callback and overloaded read form with split construction. No result is promoted from this directory until that public API tradeoff is accepted.

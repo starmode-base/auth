@@ -83,8 +83,12 @@ This comparison does not choose final session credentials, lifecycle capabilitie
 
 ## Exit
 
-Neither construction form is ready to replace the active usage API until one reusable strategy contract survives the remaining workflow proofs. After that boundary is settled and one construction form wins, the shared open strategy model and the winning syntax replace the fixed composition section of the active usage API. This directory is then removed rather than becoming another permanent contract.
+The workflow proofs are complete, but no construction form has been promoted. The constructor signature and read boundary must be settled before the shared open strategy model can replace the fixed composition section of the active usage API.
 
 ## Reusable strategy follow up
 
-[`reusable-strategy/`](./reusable-strategy/) compares a one shot kernel map, namespace factories, operation descriptors, an explicit `defineStrategy` type encoding, and one universal session result. The kernel map is the current composition leader because it preserves exact session and configuration types without an accumulating API. Two OTP instances and two Google OIDC instances coexist under arbitrary caller chosen names. Complete OTP, passkey, and OIDC shaped workflows use only authentication and current user kernel capabilities. Operation descriptors retain the simpler data shape but need an unchecked generic projector. The remaining composition work is agent-facing diagnostics and the session-only policy.
+[`reusable-strategy/`](./reusable-strategy/) compares a one shot kernel map, namespace factories, operation descriptors, an explicit `defineStrategy` type encoding, and one universal session result. The kernel map is the current composition leader because it preserves exact session and configuration types without an accumulating API. Two OTP instances and two Google OIDC instances coexist under arbitrary caller chosen names. Complete OTP, passkey, and OIDC shaped workflows use only authentication and current user kernel capabilities. Operation descriptors retain the simpler data shape but need an unchecked generic projector.
+
+## Construction API follow up
+
+[`construction-api/`](./construction-api/) compares the nested one object kernel map with split write and read construction. It records the named configuration inference and overload failures without changing the active usage API.
