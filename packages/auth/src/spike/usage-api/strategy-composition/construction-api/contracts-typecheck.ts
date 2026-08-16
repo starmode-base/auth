@@ -47,10 +47,7 @@ type Auth<
   strategies: Namespaces;
 };
 
-type AuthReader<
-  Identity extends AuthUser,
-  Capabilities extends object,
-> = {
+type AuthReader<Identity extends AuthUser, Capabilities extends object> = {
   session: SessionNamespace<Identity, Capabilities>;
 };
 
@@ -62,15 +59,10 @@ type NestedConfig<
 > = {
   debug: boolean;
   session: SessionAdapter<Identity, CreateResult, Capabilities>;
-  strategies: (
-    kernel: StrategyKernel<Identity, CreateResult>,
-  ) => Namespaces;
+  strategies: (kernel: StrategyKernel<Identity, CreateResult>) => Namespaces;
 };
 
-type ReaderConfig<
-  Identity extends AuthUser,
-  Capabilities extends object,
-> = {
+type ReaderConfig<Identity extends AuthUser, Capabilities extends object> = {
   debug: boolean;
   session: SessionReader<Identity, Capabilities>;
 };
@@ -87,7 +79,9 @@ declare function makeOverloadedAuth<
 declare function makeOverloadedAuth<
   Identity extends AuthUser,
   Capabilities extends object,
->(config: ReaderConfig<Identity, Capabilities>): AuthReader<Identity, Capabilities>;
+>(
+  config: ReaderConfig<Identity, Capabilities>,
+): AuthReader<Identity, Capabilities>;
 
 type SplitConfig<
   Identity extends AuthUser,
@@ -113,7 +107,9 @@ declare function makeSplitAuth<
 declare function makeAuthReader<
   Identity extends AuthUser,
   Capabilities extends object,
->(config: ReaderConfig<Identity, Capabilities>): AuthReader<Identity, Capabilities>;
+>(
+  config: ReaderConfig<Identity, Capabilities>,
+): AuthReader<Identity, Capabilities>;
 
 type Identity = AuthUser & {
   role: "member";
@@ -128,7 +124,10 @@ type Capabilities = {
 };
 
 type OtpNamespace<CreateResult> = {
-  authenticate: (args: { identifier: string; otp: string }) => Promise<CreateResult>;
+  authenticate: (args: {
+    identifier: string;
+    otp: string;
+  }) => Promise<CreateResult>;
 };
 
 declare const session: SessionAdapter<Identity, CreatedSession, Capabilities>;
@@ -141,10 +140,9 @@ declare function makeOtpNamespace<
   kernel: StrategyKernel<CurrentIdentity, CreateResult>,
 ): OtpNamespace<CreateResult>;
 
-function makeStrategies<
-  CurrentIdentity extends AuthUser,
-  CreateResult,
->(kernel: StrategyKernel<CurrentIdentity, CreateResult>) {
+function makeStrategies<CurrentIdentity extends AuthUser, CreateResult>(
+  kernel: StrategyKernel<CurrentIdentity, CreateResult>,
+) {
   return {
     emailOtp: makeOtpNamespace(kernel),
   };
@@ -160,9 +158,7 @@ const directNestedAuth = makeOverloadedAuth({
   strategies: makeStrategies,
 });
 
-expectType<OtpNamespace<CreatedSession>>(
-  directNestedAuth.strategies.emailOtp,
-);
+expectType<OtpNamespace<CreatedSession>>(directNestedAuth.strategies.emailOtp);
 
 const storedNestedConfiguration = {
   debug: true,

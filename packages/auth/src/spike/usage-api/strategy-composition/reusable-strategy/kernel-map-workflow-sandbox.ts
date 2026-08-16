@@ -22,13 +22,8 @@ type OtpConfig = {
 };
 
 type OtpNamespace<SessionCreateResult> = {
-  request: (args: {
-    identifier: string;
-  }) => Promise<Result<void, never>>;
-  authenticate: (args: {
-    identifier: string;
-    otp: string;
-  }) => Promise<
+  request: (args: { identifier: string }) => Promise<Result<void, never>>;
+  authenticate: (args: { identifier: string; otp: string }) => Promise<
     Result<
       {
         user: OtpUser;
@@ -39,9 +34,7 @@ type OtpNamespace<SessionCreateResult> = {
   >;
 };
 
-type RegistrationIntent =
-  | { kind: "sign-up" }
-  | { kind: "add"; userId: string };
+type RegistrationIntent = { kind: "sign-up" } | { kind: "add"; userId: string };
 
 type RegistrationProof = {
   intent: "sign-up" | "add";
@@ -57,14 +50,15 @@ type PasskeyConfig<Summary extends PasskeySummary> = {
   beginRegistration: (
     intent: RegistrationIntent,
   ) => Promise<{ challenge: string }>;
-  verifyRegistration: (credential: string) => Promise<
-    Result<
-      RegistrationProof,
-      "challenge_expired" | "verification_failed"
-    >
+  verifyRegistration: (
+    credential: string,
+  ) => Promise<
+    Result<RegistrationProof, "challenge_expired" | "verification_failed">
   >;
   beginAuthentication: () => Promise<{ challenge: string }>;
-  verifyAuthentication: (credential: string) => Promise<
+  verifyAuthentication: (
+    credential: string,
+  ) => Promise<
     Result<AuthUser, "credential_not_found" | "verification_failed">
   >;
   list: (userId: string) => Promise<Summary[]>;
@@ -74,17 +68,10 @@ type PasskeyConfig<Summary extends PasskeySummary> = {
   ) => Promise<Result<void, "credential_not_found">>;
 };
 
-type PasskeyNamespace<
-  SessionCreateResult,
-  Summary extends PasskeySummary,
-> = {
+type PasskeyNamespace<SessionCreateResult, Summary extends PasskeySummary> = {
   beginSignUp: () => Promise<{ challenge: string }>;
-  beginAdd: () => Promise<
-    Result<{ challenge: string }, "not_authenticated">
-  >;
-  completeRegistration: (args: {
-    credential: string;
-  }) => Promise<
+  beginAdd: () => Promise<Result<{ challenge: string }, "not_authenticated">>;
+  completeRegistration: (args: { credential: string }) => Promise<
     Result<
       | {
           intent: "sign-up";
@@ -111,15 +98,10 @@ type PasskeyNamespace<
       "credential_not_found" | "verification_failed"
     >
   >;
-  list: () => Promise<
-    Result<Summary[], "not_authenticated">
-  >;
-  remove: (args: { credentialId: string }) => Promise<
-    Result<
-      void,
-      "not_authenticated" | "credential_not_found"
-    >
-  >;
+  list: () => Promise<Result<Summary[], "not_authenticated">>;
+  remove: (args: {
+    credentialId: string;
+  }) => Promise<Result<void, "not_authenticated" | "credential_not_found">>;
 };
 
 type OidcUser<
@@ -130,18 +112,15 @@ type OidcUser<
   scopes: Scopes;
 };
 
-type OidcConfig<
-  Provider extends string,
-  Scopes extends readonly string[],
-> = {
+type OidcConfig<Provider extends string, Scopes extends readonly string[]> = {
   provider: Provider;
   scopes: Scopes;
   begin: (
-    intent:
-      | { kind: "authenticate" }
-      | { kind: "link"; userId: string },
+    intent: { kind: "authenticate" } | { kind: "link"; userId: string },
   ) => Promise<{ authorizationUrl: string }>;
-  authenticate: (callbackUrl: string) => Promise<
+  authenticate: (
+    callbackUrl: string,
+  ) => Promise<
     Result<
       OidcUser<Provider, Scopes>,
       "invalid_state" | "authentication_failed"
@@ -151,10 +130,7 @@ type OidcConfig<
     userId: string,
     callbackUrl: string,
   ) => Promise<
-    Result<
-      { providerAccountId: string },
-      "invalid_state" | "linking_failed"
-    >
+    Result<{ providerAccountId: string }, "invalid_state" | "linking_failed">
   >;
 };
 
@@ -187,7 +163,9 @@ type OidcNamespace<
       "not_authenticated"
     >
   >;
-  linkCallback: (args: { callbackUrl: string }) => Promise<
+  linkCallback: (args: {
+    callbackUrl: string;
+  }) => Promise<
     Result<
       { providerAccountId: string },
       "not_authenticated" | "invalid_state" | "linking_failed"
@@ -195,10 +173,7 @@ type OidcNamespace<
   >;
 };
 
-function makeOtpNamespace<
-  Identity extends AuthUser,
-  SessionCreateResult,
->(
+function makeOtpNamespace<Identity extends AuthUser, SessionCreateResult>(
   kernel: StrategyKernel<Identity, SessionCreateResult>,
   config: OtpConfig,
 ): OtpNamespace<SessionCreateResult> {
@@ -218,8 +193,7 @@ function makePasskeyNamespace<
   config: PasskeyConfig<Summary>,
 ): PasskeyNamespace<SessionCreateResult, Summary> {
   return {
-    beginSignUp: () =>
-      config.beginRegistration({ kind: "sign-up" }),
+    beginSignUp: () => config.beginRegistration({ kind: "sign-up" }),
     beginAdd: async () => {
       const identity = await kernel.current();
 
@@ -288,9 +262,7 @@ function makePasskeyNamespace<
     },
     beginAuthentication: () => config.beginAuthentication(),
     authenticate: ({ credential }) =>
-      kernel.authenticate(() =>
-        config.verifyAuthentication(credential),
-      ),
+      kernel.authenticate(() => config.verifyAuthentication(credential)),
     list: async () => {
       const identity = await kernel.current();
 
@@ -538,22 +510,15 @@ const googleCalendarConfig = {
       data: { providerAccountId: "google-account" },
     };
   },
-} satisfies OidcConfig<
-  "google",
-  ["openid", "calendar"]
->;
+} satisfies OidcConfig<"google", ["openid", "calendar"]>;
 
-function makeCompleteNamespaces<
-  Identity extends AuthUser,
-  SessionCreateResult,
->(kernel: StrategyKernel<Identity, SessionCreateResult>) {
+function makeCompleteNamespaces<Identity extends AuthUser, SessionCreateResult>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+) {
   return {
     emailOtp: makeOtpNamespace(kernel, otpConfig),
     passkeys: makePasskeyNamespace(kernel, passkeyConfig),
-    googleCalendar: makeOidcNamespace(
-      kernel,
-      googleCalendarConfig,
-    ),
+    googleCalendar: makeOidcNamespace(kernel, googleCalendarConfig),
   };
 }
 
@@ -574,18 +539,12 @@ const signedOutAuth = makeAuth({
   strategies: makeCompleteNamespaces,
 });
 
-expectType<OtpNamespace<CookieSessionResult>>(
-  cookieAuth.strategies.emailOtp,
+expectType<OtpNamespace<CookieSessionResult>>(cookieAuth.strategies.emailOtp);
+expectType<PasskeyNamespace<HeaderSessionResult, PasskeySummary>>(
+  headerAuth.strategies.passkeys,
 );
 expectType<
-  PasskeyNamespace<HeaderSessionResult, PasskeySummary>
->(headerAuth.strategies.passkeys);
-expectType<
-  OidcNamespace<
-    "google",
-    ["openid", "calendar"],
-    CookieSessionResult
-  >
+  OidcNamespace<"google", ["openid", "calendar"], CookieSessionResult>
 >(cookieAuth.strategies.googleCalendar);
 
 const failedOtp = await cookieAuth.strategies.emailOtp.authenticate({
@@ -598,21 +557,21 @@ const successfulOtp = await cookieAuth.strategies.emailOtp.authenticate({
 });
 
 await cookieAuth.strategies.passkeys.beginSignUp();
-const passkeySignUp =
-  await cookieAuth.strategies.passkeys.completeRegistration({
+const passkeySignUp = await cookieAuth.strategies.passkeys.completeRegistration(
+  {
     credential: "sign-up:new-passkey-user",
-  });
+  },
+);
 await cookieAuth.strategies.passkeys.beginAuthentication();
-const passkeyAuthentication =
-  await cookieAuth.strategies.passkeys.authenticate({
+const passkeyAuthentication = await cookieAuth.strategies.passkeys.authenticate(
+  {
     credential: "valid-passkey",
-  });
-const passkeyAddOptions =
-  await cookieAuth.strategies.passkeys.beginAdd();
-const passkeyAdd =
-  await cookieAuth.strategies.passkeys.completeRegistration({
-    credential: "add:current-user",
-  });
+  },
+);
+const passkeyAddOptions = await cookieAuth.strategies.passkeys.beginAdd();
+const passkeyAdd = await cookieAuth.strategies.passkeys.completeRegistration({
+  credential: "add:current-user",
+});
 const passkeyMismatch =
   await cookieAuth.strategies.passkeys.completeRegistration({
     credential: "add:other-user",
@@ -623,21 +582,16 @@ await cookieAuth.strategies.passkeys.remove({
 });
 
 await cookieAuth.strategies.googleCalendar.begin();
-const oidcAuthentication =
-  await cookieAuth.strategies.googleCalendar.callback({
-    callbackUrl: "https://app.example/callback?state=valid",
-  });
-const oidcLinkOptions =
-  await cookieAuth.strategies.googleCalendar.beginLink();
-const oidcLink =
-  await cookieAuth.strategies.googleCalendar.linkCallback({
-    callbackUrl: "https://app.example/link?state=valid",
-  });
+const oidcAuthentication = await cookieAuth.strategies.googleCalendar.callback({
+  callbackUrl: "https://app.example/callback?state=valid",
+});
+const oidcLinkOptions = await cookieAuth.strategies.googleCalendar.beginLink();
+const oidcLink = await cookieAuth.strategies.googleCalendar.linkCallback({
+  callbackUrl: "https://app.example/link?state=valid",
+});
 
-const signedOutPasskeyAdd =
-  await signedOutAuth.strategies.passkeys.beginAdd();
-const signedOutPasskeyList =
-  await signedOutAuth.strategies.passkeys.list();
+const signedOutPasskeyAdd = await signedOutAuth.strategies.passkeys.beginAdd();
+const signedOutPasskeyList = await signedOutAuth.strategies.passkeys.list();
 const signedOutOidcLink =
   await signedOutAuth.strategies.googleCalendar.beginLink();
 
@@ -648,8 +602,7 @@ if (failedOtp.success || establishedUserIds.length !== 4) {
 if (
   !successfulOtp.success ||
   !("data" in successfulOtp) ||
-  successfulOtp.data.session.cookie.value !==
-    "cookie:otp:person@example.com"
+  successfulOtp.data.session.cookie.value !== "cookie:otp:person@example.com"
 ) {
   throw new Error("OTP authentication did not establish its user");
 }
@@ -659,8 +612,7 @@ if (
   !("data" in passkeySignUp) ||
   passkeySignUp.data.intent !== "sign-up" ||
   !("session" in passkeySignUp.data) ||
-  passkeySignUp.data.session.cookie.value !==
-    "cookie:new-passkey-user"
+  passkeySignUp.data.session.cookie.value !== "cookie:new-passkey-user"
 ) {
   throw new Error("Passkey sign-up did not establish its user");
 }
@@ -668,8 +620,7 @@ if (
 if (
   !passkeyAuthentication.success ||
   !("data" in passkeyAuthentication) ||
-  passkeyAuthentication.data.session.cookie.value !==
-    "cookie:passkey-user"
+  passkeyAuthentication.data.session.cookie.value !== "cookie:passkey-user"
 ) {
   throw new Error("Passkey authentication did not establish its user");
 }
@@ -689,10 +640,8 @@ if (
 if (
   !passkeyList.success ||
   !("data" in passkeyList) ||
-  passkeyList.data[0]?.credentialId !==
-    "credential:current-user" ||
-  removedPasskeys[0] !==
-    "current-user:credential:current-user"
+  passkeyList.data[0]?.credentialId !== "credential:current-user" ||
+  removedPasskeys[0] !== "current-user:credential:current-user"
 ) {
   throw new Error("Passkey management used the wrong current user");
 }
@@ -700,8 +649,7 @@ if (
 if (
   !oidcAuthentication.success ||
   !("data" in oidcAuthentication) ||
-  oidcAuthentication.data.session.cookie.value !==
-    "cookie:google-user"
+  oidcAuthentication.data.session.cookie.value !== "cookie:google-user"
 ) {
   throw new Error("OIDC callback did not establish its user");
 }
@@ -709,9 +657,7 @@ if (
 if (
   !oidcLinkOptions.success ||
   !("data" in oidcLinkOptions) ||
-  !oidcLinkOptions.data.authorizationUrl.includes(
-    "user=current-user",
-  ) ||
+  !oidcLinkOptions.data.authorizationUrl.includes("user=current-user") ||
   !oidcLink.success ||
   linkedAccounts[0] !== "current-user"
 ) {

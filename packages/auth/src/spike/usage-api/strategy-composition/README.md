@@ -92,3 +92,7 @@ The workflow proofs are complete, but no construction form has been promoted. Th
 ## Construction API follow up
 
 [`construction-api/`](./construction-api/) compares the nested one object kernel map with split write and read construction. It records the named configuration inference and overload failures without changing the active usage API.
+
+## Feature overload follow up
+
+[`feature-overloads/`](./feature-overloads/) compares fixed OTP and passkey configuration overloads with one arbitrary kernel map signature. It demonstrates how a malformed named feature configuration can fall through to a narrower overload while fresh literals remain exact.
