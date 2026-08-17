@@ -12,7 +12,6 @@ import type {
   AuthUser,
   OtpNamespace,
   PasskeyNamespace,
-  PasskeySummary,
   Result,
   SessionAdapter,
   SessionIdentity,
@@ -179,17 +178,7 @@ const passkeyConfig = {
       userId: credential.id,
     },
   }),
-  list: async (userId) => [
-    {
-      credentialId: `credential:${userId}`,
-    },
-  ],
-  remove: async (userId, credentialId) => {
-    void userId;
-    void credentialId;
-    return { success: true };
-  },
-} satisfies WithPasskeyConfig<PasskeySummary>;
+} satisfies WithPasskeyConfig;
 
 function makeOtpStrategy<
   Identity extends SessionIdentity,
@@ -209,19 +198,18 @@ function makeOtpStrategy<
 function makePasskeyStrategy<
   Identity extends SessionIdentity,
   SessionCreateResult,
-  Summary extends PasskeySummary,
 >(
   kernel: StrategyKernel<Identity, SessionCreateResult>,
-  config: WithPasskeyConfig<Summary>,
-): PasskeyNamespace<SessionCreateResult, Summary> {
+  config: WithPasskeyConfig,
+): PasskeyNamespace<SessionCreateResult> {
   return {
     createRegistrationOptions: () =>
       config.createRegistrationOptions({
         intent: "sign-up",
         userId: null,
       }),
-    createAdditionalRegistrationOptions: async ({ session }) => {
-      const identity = await kernel.current(session);
+    createAdditionalRegistrationOptions: async (token) => {
+      const identity = await kernel.current(token);
 
       if (identity === null) {
         return {
@@ -235,7 +223,7 @@ function makePasskeyStrategy<
         userId: identity.userId,
       });
     },
-    verifyRegistration: async ({ session, credential }) => {
+    verifyRegistration: async (token, { credential }) => {
       const registration = await config.verifyRegistration({ credential });
 
       if (!registration.success) {
@@ -243,7 +231,7 @@ function makePasskeyStrategy<
       }
 
       if (registration.data.intent === "add") {
-        const identity = await kernel.current(session);
+        const identity = await kernel.current(token);
 
         if (identity === null) {
           return {
@@ -302,33 +290,6 @@ function makePasskeyStrategy<
         },
       };
     },
-    list: async ({ session }) => {
-      const identity = await kernel.current(session);
-
-      if (identity === null) {
-        return {
-          success: false,
-          error: "not_authenticated",
-        };
-      }
-
-      return {
-        success: true,
-        data: await config.list(identity.userId),
-      };
-    },
-    remove: async ({ session, credentialId }) => {
-      const identity = await kernel.current(session);
-
-      if (identity === null) {
-        return {
-          success: false,
-          error: "not_authenticated",
-        };
-      }
-
-      return config.remove(identity.userId, credentialId);
-    },
   };
 }
 
@@ -363,34 +324,28 @@ async function runSandbox(): Promise<void> {
   await auth.strategies.passkeys.verifyAuthentication({
     credential: authenticationCredential,
   });
-  await auth.strategies.passkeys.verifyRegistration({
-    session: null,
+  await auth.strategies.passkeys.verifyRegistration(null, {
     credential: registrationCredential,
   });
-  await auth.strategies.passkeys.createAdditionalRegistrationOptions({
-    session: "session-token",
-  });
+  await auth.strategies.passkeys.createAdditionalRegistrationOptions(
+    "session-token",
+  );
 
-  const passkeyAdd = await auth.strategies.passkeys.verifyRegistration({
-    session: "session-token",
-    credential: additionalRegistrationCredential,
-  });
+  const passkeyAdd = await auth.strategies.passkeys.verifyRegistration(
+    "session-token",
+    { credential: additionalRegistrationCredential },
+  );
 
   if (!passkeyAdd.success) {
     throw new Error("Adding a passkey for the current user failed");
   }
 
-  const signedOutList = await auth.strategies.passkeys.list({ session: null });
+  const signedOutAdd =
+    await auth.strategies.passkeys.createAdditionalRegistrationOptions(null);
 
-  if (signedOutList.success) {
-    throw new Error("A signed-out user listed passkeys");
+  if (signedOutAdd.success) {
+    throw new Error("A signed-out user began adding a passkey");
   }
-
-  await auth.strategies.passkeys.list({ session: "session-token" });
-  await auth.strategies.passkeys.remove({
-    session: "session-token",
-    credentialId: "credential:current-user",
-  });
 
   const viewer = await auth.session.get("session-token");
 

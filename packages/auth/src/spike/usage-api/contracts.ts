@@ -33,8 +33,8 @@ export type SessionIdentity = {
 
 /** Read-only session port used to resolve current auth authority */
 export type SessionResolver<Identity extends SessionIdentity> = {
-  /** Repeatable read-only resolution of the presented credential */
-  resolve: (credential: string | null) => Promise<Identity | null>;
+  /** Repeatable read-only resolution of the presented session token */
+  resolve: (token: string | null) => Promise<Identity | null>;
 };
 
 /**
@@ -86,7 +86,7 @@ export type SessionManagementNamespace<
   Identity extends SessionIdentity,
   Capabilities extends object,
 > = {
-  get: (credential: string | null) => Promise<Identity | null>;
+  get: (token: string | null) => Promise<Identity | null>;
 } & SessionCapabilitySet<Capabilities>;
 
 /**
@@ -112,7 +112,7 @@ export type StrategyKernel<
       E
     >
   >;
-  current: (credential: string | null) => Promise<Identity | null>;
+  current: (token: string | null) => Promise<Identity | null>;
 };
 
 /** Auth surface produced by one kernel bound namespace map */
@@ -171,11 +171,6 @@ export type OtpNamespace<User extends AuthUser, SessionCreateResult> = {
   }) => Promise<OtpAuthenticateResult<User, SessionCreateResult>>;
 };
 
-/** Minimum safe passkey metadata exposed by credential management */
-export type PasskeySummary = {
-  credentialId: string;
-};
-
 /** The two registration workflows have different session consequences */
 export type RegistrationIntent = "sign-up" | "add";
 
@@ -200,18 +195,16 @@ export type RegisteredPasskeyUser = {
  * Complete trusted passkey authentication strategy.
  *
  * The object owns user provisioning, application policy, WebAuthn, challenge
- * lifecycle, credential persistence, counter handling, and atomic credential
- * removal. Its operations are called independently because they span separate
- * public workflows and server requests.
- *
- * Summary is an application-defined safe projection. The strategy namespace
- * relies only on credentialId and returns all additional fields unchanged.
+ * lifecycle, credential persistence, and counter handling. Its operations are
+ * called independently because they span separate public workflows and server
+ * requests. Credential management is not part of the strategy; the
+ * application manages stored credentials directly.
  *
  * A direct implementation replaces the passkey authentication engine. Helpers
  * may produce this same object from lower-level WebAuthn, challenge, storage,
  * and application-user primitives.
  */
-export type WithPasskeyConfig<Summary extends PasskeySummary> = {
+export type WithPasskeyConfig = {
   createRegistrationOptions: (
     context: RegistrationContext,
   ) => Promise<
@@ -239,14 +232,6 @@ export type WithPasskeyConfig<Summary extends PasskeySummary> = {
       | "verification_failed"
     >
   >;
-  list: (userId: string) => Promise<Summary[]>;
-  /**
-   * Atomically applies removal policy and removes only an owned credential.
-   */
-  remove: (
-    userId: string,
-    credentialId: string,
-  ) => Promise<Result<void, "credential_not_found" | "removal_disabled">>;
 };
 
 /** Result of completing either public passkey registration workflow */
@@ -268,34 +253,31 @@ export type VerifyRegistrationResult<SessionCreateResult> = Result<
 >;
 
 /**
- * Passkey authentication and credential-management workflows.
+ * Passkey authentication workflows.
  *
  * Operations that use current-user authority receive the presented session
- * credential as session. The strategy derives userId from that authority and
- * never accepts an arbitrary public userId.
+ * token as their first positional argument. The strategy derives userId from
+ * that authority and never accepts an arbitrary public userId.
  */
-export type PasskeyNamespace<
-  SessionCreateResult,
-  Summary extends PasskeySummary,
-> = {
+export type PasskeyNamespace<SessionCreateResult> = {
   /** Begins passkey-first signup */
   createRegistrationOptions: () => Promise<
     Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
   >;
   /** Begins adding a passkey for the authenticated user */
-  createAdditionalRegistrationOptions: (args: {
-    session: string | null;
-  }) => Promise<
+  createAdditionalRegistrationOptions: (
+    token: string | null,
+  ) => Promise<
     Result<
       PublicKeyCredentialCreationOptionsJSON,
       "not_authenticated" | "registration_disabled"
     >
   >;
   /** The strategy result determines whether completion signs in or adds */
-  verifyRegistration: (args: {
-    session: string | null;
-    credential: RegistrationResponseJSON;
-  }) => Promise<VerifyRegistrationResult<SessionCreateResult>>;
+  verifyRegistration: (
+    token: string | null,
+    args: { credential: RegistrationResponseJSON },
+  ) => Promise<VerifyRegistrationResult<SessionCreateResult>>;
   createAuthenticationOptions: () => Promise<
     Result<PublicKeyCredentialRequestOptionsJSON, never>
   >;
@@ -312,20 +294,6 @@ export type PasskeyNamespace<
       | "credential_not_found"
       | "challenge_expired"
       | "verification_failed"
-    >
-  >;
-  /** Lists only passkeys belonging to the authenticated user */
-  list: (args: {
-    session: string | null;
-  }) => Promise<Result<Summary[], "not_authenticated">>;
-  /** Removes only an owned passkey through the strategy's atomic operation */
-  remove: (args: {
-    session: string | null;
-    credentialId: string;
-  }) => Promise<
-    Result<
-      void,
-      "not_authenticated" | "credential_not_found" | "removal_disabled"
     >
   >;
 };

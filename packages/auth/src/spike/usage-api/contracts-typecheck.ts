@@ -9,7 +9,6 @@ import type {
   AuthUser,
   OtpNamespace,
   PasskeyNamespace,
-  PasskeySummary,
   Result,
   SessionAdapter,
   SessionIdentity,
@@ -46,17 +45,14 @@ type ResolvedUser = AuthUser & {
   isNew: boolean;
 };
 
-type ListedPasskey = PasskeySummary & {
-  label: string;
-};
-
 declare const session: SessionAdapter<
   SessionClaims,
   SessionCreated,
   SessionCapabilities
 >;
 declare const otp: WithOtpConfig<ResolvedUser>;
-declare const passkey: WithPasskeyConfig<ListedPasskey>;
+declare const passkey: WithPasskeyConfig;
+declare const registrationResponse: RegistrationResponseJSON;
 
 declare function makeOtpStrategy<
   Identity extends SessionIdentity,
@@ -70,11 +66,10 @@ declare function makeOtpStrategy<
 declare function makePasskeyStrategy<
   Identity extends SessionIdentity,
   SessionCreateResult,
-  Summary extends PasskeySummary,
 >(
   kernel: StrategyKernel<Identity, SessionCreateResult>,
-  config: WithPasskeyConfig<Summary>,
-): PasskeyNamespace<SessionCreateResult, Summary>;
+  config: WithPasskeyConfig,
+): PasskeyNamespace<SessionCreateResult>;
 
 function expectType<T>(value: T): T {
   return value;
@@ -90,9 +85,7 @@ const auth = makeAuth(session, (kernel) => ({
 const sessionOnly = makeAuth(session, () => ({}));
 
 expectType<OtpNamespace<ResolvedUser, SessionCreated>>(auth.strategies.otp);
-expectType<PasskeyNamespace<SessionCreated, ListedPasskey>>(
-  auth.strategies.passkeys,
-);
+expectType<PasskeyNamespace<SessionCreated>>(auth.strategies.passkeys);
 
 // @ts-expect-error an unconfigured namespace is unavailable
 void auth.strategies.google;
@@ -212,22 +205,26 @@ async function otpProbe(): Promise<void> {
 
 void otpProbe;
 
-/* Passkey current-user operations receive the presented credential. */
+/* Passkey current-user operations receive the token first, positionally. */
 
-void auth.strategies.passkeys.list({ session: "token" });
-void auth.strategies.passkeys.remove({
-  session: null,
-  credentialId: "credential-1",
-});
-void auth.strategies.passkeys.createAdditionalRegistrationOptions({
-  session: "token",
+void auth.strategies.passkeys.createAdditionalRegistrationOptions("token");
+void auth.strategies.passkeys.createAdditionalRegistrationOptions(null);
+void auth.strategies.passkeys.verifyRegistration(null, {
+  credential: registrationResponse,
 });
 
-// @ts-expect-error listing requires the presented session credential
-void auth.strategies.passkeys.list({});
+// @ts-expect-error completing registration requires the token first
+void auth.strategies.passkeys.verifyRegistration({
+  credential: registrationResponse,
+});
 
-// @ts-expect-error the strategy derives userId from current authority
-void auth.strategies.passkeys.list({ session: "token", userId: "user-1" });
+/* Credential management is application storage, not library surface. */
+
+// @ts-expect-error stored passkeys are listed storage-direct by the app
+void auth.strategies.passkeys.list;
+
+// @ts-expect-error stored passkeys are removed storage-direct by the app
+void auth.strategies.passkeys.remove;
 
 /* Public methods accept values, never framework contexts. */
 
