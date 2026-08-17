@@ -1,12 +1,16 @@
 /**
  * Framework-neutral playground for the kernel map construction candidate.
  *
- * makeAuth receives fixed configuration and one strategy map callback. The
+ * makeAuth receives the session adapter and one strategy map callback. The
  * callback receives the narrow strategy kernel and returns the final named
  * namespace map. The public surface nests every strategy under
  * auth.strategies, while auth.session carries reads plus the configured
  * mechanism capabilities. Direct session creation does not exist. Bespoke
  * authentication is an explicit strategy.
+ *
+ * Strategy bundles are functions of the kernel. A bundle passed directly,
+ * a parameterized bundle factory, and a hand written callback that spreads
+ * a bundle's result are the same API at three levels of granularity.
  *
  * makeAuth, the strategy kernel, and the returned auth shape are candidate
  * declarations local to this example until promoted into contracts. The
@@ -15,7 +19,6 @@
  */
 import type {
   AuthUser,
-  MakeAuthConfig,
   Result,
   SessionAdapter,
   SessionIdentity,
@@ -53,14 +56,14 @@ export type KernelMapAuth<
   strategies: Namespaces;
 };
 
-/** Candidate constructor. Fixed configuration first, strategy map callback second */
+/** Candidate constructor. Session adapter first, strategy map callback second */
 export declare function makeAuth<
   Identity extends SessionIdentity,
   SessionCreateResult,
   Capabilities extends object,
   const Namespaces extends Record<string, object>,
 >(
-  config: MakeAuthConfig<Identity, SessionCreateResult, Capabilities>,
+  session: SessionAdapter<Identity, SessionCreateResult, Capabilities>,
   strategies: (
     kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCreateResult>>,
   ) => Namespaces,
@@ -198,13 +201,37 @@ export const googleProfileConfig = {
   authenticate: async () => ({ success: false, error: "invalid_state" }),
 } satisfies OidcConfig<"google">;
 
-export const auth = makeAuth({ debug: true, session }, (kernel) => ({
+/** Shipped strategy bundle. Passed to makeAuth directly */
+export function emailOtp<
+  Identity extends SessionIdentity,
+  SessionCreateResult,
+>(kernel: StrategyKernel<Identity, SessionCreateResult>) {
+  return { emailOtp: makeOtpNamespace(kernel, emailOtpConfig) };
+}
+
+/** Parameterized strategy bundle factory */
+export function otpStrategy(config: OtpConfig) {
+  return <Identity extends SessionIdentity, SessionCreateResult>(
+    kernel: StrategyKernel<Identity, SessionCreateResult>,
+  ) => ({ otp: makeOtpNamespace(kernel, config) });
+}
+
+export const auth = makeAuth(session, (kernel) => ({
   emailOtp: makeOtpNamespace(kernel, emailOtpConfig),
   smsOtp: makeOtpNamespace(kernel, smsOtpConfig),
   googleProfile: makeOidcNamespace(kernel, googleProfileConfig),
 }));
 
-export const sessionOnlyAuth = makeAuth({ debug: true, session }, () => ({}));
+export const bundleAuth = makeAuth(session, emailOtp);
+
+export const parameterizedAuth = makeAuth(session, otpStrategy(smsOtpConfig));
+
+export const extendedAuth = makeAuth(session, (kernel) => ({
+  ...otpStrategy(emailOtpConfig)(kernel),
+  googleProfile: makeOidcNamespace(kernel, googleProfileConfig),
+}));
+
+export const sessionOnlyAuth = makeAuth(session, () => ({}));
 
 export const getSession = () => auth.session.get();
 
