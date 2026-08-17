@@ -3,7 +3,9 @@
  *
  * Each session implementation supplies the same two-operation kernel port and
  * only its meaningful public capabilities. The authentication kernel does not
- * branch on the mechanism or impose one credential shape.
+ * branch on the mechanism or impose one credential shape. The presented
+ * credential is a string argument; created credentials remain mechanism
+ * defined values.
  */
 import type { SessionAdapter, SessionIdentity } from "./contracts";
 import { makeAuth } from "./contracts";
@@ -39,7 +41,6 @@ declare const makeCredential: () => string;
 declare const now: () => Date;
 declare const readContext: ReadContext;
 declare const writeContext: WriteContext;
-declare const accessToken: string | null;
 declare const presentedCredentials: PresentedSessionCredentials;
 
 const authority = makeOpaqueSessionAuthority({
@@ -53,17 +54,19 @@ const authority = makeOpaqueSessionAuthority({
 const opaqueLifecycle = makeOpaqueSession({ authority });
 
 const opaqueCapabilities = {
-  renew: () => opaqueLifecycle.refresh(writeContext, presentedCredentials),
-  end: () => opaqueLifecycle.end(writeContext, presentedCredentials),
+  renew: (presented: PresentedSessionCredentials) =>
+    opaqueLifecycle.refresh(writeContext, presented),
+  end: (presented: PresentedSessionCredentials) =>
+    opaqueLifecycle.end(writeContext, presented),
 };
 
 const opaqueSession = {
   kernel: {
     establish: (userId: string) => opaqueLifecycle.create(writeContext, userId),
-    resolve: () =>
-      accessToken === null
+    resolve: (credential: string | null) =>
+      credential === null
         ? Promise.resolve(null)
-        : opaqueLifecycle.validate(readContext, accessToken),
+        : opaqueLifecycle.validate(readContext, credential),
   },
   capabilities: opaqueCapabilities,
 } satisfies SessionAdapter<
@@ -72,12 +75,14 @@ const opaqueSession = {
   typeof opaqueCapabilities
 >;
 
-const opaqueAuth = makeAuth({ debug: true, session: opaqueSession });
+const opaqueAuth = makeAuth(opaqueSession, () => ({}));
 
-void opaqueAuth.session.create;
 void opaqueAuth.session.get;
 void opaqueAuth.session.renew;
 void opaqueAuth.session.end;
+
+// @ts-expect-error Direct session creation does not exist.
+void opaqueAuth.session.create;
 
 // @ts-expect-error Direct opaque access has no separate access refresh.
 void opaqueAuth.session.refresh;
@@ -95,19 +100,20 @@ const signedAccessLifecycle = makeSignedAccessSession({
 });
 
 const signedAccessCapabilities = {
-  refresh: () =>
-    signedAccessLifecycle.refresh(writeContext, presentedCredentials),
-  end: () => signedAccessLifecycle.end(writeContext, presentedCredentials),
+  refresh: (presented: PresentedSessionCredentials) =>
+    signedAccessLifecycle.refresh(writeContext, presented),
+  end: (presented: PresentedSessionCredentials) =>
+    signedAccessLifecycle.end(writeContext, presented),
 };
 
 const signedAccessSession = {
   kernel: {
     establish: (userId: string) =>
       signedAccessLifecycle.create(writeContext, userId),
-    resolve: () =>
-      accessToken === null
+    resolve: (credential: string | null) =>
+      credential === null
         ? Promise.resolve(null)
-        : signedAccessLifecycle.validate(readContext, accessToken),
+        : signedAccessLifecycle.validate(readContext, credential),
   },
   capabilities: signedAccessCapabilities,
 } satisfies SessionAdapter<
@@ -116,15 +122,14 @@ const signedAccessSession = {
   typeof signedAccessCapabilities
 >;
 
-const signedAccessAuth = makeAuth({
-  debug: true,
-  session: signedAccessSession,
-});
+const signedAccessAuth = makeAuth(signedAccessSession, () => ({}));
 
-void signedAccessAuth.session.create;
 void signedAccessAuth.session.get;
 void signedAccessAuth.session.refresh;
 void signedAccessAuth.session.end;
+
+// @ts-expect-error Direct session creation does not exist.
+void signedAccessAuth.session.create;
 
 // @ts-expect-error Access refresh does not expose authority renewal separately.
 void signedAccessAuth.session.renew;
@@ -138,20 +143,23 @@ type DenylistIdentity = SessionIdentity & {
 
 type DenylistSession = {
   issue: (userId: string) => Promise<IssuedSessionCredential>;
-  validateCurrent: () => Promise<DenylistIdentity | null>;
-  denyCurrent: () => Promise<void>;
+  validate: (token: string) => Promise<DenylistIdentity | null>;
+  deny: (token: string) => Promise<void>;
 };
 
 declare const denylist: DenylistSession;
 
 const denylistCapabilities = {
-  end: () => denylist.denyCurrent(),
+  end: (credential: string) => denylist.deny(credential),
 };
 
 const denylistSession = {
   kernel: {
     establish: (userId: string) => denylist.issue(userId),
-    resolve: () => denylist.validateCurrent(),
+    resolve: (credential: string | null) =>
+      credential === null
+        ? Promise.resolve(null)
+        : denylist.validate(credential),
   },
   capabilities: denylistCapabilities,
 } satisfies SessionAdapter<
@@ -160,11 +168,13 @@ const denylistSession = {
   typeof denylistCapabilities
 >;
 
-const denylistAuth = makeAuth({ debug: true, session: denylistSession });
+const denylistAuth = makeAuth(denylistSession, () => ({}));
 
-void denylistAuth.session.create;
 void denylistAuth.session.get;
 void denylistAuth.session.end;
+
+// @ts-expect-error Direct session creation does not exist.
+void denylistAuth.session.create;
 
 // @ts-expect-error Denylist-backed signed sessions do not inherently refresh.
 void denylistAuth.session.refresh;
@@ -183,7 +193,7 @@ type CustomCredential = {
 
 type CustomSession = {
   establish: (userId: string) => Promise<CustomCredential>;
-  resolve: () => Promise<CustomIdentity | null>;
+  resolve: (credential: string | null) => Promise<CustomIdentity | null>;
 };
 
 declare const custom: CustomSession;
@@ -193,10 +203,12 @@ const customSession = {
   capabilities: {},
 } satisfies SessionAdapter<CustomIdentity, CustomCredential, object>;
 
-const customAuth = makeAuth({ debug: true, session: customSession });
+const customAuth = makeAuth(customSession, () => ({}));
 
-void customAuth.session.create;
 void customAuth.session.get;
+
+// @ts-expect-error Direct session creation does not exist.
+void customAuth.session.create;
 
 // @ts-expect-error A minimal custom implementation invents no end operation.
 void customAuth.session.end;
@@ -205,7 +217,7 @@ void customAuth.session.end;
 void customAuth.session.refresh;
 
 async function readCustomClaims(): Promise<void> {
-  const identity = await customAuth.session.get();
+  const identity = await customAuth.session.get("presented-token");
 
   if (identity !== null) {
     void identity.organizationId;

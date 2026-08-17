@@ -1,16 +1,16 @@
 /**
- * Compile-time sandbox for invocation-scoped session capabilities.
+ * Compile-time sandbox for execution-boundary usage.
  *
- * Bindings close over framework context and presented credentials when they
- * construct a session projection. Read-only invocations receive only resolve;
- * write-capable invocations receive the complete authentication kernel and
- * their meaningful lifecycle capabilities. Public auth methods stay free of
- * framework context.
+ * auth is a module singleton wherever the platform allows one; operations
+ * receive the presented credential as an argument. A platform that supplies
+ * storage capabilities per invocation constructs the session adapter inside
+ * the handler. A read-only invocation constructs no auth at all; the session
+ * mechanism's read operation is its entire surface. Public auth methods stay
+ * free of framework context.
  */
 import type {
   SessionAdapter,
   SessionIdentity,
-  SessionReader,
   WithOtpConfig,
 } from "./contracts";
 import { makeAuth } from "./contracts";
@@ -47,7 +47,7 @@ declare const now: () => Date;
 declare const readContext: ReadContext;
 declare const writeContext: WriteContext;
 declare const accessToken: string | null;
-declare const credentials: PresentedSessionCredentials;
+declare const presentedCredentials: PresentedSessionCredentials;
 
 const authority = makeOpaqueSessionAuthority({
   storage,
@@ -67,39 +67,24 @@ const signedAccessLifecycle = makeSignedAccessSession({
   now,
 });
 
-function bindReadSession(
-  session: LifecycleSession<ReadContext, WriteContext>,
-  context: ReadContext,
-  presentedAccessToken: string | null,
-): SessionReader<SessionIdentity, object> {
-  return {
-    kernel: {
-      resolve: () =>
-        presentedAccessToken === null
-          ? Promise.resolve(null)
-          : session.validate(context, presentedAccessToken),
-    },
-    capabilities: {},
-  };
-}
-
 function bindWriteSession(
   session: LifecycleSession<ReadContext, WriteContext>,
   context: WriteContext,
-  presented: PresentedSessionCredentials,
 ) {
   const capabilities = {
-    refresh: () => session.refresh(context, presented),
-    end: () => session.end(context, presented),
+    refresh: (presented: PresentedSessionCredentials) =>
+      session.refresh(context, presented),
+    end: (presented: PresentedSessionCredentials) =>
+      session.end(context, presented),
   };
 
   return {
     kernel: {
       establish: (userId: string) => session.create(context, userId),
-      resolve: () =>
-        presented.access === null
+      resolve: (credential: string | null) =>
+        credential === null
           ? Promise.resolve(null)
-          : session.validate(context, presented.access),
+          : session.validate(context, credential),
     },
     capabilities,
   } satisfies SessionAdapter<
@@ -109,40 +94,40 @@ function bindWriteSession(
   >;
 }
 
-/* Next.js RSC binds only cookie and persistence reads. */
+/* Conventional servers hold one singleton; requests pass credentials in. */
 
-const rscAuth = makeAuth({
-  debug: true,
-  session: bindReadSession(opaqueLifecycle, readContext, accessToken),
-});
+const serverAuth = makeAuth(
+  bindWriteSession(signedAccessLifecycle, writeContext),
+  () => ({}),
+);
 
-void rscAuth.session.get();
+void serverAuth.session.get(accessToken);
+void serverAuth.session.refresh(presentedCredentials);
+void serverAuth.session.end(presentedCredentials);
 
-// @ts-expect-error A read-only render cannot establish a session.
-void rscAuth.session.create;
+// @ts-expect-error Direct session creation does not exist.
+void serverAuth.session.create;
 
-// @ts-expect-error A read-only render cannot install authentication strategies.
-void rscAuth.withOtp;
+// @ts-expect-error Framework context never crosses a public method.
+void serverAuth.session.get({ context: readContext });
 
-// @ts-expect-error The read binding did not expose refresh.
-void rscAuth.session.refresh;
+/* Next.js RSC renders read through the same singleton and never write. */
 
-/* Convex queries receive a read capability and no fake mutation capability. */
+void serverAuth.session.get(accessToken);
 
-const convexQueryAuth = makeAuth({
-  debug: true,
-  session: bindReadSession(signedAccessLifecycle, readContext, accessToken),
-});
+/* Convex queries construct no auth; the mechanism read is the surface. */
 
-void convexQueryAuth.session.get();
+const queryViewer =
+  accessToken === null
+    ? Promise.resolve(null)
+    : opaqueLifecycle.validate(readContext, accessToken);
 
-// @ts-expect-error A Convex query cannot establish a session.
-void convexQueryAuth.session.create;
+void queryViewer;
 
-// @ts-expect-error A Convex query cannot refresh or mutate session state.
-void convexQueryAuth.session.refresh;
+// @ts-expect-error A read context cannot establish sessions.
+void opaqueLifecycle.create(readContext, "user-1");
 
-/* Convex mutations bind the write capability used by authentication. */
+/* Convex mutations bind per-invocation storage, then authenticate normally. */
 
 type ResolvedUser = {
   userId: string;
@@ -151,33 +136,22 @@ type ResolvedUser = {
 
 declare const otp: WithOtpConfig<ResolvedUser>;
 
-const convexMutationAuth = makeAuth({
-  debug: true,
-  session: bindWriteSession(opaqueLifecycle, writeContext, credentials),
-}).withOtp(otp);
+const mutationAuth = makeAuth(
+  bindWriteSession(opaqueLifecycle, writeContext),
+  (kernel) => ({
+    otp: {
+      authenticate: (args: { identifier: string; otp: string }) =>
+        kernel.authenticate(() => otp.authenticate(args)),
+    },
+  }),
+);
 
-void convexMutationAuth.otp.authenticate({
+void mutationAuth.strategies.otp.authenticate({
   identifier: "person@example.com",
   otp: "123456",
 });
-void convexMutationAuth.session.get();
-void convexMutationAuth.session.refresh();
-void convexMutationAuth.session.end();
+void mutationAuth.session.get(accessToken);
+void mutationAuth.session.end(presentedCredentials);
 
-// @ts-expect-error The write projection requires a write-capable context.
-void bindWriteSession(opaqueLifecycle, readContext, credentials);
-
-/* Conventional request handlers use the same write-capable projection. */
-
-const requestAuth = makeAuth({
-  debug: true,
-  session: bindWriteSession(signedAccessLifecycle, writeContext, credentials),
-});
-
-void requestAuth.session.create({ userId: "user-1" });
-void requestAuth.session.get();
-void requestAuth.session.refresh();
-void requestAuth.session.end();
-
-// @ts-expect-error Framework context is closed over by the binding.
-void requestAuth.session.get({ context: readContext });
+// @ts-expect-error The write binding requires a write-capable context.
+void bindWriteSession(opaqueLifecycle, readContext);

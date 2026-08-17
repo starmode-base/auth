@@ -3,14 +3,20 @@
  *
  * The concrete session and strategy values are inert fixtures at the consumer
  * boundary. Production values may be custom application implementations or
- * objects produced by separately exported library adapters. These fixtures and
- * calls are not candidate library exports.
+ * objects produced by separately exported library adapters. The strategy
+ * factories here stand in for shipped adapters; their orchestration receives
+ * only the narrow strategy kernel. These fixtures and calls are not candidate
+ * library exports.
  */
 import type {
   AuthUser,
+  OtpNamespace,
+  PasskeyNamespace,
   PasskeySummary,
+  Result,
   SessionAdapter,
   SessionIdentity,
+  StrategyKernel,
   WithOtpConfig,
   WithPasskeyConfig,
 } from "./contracts";
@@ -31,18 +37,23 @@ const sandboxSession = {
       establishedFor: userId,
       credential: new Uint8Array([1, 2, 3]),
     }),
-    resolve: async () => ({
-      userId: "current-user",
-      tenantId: "tenant-1",
-    }),
+    resolve: async (credential) =>
+      credential === "session-token"
+        ? {
+            userId: "current-user",
+            tenantId: "tenant-1",
+          }
+        : null,
   },
   capabilities: {
-    end: async () => undefined,
+    end: async (credential: string | null) => {
+      void credential;
+    },
   },
 } satisfies SessionAdapter<
   SandboxIdentity,
   SandboxSession,
-  { end: () => Promise<void> }
+  { end: (credential: string | null) => Promise<void> }
 >;
 
 type SandboxOtpUser = AuthUser & {
@@ -107,7 +118,7 @@ const authenticationCredential = {
   type: "public-key",
 } satisfies AuthenticationResponseJSON;
 
-const otpStrategy = {
+const otpConfig = {
   request: async ({ identifier }) => {
     void identifier;
     return { success: true };
@@ -130,7 +141,7 @@ const otpStrategy = {
   },
 } satisfies WithOtpConfig<SandboxOtpUser>;
 
-const passkeyStrategy = {
+const passkeyConfig = {
   createRegistrationOptions: async ({ intent, userId }) => {
     void intent;
     void userId;
@@ -180,37 +191,218 @@ const passkeyStrategy = {
   },
 } satisfies WithPasskeyConfig<PasskeySummary>;
 
-const auth = makeAuth({
-  debug: true,
-  session: sandboxSession,
-})
-  .withOtp(otpStrategy)
-  .withPasskey(passkeyStrategy);
+function makeOtpStrategy<
+  Identity extends SessionIdentity,
+  SessionCreateResult,
+  User extends AuthUser,
+>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+  config: WithOtpConfig<User>,
+): OtpNamespace<User, SessionCreateResult> {
+  return {
+    request: (args) => config.request(args),
+    authenticate: (args) =>
+      kernel.authenticate(() => config.authenticate(args)),
+  };
+}
+
+function makePasskeyStrategy<
+  Identity extends SessionIdentity,
+  SessionCreateResult,
+  Summary extends PasskeySummary,
+>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+  config: WithPasskeyConfig<Summary>,
+): PasskeyNamespace<SessionCreateResult, Summary> {
+  return {
+    createRegistrationOptions: () =>
+      config.createRegistrationOptions({
+        intent: "sign-up",
+        userId: null,
+      }),
+    createAdditionalRegistrationOptions: async ({ session }) => {
+      const identity = await kernel.current(session);
+
+      if (identity === null) {
+        return {
+          success: false,
+          error: "not_authenticated",
+        };
+      }
+
+      return config.createRegistrationOptions({
+        intent: "add",
+        userId: identity.userId,
+      });
+    },
+    verifyRegistration: async ({ session, credential }) => {
+      const registration = await config.verifyRegistration({ credential });
+
+      if (!registration.success) {
+        return registration;
+      }
+
+      if (registration.data.intent === "add") {
+        const identity = await kernel.current(session);
+
+        if (identity === null) {
+          return {
+            success: false,
+            error: "not_authenticated",
+          };
+        }
+
+        if (identity.userId !== registration.data.userId) {
+          return {
+            success: false,
+            error: "user_mismatch",
+          };
+        }
+
+        return {
+          success: true,
+          data: {
+            intent: "add",
+            userId: registration.data.userId,
+          },
+        };
+      }
+
+      const authentication = await kernel.authenticate<AuthUser, never>(
+        async (): Promise<Result<AuthUser, never>> => ({
+          success: true,
+          data: { userId: registration.data.userId },
+        }),
+      );
+
+      return {
+        success: true,
+        data: {
+          intent: "sign-up",
+          userId: authentication.data.user.userId,
+          session: authentication.data.session,
+        },
+      };
+    },
+    createAuthenticationOptions: () => config.createAuthenticationOptions(),
+    verifyAuthentication: async ({ credential }) => {
+      const outcome = await kernel.authenticate(() =>
+        config.verifyAuthentication({ credential }),
+      );
+
+      if (!outcome.success) {
+        return outcome;
+      }
+
+      return {
+        success: true,
+        data: {
+          userId: outcome.data.user.userId,
+          session: outcome.data.session,
+        },
+      };
+    },
+    list: async ({ session }) => {
+      const identity = await kernel.current(session);
+
+      if (identity === null) {
+        return {
+          success: false,
+          error: "not_authenticated",
+        };
+      }
+
+      return {
+        success: true,
+        data: await config.list(identity.userId),
+      };
+    },
+    remove: async ({ session, credentialId }) => {
+      const identity = await kernel.current(session);
+
+      if (identity === null) {
+        return {
+          success: false,
+          error: "not_authenticated",
+        };
+      }
+
+      return config.remove(identity.userId, credentialId);
+    },
+  };
+}
+
+const auth = makeAuth(sandboxSession, (kernel) => ({
+  otp: makeOtpStrategy(kernel, otpConfig),
+  passkeys: makePasskeyStrategy(kernel, passkeyConfig),
+}));
 
 async function runSandbox(): Promise<void> {
-  await auth.otp.authenticate({
+  const failedOtp = await auth.strategies.otp.authenticate({
     identifier: "sandbox@example.com",
     otp: "invalid",
   });
-  await auth.otp.authenticate({
+
+  if (failedOtp.success) {
+    throw new Error("Invalid OTP authenticated");
+  }
+
+  const successfulOtp = await auth.strategies.otp.authenticate({
     identifier: "sandbox@example.com",
     otp: "123456",
   });
-  await auth.passkey.verifyAuthentication({
+
+  if (
+    !successfulOtp.success ||
+    !("data" in successfulOtp) ||
+    successfulOtp.data.session.establishedFor !== "otp:sandbox@example.com"
+  ) {
+    throw new Error("OTP authentication did not establish its user");
+  }
+
+  await auth.strategies.passkeys.verifyAuthentication({
     credential: authenticationCredential,
   });
-  await auth.passkey.verifyRegistration({
+  await auth.strategies.passkeys.verifyRegistration({
+    session: null,
     credential: registrationCredential,
   });
-  await auth.passkey.createAdditionalRegistrationOptions();
-  await auth.passkey.verifyRegistration({
+  await auth.strategies.passkeys.createAdditionalRegistrationOptions({
+    session: "session-token",
+  });
+
+  const passkeyAdd = await auth.strategies.passkeys.verifyRegistration({
+    session: "session-token",
     credential: additionalRegistrationCredential,
   });
-  await auth.passkey.list();
-  await auth.passkey.remove({
+
+  if (!passkeyAdd.success) {
+    throw new Error("Adding a passkey for the current user failed");
+  }
+
+  const signedOutList = await auth.strategies.passkeys.list({ session: null });
+
+  if (signedOutList.success) {
+    throw new Error("A signed-out user listed passkeys");
+  }
+
+  await auth.strategies.passkeys.list({ session: "session-token" });
+  await auth.strategies.passkeys.remove({
+    session: "session-token",
     credentialId: "credential:current-user",
   });
-  await auth.session.end();
+
+  const viewer = await auth.session.get("session-token");
+
+  if (viewer === null || viewer.tenantId !== "tenant-1") {
+    throw new Error("The presented credential did not resolve");
+  }
+
+  if ((await auth.session.get(null)) !== null) {
+    throw new Error("A missing credential resolved to an identity");
+  }
+
+  await auth.session.end("session-token");
 }
 
 await runSandbox();

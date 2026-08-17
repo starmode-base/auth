@@ -2,10 +2,18 @@
  * Server usage API candidate.
  *
  * Names in this spike are provisional. The contract under examination is the
- * ownership and composition model: literal objects are the DI contract,
- * chained features are complete authentication strategies, strategy DIs own
- * feature workflows, and core owns composition, session establishment, and
- * current-user scoping.
+ * ownership and composition model: literal objects are the DI contract, the
+ * strategy map callback mounts complete authentication strategies under
+ * caller chosen names, strategy DIs own feature workflows, and core owns
+ * composition, session establishment, and current-user scoping.
+ *
+ * auth is a module singleton. Construction touches no request. Every
+ * operation that uses current session authority receives the presented
+ * credential as an argument. The presented credential is a string, whatever
+ * value the application extracted from its transport. Created credentials
+ * remain mechanism defined values that the application writes back. Direct
+ * session creation does not exist. Bespoke authentication is an explicit
+ * strategy.
  */
 
 /** Expected command result; infrastructure failures throw */
@@ -25,18 +33,19 @@ export type SessionIdentity = {
 
 /** Read-only session port used to resolve current auth authority */
 export type SessionResolver<Identity extends SessionIdentity> = {
-  /** Repeatable read-only resolution of the presented session */
-  resolve: () => Promise<Identity | null>;
+  /** Repeatable read-only resolution of the presented credential */
+  resolve: (credential: string | null) => Promise<Identity | null>;
 };
 
 /**
  * Fixed session port used by the authentication microkernel.
  *
  * Core establishes the exact userId returned by a successful authentication
- * strategy and resolves the current identity when another auth workflow needs
- * that authority. The implementation owns every credential, persistence,
- * transport, lifetime, renewal, and revocation decision behind these two
- * operations.
+ * strategy and resolves the presented credential when another auth workflow
+ * needs current authority. The implementation owns every credential,
+ * persistence, transport, lifetime, renewal, and revocation decision behind
+ * these two operations. resolve performs no writes; renewal is an explicit
+ * capability when the mechanism supports it.
  */
 export type SessionKernel<
   Identity extends SessionIdentity,
@@ -45,36 +54,21 @@ export type SessionKernel<
   establish: (userId: string) => Promise<CreateResult>;
 };
 
-/** Capability names reserved for the kernel's public projections */
-type ReservedSessionCapability = "create" | "get";
+/** Capability names reserved for the kernel's public projection */
+type ReservedSessionCapability = "get";
 
-/** A public capability set cannot bypass or replace the kernel projections */
+/** A public capability set cannot replace the kernel's read projection */
 export type SessionCapabilitySet<Capabilities extends object> =
   Extract<keyof Capabilities, ReservedSessionCapability> extends never
     ? Capabilities
     : never;
 
 /**
- * Invocation-bound read-only session implementation.
- *
- * A binding closes over presented credentials and read capabilities, then
- * supplies only the public operations valid in that invocation. Since this
- * projection cannot establish sessions, it cannot install authentication
- * strategies or expose direct session creation.
- */
-export type SessionReader<
-  Identity extends SessionIdentity,
-  Capabilities extends object,
-> = {
-  kernel: SessionResolver<Identity>;
-  capabilities: SessionCapabilitySet<Capabilities>;
-};
-
-/**
  * Complete injected session implementation.
  *
  * Capabilities contains complete current-session workflows such as refresh,
- * renewal, revocation, or management. It accepts no arbitrary userId and is
+ * renewal, revocation, or management. Each capability defines its own
+ * signature, including which presented credentials it requires. The set is
  * projected unchanged into the public session namespace. An implementation
  * supplies only the operations its mechanism can perform meaningfully.
  */
@@ -84,7 +78,6 @@ export type SessionAdapter<
   Capabilities extends object,
 > = {
   kernel: SessionKernel<Identity, CreateResult>;
-  /** TODO: Documentation */
   capabilities: SessionCapabilitySet<Capabilities>;
 };
 
@@ -93,22 +86,43 @@ export type SessionManagementNamespace<
   Identity extends SessionIdentity,
   Capabilities extends object,
 > = {
-  get: () => Promise<Identity | null>;
+  get: (credential: string | null) => Promise<Identity | null>;
 } & SessionCapabilitySet<Capabilities>;
 
 /**
- * Session-only namespace.
+ * Narrow authority a strategy receives while its namespace is constructed.
  *
- * create is the escape hatch for applications implementing a custom
- * authentication strategy. Installed strategies retain create internally and
- * remove it from their ordinary public usage surface.
+ * Strategies never receive the session implementation or its capabilities.
+ * authenticate establishes a session for exactly the user returned by a
+ * successful proof and establishes nothing on failure. current is the same
+ * repeatable read-only resolution the public session namespace exposes.
  */
-export type SessionNamespace<
+export type StrategyKernel<
   Identity extends SessionIdentity,
-  CreateResult,
+  SessionCreateResult,
+> = {
+  authenticate: <User extends AuthUser, E extends string>(
+    prove: () => Promise<Result<User, E>>,
+  ) => Promise<
+    Result<
+      {
+        user: User;
+        session: SessionCreateResult;
+      },
+      E
+    >
+  >;
+  current: (credential: string | null) => Promise<Identity | null>;
+};
+
+/** Auth surface produced by one kernel bound namespace map */
+export type Auth<
+  Identity extends SessionIdentity,
   Capabilities extends object,
-> = SessionManagementNamespace<Identity, Capabilities> & {
-  create: (args: { userId: string }) => Promise<CreateResult>;
+  Namespaces extends Record<string, object>,
+> = {
+  session: SessionManagementNamespace<Identity, Capabilities>;
+  strategies: Namespaces;
 };
 
 /**
@@ -165,7 +179,7 @@ export type PasskeySummary = {
 /** The two registration workflows have different session consequences */
 export type RegistrationIntent = "sign-up" | "add";
 
-/** Registration context established by core */
+/** Registration context established by the strategy from current authority */
 export type RegistrationContext =
   | {
       intent: "sign-up";
@@ -187,11 +201,11 @@ export type RegisteredPasskeyUser = {
  *
  * The object owns user provisioning, application policy, WebAuthn, challenge
  * lifecycle, credential persistence, counter handling, and atomic credential
- * removal. Core calls these operations independently because they span
- * separate public workflows and server requests.
+ * removal. Its operations are called independently because they span separate
+ * public workflows and server requests.
  *
- * Summary is an application-defined safe projection. Core relies only on
- * credentialId and returns all additional fields unchanged.
+ * Summary is an application-defined safe projection. The strategy namespace
+ * relies only on credentialId and returns all additional fields unchanged.
  *
  * A direct implementation replaces the passkey authentication engine. Helpers
  * may produce this same object from lower-level WebAuthn, challenge, storage,
@@ -246,10 +260,20 @@ export type VerifyRegistrationResult<SessionCreateResult> = Result<
       intent: "add";
       userId: string;
     },
-  "registration_disabled" | "challenge_expired" | "verification_failed"
+  | "registration_disabled"
+  | "challenge_expired"
+  | "verification_failed"
+  | "not_authenticated"
+  | "user_mismatch"
 >;
 
-/** Passkey authentication and credential-management workflows */
+/**
+ * Passkey authentication and credential-management workflows.
+ *
+ * Operations that use current-user authority receive the presented session
+ * credential as session. The strategy derives userId from that authority and
+ * never accepts an arbitrary public userId.
+ */
 export type PasskeyNamespace<
   SessionCreateResult,
   Summary extends PasskeySummary,
@@ -259,7 +283,9 @@ export type PasskeyNamespace<
     Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
   >;
   /** Begins adding a passkey for the authenticated user */
-  createAdditionalRegistrationOptions: () => Promise<
+  createAdditionalRegistrationOptions: (args: {
+    session: string | null;
+  }) => Promise<
     Result<
       PublicKeyCredentialCreationOptionsJSON,
       "not_authenticated" | "registration_disabled"
@@ -267,6 +293,7 @@ export type PasskeyNamespace<
   >;
   /** The strategy result determines whether completion signs in or adds */
   verifyRegistration: (args: {
+    session: string | null;
     credential: RegistrationResponseJSON;
   }) => Promise<VerifyRegistrationResult<SessionCreateResult>>;
   createAuthenticationOptions: () => Promise<
@@ -288,9 +315,12 @@ export type PasskeyNamespace<
     >
   >;
   /** Lists only passkeys belonging to the authenticated user */
-  list: () => Promise<Result<Summary[], "not_authenticated">>;
+  list: (args: {
+    session: string | null;
+  }) => Promise<Result<Summary[], "not_authenticated">>;
   /** Removes only an owned passkey through the strategy's atomic operation */
   remove: (args: {
+    session: string | null;
     credentialId: string;
   }) => Promise<
     Result<
@@ -300,119 +330,22 @@ export type PasskeyNamespace<
   >;
 };
 
-/** makeAuth always configures sessions */
-export type MakeAuthConfig<
-  Identity extends SessionIdentity,
-  CreateResult,
-  Capabilities extends object,
-> = {
-  debug: boolean;
-  session: SessionAdapter<Identity, CreateResult, Capabilities>;
-};
-
-/** makeAuth config for an invocation that can only read session state */
-export type MakeAuthReaderConfig<
-  Identity extends SessionIdentity,
-  Capabilities extends object,
-> = {
-  debug: boolean;
-  session: SessionReader<Identity, Capabilities>;
-};
-
-/** Read-only auth projection with no authentication strategy builder */
-export type AuthReader<
-  Identity extends SessionIdentity,
-  SessionCapabilities extends object,
-> = {
-  session: SessionManagementNamespace<Identity, SessionCapabilities>;
-};
-
-/** Sessions configured; either authentication strategy may be installed */
-export type Auth<
-  Identity extends SessionIdentity,
-  SessionCreateResult,
-  SessionCapabilities extends object,
-> = {
-  session: SessionNamespace<Identity, SessionCreateResult, SessionCapabilities>;
-  withOtp: <User extends AuthUser>(
-    config: WithOtpConfig<User>,
-  ) => AuthOtp<Identity, SessionCreateResult, SessionCapabilities, User>;
-  withPasskey: <Passkey extends PasskeySummary>(
-    config: WithPasskeyConfig<Passkey>,
-  ) => AuthPasskey<Identity, SessionCreateResult, SessionCapabilities, Passkey>;
-};
-
-/** Sessions plus OTP authentication; passkeys may still be installed */
-export type AuthOtp<
-  Identity extends SessionIdentity,
-  SessionCreateResult,
-  SessionCapabilities extends object,
-  User extends AuthUser,
-> = {
-  session: SessionManagementNamespace<Identity, SessionCapabilities>;
-  otp: OtpNamespace<User, SessionCreateResult>;
-  withPasskey: <Passkey extends PasskeySummary>(
-    config: WithPasskeyConfig<Passkey>,
-  ) => AuthFull<
-    Identity,
-    SessionCreateResult,
-    SessionCapabilities,
-    User,
-    Passkey
-  >;
-};
-
-/** Sessions plus passkey authentication; OTP may still be installed */
-export type AuthPasskey<
-  Identity extends SessionIdentity,
-  SessionCreateResult,
-  SessionCapabilities extends object,
-  Passkey extends PasskeySummary,
-> = {
-  session: SessionManagementNamespace<Identity, SessionCapabilities>;
-  passkey: PasskeyNamespace<SessionCreateResult, Passkey>;
-  withOtp: <User extends AuthUser>(
-    config: WithOtpConfig<User>,
-  ) => AuthFull<
-    Identity,
-    SessionCreateResult,
-    SessionCapabilities,
-    User,
-    Passkey
-  >;
-};
-
-/** Sessions plus both authentication strategies; the builder is complete */
-export type AuthFull<
-  Identity extends SessionIdentity,
-  SessionCreateResult,
-  SessionCapabilities extends object,
-  User extends AuthUser,
-  Passkey extends PasskeySummary,
-> = {
-  session: SessionManagementNamespace<Identity, SessionCapabilities>;
-  otp: OtpNamespace<User, SessionCreateResult>;
-  passkey: PasskeyNamespace<SessionCreateResult, Passkey>;
-};
-
 /**
- * Candidate dependency-aware builder.
+ * Candidate constructor. Session adapter first, strategy map callback second.
  *
- * These declarations define the candidate public shape. The partial runtime
- * candidate in make-auth-sandbox.ts implements the write-capable strategy
- * builder. The read-only overload remains type-only evidence.
+ * The callback receives the narrow strategy kernel and returns the final
+ * named namespace map. Namespace names are caller chosen literal keys that
+ * core never enumerates. The partial runtime candidate lives in
+ * make-auth-sandbox.ts.
  */
 export declare function makeAuth<
   Identity extends SessionIdentity,
   SessionCreateResult,
-  SessionCapabilities extends object,
+  Capabilities extends object,
+  const Namespaces extends Record<string, object>,
 >(
-  config: MakeAuthConfig<Identity, SessionCreateResult, SessionCapabilities>,
-): Auth<Identity, SessionCreateResult, SessionCapabilities>;
-
-export declare function makeAuth<
-  Identity extends SessionIdentity,
-  SessionCapabilities extends object,
->(
-  config: MakeAuthReaderConfig<Identity, SessionCapabilities>,
-): AuthReader<Identity, SessionCapabilities>;
+  session: SessionAdapter<Identity, SessionCreateResult, Capabilities>,
+  strategies: (
+    kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCreateResult>>,
+  ) => Namespaces,
+): Auth<Identity, Capabilities, Namespaces>;

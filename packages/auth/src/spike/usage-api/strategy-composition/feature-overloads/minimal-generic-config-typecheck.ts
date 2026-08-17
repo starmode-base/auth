@@ -43,6 +43,7 @@ declare function makeAuth2(config: {
   passkey: object;
 };
 
+// @ts-expect-error Only the config is generic. The outer object rejects x.
 export const auth2 = makeAuth2({
   session: {},
   otp: {},
