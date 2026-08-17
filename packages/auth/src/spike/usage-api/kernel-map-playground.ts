@@ -8,22 +8,57 @@
  * mechanism capabilities. Direct session creation does not exist. Bespoke
  * authentication is an explicit strategy.
  *
+ * auth is a module singleton. Construction touches no request. Every
+ * operation that uses current session authority receives the presented
+ * credential as an argument. The presented credential is a string, whatever
+ * value the application extracted from its transport. Created credentials
+ * remain mechanism defined values that the application writes back.
+ *
  * Strategy bundles are functions of the kernel. A bundle passed directly,
  * a parameterized bundle factory, and a hand written callback that spreads
  * a bundle's result are the same API at three levels of granularity.
  *
- * makeAuth, the strategy kernel, and the returned auth shape are candidate
- * declarations local to this example until promoted into contracts. The
- * session contract is imported from the settled contracts. Fixtures are
- * deliberately inert and fail closed.
+ * makeAuth, the strategy kernel, the returned auth shape, and the session
+ * contract variant with a credential taking resolve are candidate
+ * declarations local to this example until promoted into contracts.
+ * Fixtures are deliberately inert and fail closed.
  */
-import type {
-  AuthUser,
-  Result,
-  SessionAdapter,
-  SessionIdentity,
-  SessionManagementNamespace,
-} from "./contracts";
+import type { AuthUser, Result, SessionIdentity } from "./contracts";
+
+/** Read-only session port. Resolves the presented credential to an identity */
+export type SessionResolver<Identity extends SessionIdentity> = {
+  resolve: (credential: string | null) => Promise<Identity | null>;
+};
+
+/** Fixed session port used by the authentication microkernel */
+export type SessionKernel<
+  Identity extends SessionIdentity,
+  CreateResult,
+> = SessionResolver<Identity> & {
+  establish: (userId: string) => Promise<CreateResult>;
+};
+
+/** A public capability set cannot replace the kernel's read projection */
+export type SessionCapabilitySet<Capabilities extends object> =
+  Extract<keyof Capabilities, "get"> extends never ? Capabilities : never;
+
+/** Complete injected session implementation */
+export type SessionAdapter<
+  Identity extends SessionIdentity,
+  CreateResult,
+  Capabilities extends object,
+> = {
+  kernel: SessionKernel<Identity, CreateResult>;
+  capabilities: SessionCapabilitySet<Capabilities>;
+};
+
+/** Session access plus exactly the configured mechanism capabilities */
+export type SessionManagementNamespace<
+  Identity extends SessionIdentity,
+  Capabilities extends object,
+> = {
+  get: (credential: string | null) => Promise<Identity | null>;
+} & SessionCapabilitySet<Capabilities>;
 
 /** Narrow authority a strategy receives while its namespace is constructed */
 export type StrategyKernel<
@@ -42,8 +77,8 @@ export type StrategyKernel<
       E
     >
   >;
-  /** Repeatable read-only resolution of the current identity */
-  current: () => Promise<Identity | null>;
+  /** Repeatable read-only resolution of the presented credential */
+  current: (credential: string | null) => Promise<Identity | null>;
 };
 
 /** Auth surface produced by one kernel bound namespace map */
@@ -167,7 +202,9 @@ export function makeOidcNamespace<
 }
 
 export const sessionCapabilities = {
-  end: async () => undefined,
+  end: async (credential: string | null) => {
+    void credential;
+  },
 };
 
 export const session = {
@@ -176,7 +213,12 @@ export const session = {
       accessToken: `access:${userId}`,
       refreshToken: `refresh:${userId}`,
     }),
-    resolve: async (): Promise<SessionClaims | null> => null,
+    resolve: async (
+      credential: string | null,
+    ): Promise<SessionClaims | null> => {
+      void credential;
+      return null;
+    },
   },
   capabilities: sessionCapabilities,
 } satisfies SessionAdapter<
@@ -202,10 +244,9 @@ export const googleProfileConfig = {
 } satisfies OidcConfig<"google">;
 
 /** Shipped strategy bundle. Passed to makeAuth directly */
-export function emailOtp<
-  Identity extends SessionIdentity,
-  SessionCreateResult,
->(kernel: StrategyKernel<Identity, SessionCreateResult>) {
+export function emailOtp<Identity extends SessionIdentity, SessionCreateResult>(
+  kernel: StrategyKernel<Identity, SessionCreateResult>,
+) {
   return { emailOtp: makeOtpNamespace(kernel, emailOtpConfig) };
 }
 
@@ -233,9 +274,9 @@ export const extendedAuth = makeAuth(session, (kernel) => ({
 
 export const sessionOnlyAuth = makeAuth(session, () => ({}));
 
-export const getSession = () => auth.session.get();
+export const getSession = (token: string | null) => auth.session.get(token);
 
-export const endSession = () => auth.session.end();
+export const endSession = (token: string | null) => auth.session.end(token);
 
 export const requestEmailOtp = (args: { identifier: string }) =>
   auth.strategies.emailOtp.request(args);
