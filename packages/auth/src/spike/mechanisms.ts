@@ -3,12 +3,8 @@
  * library, environment-free. Factories here build correct adapters. Source
  * of intent while the API is finalized, alongside contracts.ts.
  */
-import type {
-  OtpRecord,
-  OtpStorage,
-  RegistrationCodec,
-  SessionCodec,
-} from "./contracts";
+import type { OtpRecord, OtpStorage, RegistrationCodec } from "./contracts";
+import type { SessionCodec } from "./mechanisms/session-hmac-codec-contract";
 
 /**
  * Input for makeOtpStorage: OTP storage as two primitives. take must be

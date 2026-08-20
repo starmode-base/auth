@@ -6,6 +6,54 @@ The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
 Passkeys + OTP as composable primitives. Apps choose their flow.
 
+## Current API direction
+
+> **Decided 2026-07-26:** The active usage model is specified in `packages/auth/src/spike/usage-api/`. It supersedes the older pure-primitive, application-orchestrated flow decisions that remain below as history.
+
+The main spike contract still contains the earlier fixed session surface while the replacement boundary is being designed. For builder and session work, read the usage API README together with `packages/auth/src/spike/session-lifecycle/README.md`. Those documents record the active candidate and its open questions until the surviving types are promoted into the main spike contract.
+
+`makeAuth` is a small authentication kernel configured by literal objects. Sessions are mandatory. Chained OTP and passkey objects are complete trusted authentication strategies: they own their feature-specific workflows, while core owns builder composition, session establishment after successful authentication, and current-user scoping for auth-resource management.
+
+### Microkernel boundary
+
+> **Clarified 2026-07-27:** This is a microkernel architecture, with one important qualification: “feature logic lives in DI” does not mean the kernel is logic-free. Injected modules own feature and mechanism logic; the kernel retains the small shared control plane.
+
+The trust boundary is:
+
+```text
+strategy: prove and resolve an application user
+    ↓
+kernel: convert that successful result into a session
+    ↓
+session DI: implement that session
+```
+
+The kernel guarantees only what it controls:
+
+- A failed authentication result creates no session.
+- A successful result creates a session for exactly the userId returned by the strategy, using the one session implementation configured in `makeAuth`.
+- Strategies do not receive the session implementation and cannot create sessions themselves.
+- Auth-resource operations derive userId from the current session; their public methods never accept an arbitrary userId.
+- Installed strategies hide direct session creation from the normal public usage surface.
+
+The strategy remains a trusted authentication authority. A bespoke OTP strategy can return an arbitrary user without verifying an OTP; core cannot detect that lie. Directly implementing the strategy contract therefore replaces that authentication engine. Core’s guarantee begins at the strategy result: it controls how an authenticated identity becomes a session, not whether the strategy proved that identity correctly.
+
+This separation applies least authority. OTP and passkey strategies can authenticate but cannot issue sessions; the session DI can issue sessions but does not decide whether OTP or passkey proof succeeded; the kernel alone connects those capabilities. Giving every strategy the session DI would make each strategy reimplement the shared transition and would prevent the library from guaranteeing consistent session behavior.
+
+The admission test for kernel logic is strict:
+
+> Core owns only behavior that every session-establishing strategy or current-user auth-resource operation must obey identically.
+
+OTP generation and delivery, WebAuthn verification, challenges, credential counters, identity binding, and feature policy remain outside the kernel. If strategy-specific branches begin accumulating in core, the microkernel boundary has been violated. Moving the shared transition into another file or helper would not change its architectural ownership; the component with sole control of that transition is the kernel.
+
+Literal objects are the contract. A one-off implementation may be written inline, a fixed reusable implementation is a preconfigured vanilla object, and a parameterized reusable implementation may be produced by a `make*` helper. Object-producing helpers add no capability; they only package construction or retain supplied configuration. Lower-level primitives remain independently importable and can be used to implement the same strategy contracts.
+
+A DI operation exists only where core needs an independent decision point: different public operations or requests, conditional invocation, a cross-strategy security boundary, current-session authority, or an atomic boundary. Mechanics that core would only run together belong behind one semantic operation. Accordingly OTP exposes complete request and authenticate strategy operations, passkey ceremony phases remain independent across requests, and credential removal is one atomic strategy operation rather than list followed by policy followed by delete.
+
+Strategies normalize successful authentication to at least `{ userId }`. Strategy-specific identity binding remains inside each strategy because OTP identifier resolution, passkey credential identity, and future OAuth identity resolution do not have the same inputs or authority. An operation that becomes genuinely identical across strategies moves to `makeAuth`; it is never repeated under every chained feature.
+
+Session and passkey management lists return generic application-defined safe projections extending stable identifiers. Core treats additional fields as opaque and passes them through. Raw storage records, secrets, cryptographic material, and internal policy state are never management projections.
+
 ## Core philosophy
 
 - **Primitives-first** — core API is low-level primitives, flows are composed on top
@@ -294,9 +342,9 @@ Storage is split by concern: `OtpStorage`, `SessionStorage`, `CredentialStorage`
 
 > **Decided (2026-07-16): Semantic contracts, frozen core.** `OtpStorage.verify` stays the contract — it states meaning ("is this valid"), never mechanism. This keeps core frozen (policy changes are adapter releases, not core majors) and keeps the contract maximally general: delegated verification (e.g. Twilio Verify, where the provider checks the otp and no local record exists) is a valid adapter. Power lives at the edges; core hardly ever changes.
 
-> **Decided (2026-07-16): Mechanisms make the common case correct by construction.** We ship factories that produce correct adapters from dumb atomic primitives: `makeOtpStorage({ store, take })` returns an `OtpStorage` with expiry check, comparison, and one-time consumption built in — written and race-tested once by us. `take(identifier)` is atomic fetch-and-delete (`DELETE … RETURNING`, `GETDEL`); that one-word guarantee — atomic — is the entire adapter obligation, and the lazy implementation fails closed. Database recipes target `store`/`take`; power users (delegated verification, custom lockouts, dev bypasses) implement `OtpStorage` raw — full control, visibly off the blessed path. Conformance tests ship alongside: sequential (take twice → second null) plus deterministic barrier-based race checks — no hammering (see https://www.lirbank.com/harnessing-postgres-race-conditions.md).
+> **Decided (2026-07-16, corrected 2026-07-29): Mechanisms implement and test the common case once.** `makeOtpStorage({ store, take })` returns an `OtpStorage` with expiry checks, comparison, and one-time consumption implemented and race-tested by us. `take(identifier)` must be an atomic fetch-and-delete (`DELETE … RETURNING`, `GETDEL`); database recipes show how to satisfy that obligation. Power users may implement `OtpStorage` directly for delegated verification, custom lockouts, or other policies, but that implementation is application code and must satisfy the documented contract. Core trusts adapter results and cannot make an incorrect custom adapter safe. Conformance tests cover the shipped mechanism and document observable adapter behavior: sequential consumption plus deterministic barrier-based race checks — no hammering (see https://www.lirbank.com/harnessing-postgres-race-conditions.md).
 
-> **Decided (2026-07-17): User owns the database; the API is request-scoped.** The library never dictates schema — record types (`SessionRecord`, `OtpRecord`, `CredentialRecord`) are exchange shapes at the adapter boundary, mapped to and from the user's own representation; reads must return records equivalent to what writes received, nothing more. Two placement rules follow. A namespace method exists only for request-scoped protocol operations — state named by the token riding the current request: `session.end` stays because only the library can name "the current session" and the transport pair is its own (create sets the cookie, end clears it). An adapter method exists only where core calls it during a protocol operation. Everything identifier-keyed — sign out everywhere, list sessions, revoke one session, remove a passkey — is plain CRUD on tables the user owns, done storage-direct: correct by construction, and deletion converges within the codec ttl on every token format (immediately with opaque). Accordingly `session.endAll`, `SessionStorage.deleteAll`, and `CredentialStorage.delete` are cut — superseding the shipped `signOutAll`/`deleteAll` noted in the roadmap. The sessionId-keyed `deleteAll` also failed open: a missing current-session record made it a silent no-op exactly when compromise response matters. The README gets a management-recipes table at promotion; management surfaces on convenience adapters are a later layer's question, tabled.
+> **Decided (2026-07-17): User owns the database; the API is request-scoped.** The library never dictates schema — record types (`SessionRecord`, `OtpRecord`, `CredentialRecord`) are exchange shapes at the adapter boundary, mapped to and from the user's own representation; reads must return records equivalent to what writes received, nothing more. Two placement rules follow. A namespace method exists only for request-scoped protocol operations — state named by the token riding the current request: `session.end` stays because only the library can name "the current session" and the transport pair is its own (create sets the cookie, end clears it). An adapter method exists only where core calls it during a protocol operation. Everything identifier-keyed — sign out everywhere, list sessions, revoke one session, remove a passkey — is plain CRUD on tables the user owns, done storage-direct, and deletion converges within the codec ttl on every token format (immediately with opaque). Accordingly `session.endAll`, `SessionStorage.deleteAll`, and `CredentialStorage.delete` are cut — superseding the shipped `signOutAll`/`deleteAll` noted in the roadmap. The sessionId-keyed `deleteAll` also failed open: a missing current-session record made it a silent no-op exactly when compromise response matters. The README gets a management-recipes table at promotion; management surfaces on convenience adapters are a later layer's question, tabled.
 
 > **Decided (2026-07-17): TTLs — unit policy on unit configs; mechanism TTLs in mechanism factories, never on the SPI.** Core stamps every record deadline (`expiresAt` on session, otp, and challenge records) from unit config (`MakeAuthConfig.ttl`, `WithOtpConfig.ttl`, `WithPasskeyConfig.challengeTtl`). Token TTLs are mechanism-private: only self-contained codecs have a revocation window, so the number lives in the codec factory (`sessionHmac({ secret, ttl })`) — `SessionCodec.ttl` is removed from the SPI, and an opaque user configures no dead knob; the registration-token window is likewise codec-private. `TokenStatus.expiresAt` is the storage-check deadline — the time after which the carried record must be checked against storage: self-contained tokens embed it, lookup codecs report now (per-decode trust, `expired` never true — the zero-length revocation window that is opaque's known trade-off). Encode's directive stays `token: { expiresAt: Date | null }`: null = mint a deadline from the codec's own TTL, a Date = preserve the supplied deadline — that null branch is the seam that keeps deadline policy inside the only component that has one. Pressure-tested against splitting the codec into self-contained and lookup interfaces: rejected — it forks core into two algorithms (variation belongs at the edges; core stays frozen) and closes the taxonomy to hybrids such as lookup-with-short-cache; if lookup boilerplate ever matters, `makeLookupCodec({ lookup })` is a mechanisms-layer wrapper and the contract never moves. Accepted cost: a delivery template rendering "expires in N minutes" duplicates the otp ttl (config + template) — policy stays off the SPI.
 
@@ -684,7 +732,7 @@ The through-line: **flow ownership**. Flow-owning libraries (NextAuth, Better Au
 5. **Frozen core via semantic contracts.** Interfaces state meaning (`verify`), not mechanism, so policy evolution ships as adapters and mechanisms — not core majors with migration guides.
 6. **Misconfiguration is a type error.** Builder steps take exact concrete configs — no optional fields, no unknown keys, no runtime options validation. The invalid setup doesn't compile.
 7. **Agent-native, not agent-adapted.** No OAuth dashboards, no DNS, no external clicks. Signature-as-spec interfaces, flows visible in app code where an agent reads and writes them, and a core small enough to audit in one sitting.
-8. **Fail-closed by construction.** The lazy or broken implementation of every interface denies access rather than granting it — and we ship the conformance tests that prove it.
+8. **Tested mechanisms, explicit trust boundary.** Shipped mechanisms are tested against their contracts. A custom adapter is application code: core trusts it, the documentation states its obligations, and its author is responsible for getting it right.
 
 **Why passkey-first:**
 

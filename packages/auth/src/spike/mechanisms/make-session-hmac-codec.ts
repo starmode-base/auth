@@ -1,4 +1,4 @@
-import type { SessionCodec } from "../contracts";
+import type { SessionCodec } from "./session-hmac-codec-contract";
 
 /** Input for makeSessionHmacCodec */
 export type MakeSessionHmacCodecConfig = {

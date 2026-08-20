@@ -190,3 +190,7 @@ React hooks for the multi-step passkey ceremonies live in the companion react pa
 ## Examples
 
 Every supported setup has a runnable example under [`examples/`](../../examples/) — otp-only, passkey-only, combined, combined strict — across TanStack Start, Next.js, and plain Bun + React.
+
+## License
+
+MIT, see [LICENSE.md](./LICENSE.md).

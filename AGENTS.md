@@ -11,11 +11,14 @@ Read before working, in order:
 1. `packages/auth/src/spike/contracts.ts` + `spike/mechanisms.ts`
 2. `TODO.md`
 3. `SPEC.md`
+4. For builder or session API work, `packages/auth/src/spike/usage-api/README.md` + `packages/auth/src/spike/session-lifecycle/README.md`
 
 ## Documentation map
 
 - `packages/auth/src/spike/contracts.ts` + `spike/mechanisms.ts` — the contract: the typed API spec. Wins over README and code.
-- `SPEC.md` — rationale and dated decision record. Partially stale; never treat it as the contract.
+- `packages/auth/src/spike/usage-api/README.md` — the active builder replacement candidate. It records settled composition decisions and open type questions but does not become the contract until promoted into the main spike.
+- `packages/auth/src/spike/session-lifecycle/README.md` — supporting session-boundary design for the active builder candidate. It records required mechanism coverage and unresolved internal and public capability contracts.
+- `SPEC.md` — rationale and decision record. Partially stale; never treat it as the contract.
 - `TODO.md` — the work queue. Gitignored, local to this machine. Never delete items: mark `[x]` with a resolution note; add new items for follow-on work.
 - `packages/auth/README.md` — stale. At promotion it is rewritten from the settled spike and becomes the contract.
 
@@ -29,7 +32,7 @@ At promotion (only after the implementation has proven the contract):
 ## Development workflow
 
 - Order of work: types → tests → implementation, in small chunks — one unit at a time
-- Design adapter interfaces so the laziest implementation is safe: a no-op adapter may only deny access (fail closed), never grant it. If a lazy adapter could grant access, move that obligation into core or a shipped mechanism.
+- Adapter interfaces are trust boundaries. Core relies on their documented semantics; it does not attempt to compensate for an incorrect custom implementation. Shipped adapters and mechanisms must be tested, and custom adapter authors are responsible for satisfying the contract.
 - Type files are split by layer; file organization mirrors the layers:
   - Contracts — the adapter interfaces, the product. Semantic, never mechanical; core runs on anything satisfying them.
   - Mechanisms — logic shipped as adapters, environment-free. No framework imports, ever.
@@ -99,7 +102,11 @@ Place each claim at the lowest contract unit that owns the behavior, and establi
 ## Prose style
 
 - Use sentence case, never title case
+- Avoid semicolons, colons, and hyphens
+- Never hard-wrap prose in Markdown
 - OTP: uppercase in prose, `Otp*`/`otp` in identifiers; never call it a "code"
+- Tone: professional, design specification style
+- The repo is public. Write every document neutral and self-contained, assuming no reader context beyond the repo, and never referencing private conversations, business relationships, or non-public third party plans
 
 ## Code review instructions
 

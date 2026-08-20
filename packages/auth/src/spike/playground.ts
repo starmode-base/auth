@@ -1,32 +1,28 @@
-/**
- * Playground — exercises the contracts with no-op adapters.
- * Note every no-op fails closed: a do-nothing auth denies everything.
- */
+/** Playground — exercises the contracts with inert adapters */
 import { makeAuth } from "./contracts";
 
 export const auth = makeAuth({
   session: {
-    ttl: 0,
-    storage: {
-      get: async () => null,
-      store: async () => undefined,
-      delete: async () => undefined,
-    },
-    codec: {
-      encode: async () => "",
-      decode: async () => null,
-    },
-    transport: {
-      get: () => null,
-      set: () => "",
-      clear: () => undefined,
-    },
+    create: async () => ({
+      accessToken: "",
+      refreshToken: null,
+    }),
+    validate: async () => null,
+    refresh: async () => null,
+    end: async () => undefined,
   },
   debug: false,
 });
 
+const credentials = {
+  accessToken: null,
+  refreshToken: null,
+};
+
 auth.session.create({ userId: "123" });
-auth.session.end();
+auth.session.validate({ credentials });
+auth.session.refresh({ credentials });
+auth.session.end({ credentials });
 
 const otpAuth = auth.withOtp({
   ttl: 0,

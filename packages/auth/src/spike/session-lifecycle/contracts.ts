@@ -1,25 +1,42 @@
-import type { Result } from "../contracts";
+import type {
+  OtpNamespace,
+  PasskeyNamespace,
+  Result,
+  WithOtpConfig,
+  WithPasskeyConfig,
+} from "../contracts";
+
+/**
+ * One credential issued by a session mechanism. expiresAt is null when the
+ * credential has no client-visible expiry.
+ */
+export type IssuedSessionCredential = {
+  token: string;
+  expiresAt: Date | null;
+};
 
 /**
  * Credentials issued when a session is created or refreshed.
  *
- * Every mechanism issues an access token. Mechanisms that use the access
- * token itself as the server-side session handle return a null refresh token.
+ * Every mechanism issues an access credential. A refresh credential is the
+ * opaque authority used to resolve current session state and issue another
+ * access credential. It need not rotate when used. Mechanisms that present
+ * that authority directly as their access credential return null for refresh.
  */
 export type IssuedSessionCredentials = {
-  accessToken: string;
-  refreshToken: string | null;
+  access: IssuedSessionCredential;
+  refresh: IssuedSessionCredential | null;
 };
 
 /**
  * Credentials presented by a client.
  *
  * Either credential may be absent independently. In particular, a short-lived
- * access-token cookie may expire while its refresh-token cookie remains.
+ * access credential may expire while its refresh credential remains.
  */
 export type PresentedSessionCredentials = {
-  accessToken: string | null;
-  refreshToken: string | null;
+  access: string | null;
+  refresh: string | null;
 };
 
 /** The authenticated session data exposed by core */
@@ -32,7 +49,11 @@ export type SessionIdentity = {
  *
  * The adapter owns session policy and credential mechanics. ReadContext need
  * only support validation; WriteContext supplies the capabilities required by
- * session creation, refresh, and revocation.
+ * session creation, refresh, and revocation. Refresh resolves the mechanism's
+ * authoritative credential and issues a current access representation; it
+ * does not imply credential rotation. Ending a session revokes its authority.
+ * A previously issued self-contained access credential may remain valid until
+ * its declared expiry.
  */
 export type SessionAdapter<ReadContext, WriteContext> = {
   create: (
@@ -53,8 +74,8 @@ export type SessionAdapter<ReadContext, WriteContext> = {
   ) => Promise<void>;
 };
 
-/** Config for the candidate session-only core */
-export type MakeSessionAuthConfig<ReadContext, WriteContext> = {
+/** Input for the candidate session unit */
+export type MakeSessionUnitConfig<ReadContext, WriteContext> = {
   session: SessionAdapter<ReadContext, WriteContext>;
 };
 
@@ -78,7 +99,86 @@ export type SessionNamespace<ReadContext, WriteContext> = {
   }) => Promise<Result<void, never>>;
 };
 
-/** Candidate auth shape used by the session-lifecycle spike */
-export type SessionAuth<ReadContext, WriteContext> = {
+/** The methods added by withSession */
+export type SessionUnit<ReadContext, WriteContext> = {
   session: SessionNamespace<ReadContext, WriteContext>;
 };
+
+/** Config for the candidate base factory */
+export type MakeAuthConfig = {
+  debug: boolean;
+};
+
+/** No units configured */
+export type Auth = {
+  withSession: <ReadContext, WriteContext>(
+    session: SessionAdapter<ReadContext, WriteContext>,
+  ) => AuthSession<ReadContext, WriteContext>;
+  withOtp: (config: WithOtpConfig) => AuthOtp;
+  withPasskey: (config: WithPasskeyConfig) => AuthPasskey;
+};
+
+/** Sessions only */
+export type AuthSession<ReadContext, WriteContext> = {
+  session: SessionNamespace<ReadContext, WriteContext>;
+  withOtp: (config: WithOtpConfig) => AuthSessionOtp<ReadContext, WriteContext>;
+  withPasskey: (
+    config: WithPasskeyConfig,
+  ) => AuthSessionPasskey<ReadContext, WriteContext>;
+};
+
+/** OTP only */
+export type AuthOtp = {
+  otp: OtpNamespace;
+  withSession: <ReadContext, WriteContext>(
+    session: SessionAdapter<ReadContext, WriteContext>,
+  ) => AuthSessionOtp<ReadContext, WriteContext>;
+  withPasskey: (config: WithPasskeyConfig) => AuthOtpPasskey;
+};
+
+/** Passkeys only */
+export type AuthPasskey = {
+  passkey: PasskeyNamespace;
+  withSession: <ReadContext, WriteContext>(
+    session: SessionAdapter<ReadContext, WriteContext>,
+  ) => AuthSessionPasskey<ReadContext, WriteContext>;
+  withOtp: (config: WithOtpConfig) => AuthOtpPasskey;
+};
+
+/** Sessions and OTP */
+export type AuthSessionOtp<ReadContext, WriteContext> = {
+  session: SessionNamespace<ReadContext, WriteContext>;
+  otp: OtpNamespace;
+  withPasskey: (
+    config: WithPasskeyConfig,
+  ) => AuthFull<ReadContext, WriteContext>;
+};
+
+/** Sessions and passkeys */
+export type AuthSessionPasskey<ReadContext, WriteContext> = {
+  session: SessionNamespace<ReadContext, WriteContext>;
+  passkey: PasskeyNamespace;
+  withOtp: (config: WithOtpConfig) => AuthFull<ReadContext, WriteContext>;
+};
+
+/** OTP and passkeys */
+export type AuthOtpPasskey = {
+  otp: OtpNamespace;
+  passkey: PasskeyNamespace;
+  withSession: <ReadContext, WriteContext>(
+    session: SessionAdapter<ReadContext, WriteContext>,
+  ) => AuthFull<ReadContext, WriteContext>;
+};
+
+/** Every unit configured */
+export type AuthFull<ReadContext, WriteContext> = {
+  session: SessionNamespace<ReadContext, WriteContext>;
+  otp: OtpNamespace;
+  passkey: PasskeyNamespace;
+};
+
+/**
+ * Candidate optional-unit builder. This declaration is exercised by the
+ * composition probes; runtime builder work remains in the main spike.
+ */
+export declare function makeAuth(config: MakeAuthConfig): Auth;

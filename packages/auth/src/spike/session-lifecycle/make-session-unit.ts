@@ -1,14 +1,14 @@
-import type { MakeSessionAuthConfig, SessionAuth } from "./contracts";
+import type { MakeSessionUnitConfig, SessionUnit } from "./contracts";
 
 /**
- * Candidate value-oriented session core.
+ * Candidate value-oriented session unit.
  *
  * Credential transport remains outside core. Bindings read credentials from
  * their environment and persist the credentials returned by commands.
  */
-export function makeSessionAuth<ReadContext, WriteContext>(
-  config: MakeSessionAuthConfig<ReadContext, WriteContext>,
-): SessionAuth<ReadContext, WriteContext> {
+export function makeSessionUnit<ReadContext, WriteContext>(
+  config: MakeSessionUnitConfig<ReadContext, WriteContext>,
+): SessionUnit<ReadContext, WriteContext> {
   return {
     session: {
       async create({ context, userId }) {
