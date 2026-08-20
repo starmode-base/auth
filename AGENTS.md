@@ -18,7 +18,7 @@ Read before working, in order:
 - `packages/auth/src/spike/contracts.ts` + `spike/mechanisms.ts` — the contract: the typed API spec. Wins over README and code.
 - `packages/auth/src/spike/usage-api/README.md` — the active builder replacement candidate. It records settled composition decisions and open type questions but does not become the contract until promoted into the main spike.
 - `packages/auth/src/spike/session-lifecycle/README.md` — supporting session-boundary design for the active builder candidate. It records required mechanism coverage and unresolved internal and public capability contracts.
-- `SPEC.md` — rationale and dated decision record. Partially stale; never treat it as the contract.
+- `SPEC.md` — rationale and decision record. Partially stale; never treat it as the contract.
 - `TODO.md` — the work queue. Gitignored, local to this machine. Never delete items: mark `[x]` with a resolution note; add new items for follow-on work.
 - `packages/auth/README.md` — stale. At promotion it is rewritten from the settled spike and becomes the contract.
 
@@ -106,6 +106,7 @@ Place each claim at the lowest contract unit that owns the behavior, and establi
 - Never hard-wrap prose in Markdown
 - OTP: uppercase in prose, `Otp*`/`otp` in identifiers; never call it a "code"
 - Tone: professional, design specification style
+- The repo is public. Write every document neutral and self-contained, assuming no reader context beyond the repo, and never referencing private conversations, business relationships, or non-public third party plans
 
 ## Code review instructions
 

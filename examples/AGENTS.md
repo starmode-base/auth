@@ -56,6 +56,15 @@ Each framework should use its own data-loading pattern:
 
 Never use `useAsync` in a meta-framework example. It exists only for environments that lack framework-provided data loading.
 
+## Framework notes
+
+Platform facts that shape auth integration per framework:
+
+- **TanStack Start** — server functions carry the flows and own cookie access.
+- **Next.js (App Router)** — RSC render is read only. `cookies()` is ambient and request scoped. Writes happen in server actions and route handlers.
+- **Bun (plain React)** — manual request and response, the framework free floor.
+- **Convex** — `ctx` arrives per invocation. Functions cannot set cookies, so auth HTTP goes through proxy routes. Queries are read only, so identity checks there use the session mechanism's read directly. `crypto.subtle` works in queries, mutations, and actions. `fetch` is actions only. Convex Components sit at the adapter layer as storage packaging behind isolated tables with the engine host side. Component writes commit as sub transactions of the host mutation, and table isolation surfaces management as session capabilities.
+
 ## Atoms hide rendering, examples show behavior
 
 UI atoms (`Page`, `Button`, `Header`, `EmailInput`, `OtpInput`, `Toolbar`) encapsulate Tailwind styling so examples stay focused on auth logic. Atoms are nouns you can picture — not verbs that hide processes.
