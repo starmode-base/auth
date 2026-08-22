@@ -1,0 +1,23 @@
+{
+  "name": "@starmode/auth2",
+  "private": false,
+  "license": "MIT",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src/"
+  ],
+  "scripts": {
+    "lint": "eslint --fix",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "typescript-eslint": "^8.65.0"
+  }
+}
