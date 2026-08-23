@@ -88,6 +88,17 @@ function AuthFlow(props: { onSignedIn: () => void }) {
       >
         Continue
       </Button>
+      <Button
+        variant="secondary"
+        type="button"
+        onClick={async () => {
+          await requestOtp({ data: { identifier: email } });
+          setOtp("");
+          setError(null);
+        }}
+      >
+        Send a new one-time password
+      </Button>
     </Page>
   );
 }
@@ -158,6 +169,17 @@ function ChangeEmailFlow(props: { onDone: () => void; onCancel: () => void }) {
         }
       >
         Continue
+      </Button>
+      <Button
+        variant="secondary"
+        type="button"
+        onClick={async () => {
+          await requestOtp({ data: { identifier: email } });
+          setOtp("");
+          setError(null);
+        }}
+      >
+        Send a new one-time password
       </Button>
       <Button variant="secondary" type="button" onClick={props.onCancel}>
         Cancel
