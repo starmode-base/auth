@@ -13,10 +13,10 @@
   ],
   "peerDependencies": {
     "@starmode/auth": "workspace:*",
-    "react": "^19.2.7",
+    "react": "^19.2.8",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@types/react": "^19.2.17"
+    "@types/react": "^19.2.18"
   }
 }

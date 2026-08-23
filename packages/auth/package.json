@@ -19,7 +19,7 @@
   },
   "peerDependencies": {
     "@tanstack/react-start": "^1.161.1",
-    "next": "^16.2.10"
+    "next": "^16.2.11"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-start": {
@@ -31,10 +31,10 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@tanstack/react-start": "^1.168.32",
-    "eslint": "^10.7.0",
-    "globals": "^17.7.0",
-    "neon-testing": "^3.0.0",
-    "typescript-eslint": "^8.65.0"
+    "@tanstack/react-start": "^1.168.49",
+    "eslint": "^10.9.0",
+    "globals": "^17.11.0",
+    "neon-testing": "^3.0.1",
+    "typescript-eslint": "^8.67.0"
   }
 }
