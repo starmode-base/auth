@@ -58,7 +58,7 @@ export const startRegistration = createServerFn({ method: "POST" }).handler(
  * and creates a session.
  */
 export const verifyRegistration = createServerFn({ method: "POST" })
-  .inputValidator(
+  .validator(
     z.object({
       registrationToken: z.string(),
       credential: z.any() as z.ZodType<RegistrationCredential>,
@@ -131,7 +131,7 @@ const verifyAuthenticationSchema = z.object({
  * a session.
  */
 export const verifyAuthentication = createServerFn({ method: "POST" })
-  .inputValidator(verifyAuthenticationSchema)
+  .validator(verifyAuthenticationSchema)
   .handler(async ({ data }) => {
     const result = await auth.verifyAuthentication({
       credential: data.credential,
@@ -166,7 +166,7 @@ export const listPasskeys = createServerFn().handler(async () => {
  * Deletes a passkey for the current user. Refuses to delete the last passkey.
  */
 export const removePasskey = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ credentialId: z.string() }))
+  .validator(z.object({ credentialId: z.string() }))
   .handler(async ({ data }) => {
     const session = await auth.getSession();
     if (!session) return { success: false as const };
@@ -187,7 +187,7 @@ export const removePasskey = createServerFn({ method: "POST" })
  * Requires an active session. Sends OTP to the provided email address.
  */
 export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator(requestOtpSchema)
+  .validator(requestOtpSchema)
   .handler(async ({ data }) => {
     const session = await auth.getSession();
     if (!session) return { success: false };
@@ -202,7 +202,7 @@ export const requestOtp = createServerFn({ method: "POST" })
  * Requires an active session — the OTP proves ownership of the address.
  */
 export const addEmail = createServerFn({ method: "POST" })
-  .inputValidator(verifyOtpSchema)
+  .validator(verifyOtpSchema)
   .handler(async ({ data }) => {
     const session = await auth.getSession();
     if (!session) return { success: false };

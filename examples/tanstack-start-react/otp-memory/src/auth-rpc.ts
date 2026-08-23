@@ -23,7 +23,7 @@ export const verifyOtpSchema = z.object({
  * Send OTP to identifier server function
  */
 export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator(requestOtpSchema)
+  .validator(requestOtpSchema)
   .handler(({ data }) => auth.strategies.email.request(data));
 
 /**
@@ -34,7 +34,7 @@ export const requestOtp = createServerFn({ method: "POST" })
  * onboarding, etc.).
  */
 export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator(verifyOtpSchema)
+  .validator(verifyOtpSchema)
   .handler(async ({ data }) => {
     const result = await auth.strategies.email.authenticate(data);
 
@@ -52,7 +52,7 @@ export const verifyOtp = createServerFn({ method: "POST" })
  * Requires an active session — the OTP proves ownership of the new address.
  */
 export const changeEmail = createServerFn({ method: "POST" })
-  .inputValidator(verifyOtpSchema)
+  .validator(verifyOtpSchema)
   .handler(async ({ data }) => {
     const identity = await auth.session.get(sessionCookie.get());
     if (!identity) return { success: false };
