@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@starmode/auth": "workspace:*",
+    "@starmode/auth2": "workspace:*",
     "@repo/auth-react": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-router": "^1.170.18",
