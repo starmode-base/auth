@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "tanstack-otp-passkey",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "examples/tanstack-start-react/otp-passkey-memory",
+      "port": 3102
+    },
+    {
       "name": "tanstack-otp-memory",
       "runtimeExecutable": "bunx",
       "runtimeArgs": ["vite", "dev", "--port", "3199"],

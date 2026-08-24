@@ -1,4 +1,5 @@
 import type { SessionAdapter, SessionIdentity } from "../contracts";
+import { randomBase64url } from "../lib/crypto";
 
 /** Session record — the shape exchanged with session storage, not a stored schema */
 export type SessionRecord = {
@@ -48,7 +49,7 @@ export function makeOpaqueSession(
   return {
     kernel: {
       establish: async (userId) => {
-        const token = makeToken();
+        const token = randomBase64url(32);
         const expiresAt = new Date(Date.now() + config.ttl);
 
         await config.storage.store({ sessionId: token, userId, expiresAt });
@@ -77,12 +78,4 @@ export function makeOpaqueSession(
       },
     },
   };
-}
-
-function makeToken(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return btoa(String.fromCharCode(...bytes))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
 }
