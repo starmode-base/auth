@@ -1,4 +1,8 @@
-import type { SessionAdapter, SessionIdentity } from "../contracts";
+import type {
+  SessionAdapter,
+  SessionIdentity,
+  SessionResolver,
+} from "../contracts";
 import { randomBase64url } from "../lib/crypto";
 
 /** Session record — the shape exchanged with session storage, not a stored schema */
@@ -8,13 +12,17 @@ export type SessionRecord = {
   expiresAt: Date;
 };
 
+/** Read half of session storage, sufficient for resolution */
+export type SessionReadStorage = {
+  get: (sessionId: string) => Promise<SessionRecord | null>;
+};
+
 /**
  * Session storage adapter. Plain reads and writes keyed by sessionId; the
  * mechanism enforces expiry.
  */
-export type SessionStorage = {
+export type SessionStorage = SessionReadStorage & {
   store: (record: SessionRecord) => Promise<void>;
-  get: (sessionId: string) => Promise<SessionRecord | null>;
   delete: (sessionId: string) => Promise<void>;
 };
 
@@ -23,6 +31,34 @@ export type OpaqueSessionCredential = {
   token: string;
   expiresAt: Date;
 };
+
+export type MakeOpaqueSessionReaderConfig = {
+  storage: SessionReadStorage;
+};
+
+/**
+ * Read-only resolution over the same storage and expiry rules, for execution
+ * contexts that cannot construct a write-capable adapter.
+ */
+export function makeOpaqueSessionReader(
+  config: MakeOpaqueSessionReaderConfig,
+): SessionResolver<SessionIdentity> {
+  return {
+    resolve: async (token) => {
+      if (token === null) {
+        return null;
+      }
+
+      const record = await config.storage.get(token);
+
+      if (record === null || record.expiresAt < new Date()) {
+        return null;
+      }
+
+      return { userId: record.userId };
+    },
+  };
+}
 
 export type MakeOpaqueSessionConfig = {
   storage: SessionStorage;
@@ -56,19 +92,7 @@ export function makeOpaqueSession(
 
         return { token, expiresAt };
       },
-      resolve: async (token) => {
-        if (token === null) {
-          return null;
-        }
-
-        const record = await config.storage.get(token);
-
-        if (record === null || record.expiresAt < new Date()) {
-          return null;
-        }
-
-        return { userId: record.userId };
-      },
+      resolve: makeOpaqueSessionReader({ storage: config.storage }).resolve,
     },
     capabilities: {
       end: async (token) => {
