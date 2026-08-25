@@ -4,34 +4,21 @@
     {
       "name": "tanstack-otp-passkey",
       "runtimeExecutable": "bun",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["run", "dev"],
       "cwd": "examples/tanstack-start-react/otp-passkey-memory",
       "port": 3102
     },
     {
       "name": "tanstack-otp-memory",
       "runtimeExecutable": "bunx",
-      "runtimeArgs": [
-        "vite",
-        "dev",
-        "--port",
-        "3199"
-      ],
+      "runtimeArgs": ["vite", "dev", "--port", "3199"],
       "cwd": "examples/tanstack-start-react/otp-memory",
       "port": 3199
     },
     {
       "name": "convex-otp",
       "runtimeExecutable": "bunx",
-      "runtimeArgs": [
-        "vite",
-        "dev",
-        "--port",
-        "3105"
-      ],
+      "runtimeArgs": ["vite", "dev", "--port", "3105"],
       "cwd": "examples/convex-react/otp",
       "port": 3105
     }
