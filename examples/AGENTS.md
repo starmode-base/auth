@@ -2,42 +2,41 @@
 
 These rules govern how examples are written. They exist so that examples are readable for both developers and LLMs, and so that new examples stay consistent.
 
+Examples teach. Agents compose. One canonical example carries the behavioral depth, and every other example deviates from it in one dimension to teach a constraint or pattern an agent could not infer. Missing combinations are not gaps, since a user's agent builds any combination on demand. Shipped adapters are proven by conformance tests, not by example cells.
+
 ## Example organization
 
-Examples are organized in two levels: **framework** (folder) → **flow + storage** (example). Framework is the primary dimension because developers start with their stack, then pick an auth flow.
+Framework folder first, then one example per `{flow}-{storage}`, as in `examples/tanstack-start-react/otp-postgres/`.
 
 ```
 examples/
   tanstack-start-react/       TanStack Start with React
   nextjs/                     Next.js (App Router)
   bun-react/                  Bun with React (no meta-framework)
+  convex-react/               Convex backend with a React SPA
 ```
-
-Inside each framework folder, examples are named `{flow}-{storage}`:
 
 - Flows: `otp`, `passkey`, `otp-passkey`, `otp-passkey-strict`, `passkey-otp`
 - Storage: `memory`, `postgres`
 
-Example: `examples/tanstack-start-react/otp-postgres/`
-
-The `-react` suffix appears where the platform supports multiple renderers (TanStack Start → future SolidJS) or doesn't imply one (Bun). Next.js is always React, so no suffix.
+Convex examples are named by flow alone (`convex-react/otp`) since Convex dictates the storage. The `-react` suffix appears where the platform does not imply a renderer. Next.js does, so no suffix.
 
 ### Example matrix
 
-| Flow                          | `tanstack-start-react` | `nextjs` | `bun-react` |
-| ----------------------------- | ---------------------- | -------- | ----------- |
-| `otp-memory`                  | ✅                     | ✅       | ✅          |
-| `otp-postgres`                | —                      | —        | —           |
-| `passkey-memory`              | ✅                     | —        | —           |
-| `passkey-postgres`            | —                      | —        | —           |
-| `otp-passkey-memory`          | —                      | —        | —           |
-| `otp-passkey-postgres`        | —                      | —        | —           |
-| `otp-passkey-strict-memory`   | —                      | —        | —           |
-| `otp-passkey-strict-postgres` | —                      | —        | —           |
-| `passkey-otp-memory`          | —                      | —        | —           |
-| `passkey-otp-postgres`        | —                      | —        | —           |
+| Flow                          | `tanstack-start-react` | `nextjs` | `bun-react` | `convex-react` |
+| ----------------------------- | ---------------------- | -------- | ----------- | -------------- |
+| `otp-memory`                  | ✅                     | ✅       | ✅          | ✅             |
+| `otp-postgres`                | —                      | —        | —           | n/a            |
+| `passkey-memory`              | ✅                     | —        | —           | —              |
+| `passkey-postgres`            | —                      | —        | —           | n/a            |
+| `otp-passkey-memory`          | ✅                     | —        | —           | —              |
+| `otp-passkey-postgres`        | —                      | —        | —           | n/a            |
+| `otp-passkey-strict-memory`   | —                      | —        | —           | —              |
+| `otp-passkey-strict-postgres` | —                      | —        | —           | n/a            |
+| `passkey-otp-memory`          | —                      | —        | —           | —              |
+| `passkey-otp-postgres`        | —                      | —        | —           | n/a            |
 
-✅ = done, — = planned
+✅ = done, — = planned. Convex columns read by flow only; storage rows are n/a there.
 
 ### Legacy examples (delete when covered)
 
