@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { createPasskey, getPasskey } from "@starmode/auth/client";
 import type {

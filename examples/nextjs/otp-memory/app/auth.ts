@@ -1,42 +1,39 @@
 import {
-  makeOtpAuth,
-  memoryOtpStorage,
-  memorySessionStorage,
-  sessionHmac,
-  otpTransportConsole,
-} from "@starmode/auth";
-import {
-  sessionTransportNextjs,
-  sessionCookieDefaults,
-} from "@starmode/auth/nextjs";
+  makeAuth,
+  makeOpaqueSession,
+  makeOtp,
+  makeOtpStrategy,
+} from "@starmode/auth2";
+import { db } from "./db";
 
-const sessionStorage = memorySessionStorage();
-const otpStorage = memoryOtpStorage();
-const codec = sessionHmac({
-  secret: "dev-secret-do-not-use-in-production",
-  ttl: 600,
+const session = makeOpaqueSession({
+  storage: db.sessions,
+  ttl: 30 * 24 * 60 * 60 * 1000,
 });
-const otpTransport = otpTransportConsole({ ttl: 10 * 60 * 1000 });
 
-/**
- * Per-request auth instance.
- *
- * Next.js `cookies()` is async and request-scoped, so the transport must be
- * created inside a Server Action / Route Handler. Storages and codec are
- * module-level singletons — only the transport varies per request.
- */
-export async function getAuth() {
-  return makeOtpAuth({
-    session: {
-      storage: sessionStorage,
-      codec,
-      transport: await sessionTransportNextjs(sessionCookieDefaults),
-      ttl: Infinity,
+export const emailOtp = makeOtp({
+  storage: db.otps,
+  delivery: {
+    send: async (identifier, otp) => {
+      console.log(`[OTP] ${identifier}: ${otp}`);
     },
-    otp: {
-      storage: otpStorage,
-      transport: otpTransport,
+  },
+  ttl: 10 * 60 * 1000,
+  attempts: 3,
+});
+
+export const auth = makeAuth(session, (kernel) => ({
+  email: makeOtpStrategy(kernel, {
+    request: async ({ identifier }) => {
+      await emailOtp.request(identifier);
+      return { success: true };
     },
-    debug: true,
-  });
-}
+    authenticate: async ({ identifier, otp }) => {
+      if (!(await emailOtp.verify(identifier, otp))) {
+        return { success: false, error: "invalid_otp" };
+      }
+
+      return { success: true, data: db.users.upsert(identifier) };
+    },
+  }),
+}));
