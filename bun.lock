@@ -11,8 +11,26 @@
         "vitest": "^4.1.11",
       },
     },
-    "examples/bun-react/otp-memory": {
+    "examples/bun-react/otp-memory-cookie": {
       "name": "@repo/example-bun-otp",
+      "version": "0.1.0",
+      "dependencies": {
+        "@repo/auth-react": "workspace:*",
+        "@starmode/auth2": "workspace:*",
+        "bun-plugin-tailwind": "^0.1.2",
+        "react": "^19.2.8",
+        "react-dom": "^19.2.8",
+        "tailwindcss": "^4.3.3",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+        "@types/react": "^19.2.18",
+        "@types/react-dom": "^19.2.4",
+      },
+    },
+    "examples/bun-react/otp-memory-header": {
+      "name": "@repo/example-bun-otp-header",
       "version": "0.1.0",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
@@ -495,7 +513,9 @@
 
     "@repo/example-bun-memory": ["@repo/example-bun-memory@workspace:examples/tmp/bun-memory"],
 
-    "@repo/example-bun-otp": ["@repo/example-bun-otp@workspace:examples/bun-react/otp-memory"],
+    "@repo/example-bun-otp": ["@repo/example-bun-otp@workspace:examples/bun-react/otp-memory-cookie"],
+
+    "@repo/example-bun-otp-header": ["@repo/example-bun-otp-header@workspace:examples/bun-react/otp-memory-header"],
 
     "@repo/example-convex-otp": ["@repo/example-convex-otp@workspace:examples/convex-react/otp"],
 
