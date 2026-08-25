@@ -1,6 +1,7 @@
 import { serve } from "bun";
 import index from "./index.html";
-import { makeRequestAuth } from "./auth";
+import { auth, emailOtp } from "./auth";
+import { sessionCookie } from "./session-cookie";
 import { db } from "./db";
 
 const server = serve({
@@ -10,32 +11,32 @@ const server = serve({
 
     "/api/request-otp": {
       async POST(req) {
-        const resHeaders = new Headers();
-        const auth = makeRequestAuth(req, resHeaders);
         const data = await req.json();
-        const result = await auth.requestOtp(data);
-        return Response.json(result, { headers: resHeaders });
+        const result = await auth.strategies.email.request(data);
+        return Response.json(result);
       },
     },
 
     "/api/verify-otp": {
       async POST(req) {
-        const resHeaders = new Headers();
-        const auth = makeRequestAuth(req, resHeaders);
         const data = await req.json();
 
-        const result = await auth.verifyOtp(data);
+        const result = await auth.strategies.email.authenticate(data);
         if (!result.success) {
-          return Response.json({ success: false }, { headers: resHeaders });
+          return Response.json({ success: false });
         }
 
-        const { userId, isNew } = db.users.upsert(data.identifier);
-        const session = await auth.createSession({ userId });
-        if (!session.success) {
-          return Response.json({ success: false }, { headers: resHeaders });
-        }
+        const headers = new Headers();
+        sessionCookie.set(
+          headers,
+          result.data.session.token,
+          result.data.session.expiresAt,
+        );
 
-        return Response.json({ success: true, isNew }, { headers: resHeaders });
+        return Response.json(
+          { success: true, isNew: result.data.user.isNew },
+          { headers },
+        );
       },
     },
 
@@ -43,57 +44,53 @@ const server = serve({
     // Wire to useOtpFlow on the client to enable email changes.
     "/api/change-email": {
       async POST(req) {
-        const resHeaders = new Headers();
-        const auth = makeRequestAuth(req, resHeaders);
         const data = await req.json();
 
-        const session = await auth.getSession();
-        if (!session) {
-          return Response.json({ success: false }, { headers: resHeaders });
+        const identity = await auth.session.get(sessionCookie.get(req));
+        if (!identity) {
+          return Response.json({ success: false });
         }
 
-        const result = await auth.verifyOtp(data);
-        if (!result.success) {
-          return Response.json({ success: false }, { headers: resHeaders });
+        const verified = await emailOtp.verify(data.identifier, data.otp);
+        if (!verified) {
+          return Response.json({ success: false });
         }
 
-        const user = db.users.updateEmail(session.userId, data.identifier);
+        const user = db.users.updateEmail(identity.userId, data.identifier);
         if (!user) {
-          return Response.json({ success: false }, { headers: resHeaders });
+          return Response.json({ success: false });
         }
 
-        return Response.json(
-          { success: true, viewer: user },
-          { headers: resHeaders },
-        );
+        return Response.json({ success: true, viewer: user });
       },
     },
 
     "/api/sign-out": {
       async POST(req) {
-        const resHeaders = new Headers();
-        const auth = makeRequestAuth(req, resHeaders);
-        await auth.signOut();
-        return Response.json({ success: true }, { headers: resHeaders });
+        await auth.session.end(sessionCookie.get(req));
+
+        const headers = new Headers();
+        sessionCookie.clear(headers);
+        return Response.json({ success: true }, { headers });
       },
     },
 
     "/api/sign-out-all": {
       async POST(req) {
-        const resHeaders = new Headers();
-        const auth = makeRequestAuth(req, resHeaders);
-        await auth.signOutAll();
-        return Response.json({ success: true }, { headers: resHeaders });
+        const identity = await auth.session.get(sessionCookie.get(req));
+        if (identity) db.sessions.deleteAllForUser(identity.userId);
+
+        const headers = new Headers();
+        sessionCookie.clear(headers);
+        return Response.json({ success: true }, { headers });
       },
     },
 
     "/api/viewer": {
       async GET(req) {
-        const resHeaders = new Headers();
-        const auth = makeRequestAuth(req, resHeaders);
-        const session = await auth.getSession();
-        const viewer = session ? db.users.get(session.userId) : undefined;
-        return Response.json(viewer ?? null, { headers: resHeaders });
+        const identity = await auth.session.get(sessionCookie.get(req));
+        const viewer = identity ? db.users.get(identity.userId) : undefined;
+        return Response.json(viewer ?? null);
       },
     },
   },

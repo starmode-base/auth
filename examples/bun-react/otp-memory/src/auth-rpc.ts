@@ -42,10 +42,11 @@ export const requestOtp = (data: z.input<typeof requestOtpSchema>) =>
   post("/api/request-otp", requestOtpSchema.parse(data));
 
 /**
- * Verify OTP, upsert user, create session
+ * Verify OTP
  *
- * Returns isNew to distinguish sign-up from sign-in (for analytics,
- * onboarding, etc.).
+ * Authenticates with the OTP, which upserts the user and establishes a
+ * session in the cookie. Returns isNew to distinguish sign-up from sign-in
+ * (for analytics, onboarding, etc.).
  */
 export const verifyOtp = (data: z.input<typeof verifyOtpSchema>) =>
   post("/api/verify-otp", verifyOtpSchema.parse(data));
@@ -62,7 +63,7 @@ export const changeEmail = (data: z.input<typeof verifyOtpSchema>) =>
 /**
  * Sign out
  *
- * Invalidates the current session and clears the session cookie.
+ * Ends the current session and clears the session cookie.
  */
 export const signOut = () => post("/api/sign-out");
 
@@ -76,6 +77,6 @@ export const signOutAll = () => post("/api/sign-out-all");
 /**
  * Get viewer
  *
- * Returns the current user if authenticated, or undefined otherwise.
+ * Returns the current user if authenticated, or null otherwise.
  */
 export const getViewer = async () => get("/api/viewer");
