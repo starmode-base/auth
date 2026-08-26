@@ -158,7 +158,7 @@
       "name": "@repo/example-tanstack-passkey",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
-        "@starmode/auth": "workspace:*",
+        "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
         "@tanstack/react-start": "^1.168.49",
