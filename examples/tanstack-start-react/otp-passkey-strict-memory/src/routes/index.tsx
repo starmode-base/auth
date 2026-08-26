@@ -25,9 +25,11 @@ import {
   Toolbar,
   AuthLayout,
   PasskeyList,
+} from "@repo/auth-react";
+import {
   usePasskeyAuthentication,
   usePasskeyRegistration,
-} from "@repo/auth-react";
+} from "../use-passkey";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -126,7 +128,7 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
 
   const authenticate = usePasskeyAuthentication({
     start: () => startAuthentication(),
-    verify: (args) => verifyAuthentication({ data: args }),
+    verify: (credential) => verifyAuthentication({ data: { credential } }),
     onSuccess: () => props.onSignedIn(),
   });
 
@@ -160,7 +162,7 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
 function SetupPasskey(props: { viewer: Viewer; onChanged: () => void }) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (args) => verifyRegistration({ data: args }),
+    verify: (credential) => verifyRegistration({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 
@@ -196,7 +198,7 @@ function Authenticated(props: {
 }) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (args) => verifyRegistration({ data: args }),
+    verify: (credential) => verifyRegistration({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 

@@ -74,6 +74,16 @@
       ],
       "cwd": "examples/tanstack-start-react/passkey-memory",
       "port": 3107
+    },
+    {
+      "name": "tanstack-strict",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/tanstack-start-react/otp-passkey-strict-memory",
+      "port": 3103
     }
   ]
 }
