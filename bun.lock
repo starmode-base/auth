@@ -88,6 +88,15 @@
         "typescript": "^6.0.3",
       },
     },
+    "examples/shared/webauthn": {
+      "name": "@repo/shared-webauthn",
+      "dependencies": {
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "typescript": "^6.0.3",
+      },
+    },
     "examples/tanstack-start-react/otp-memory": {
       "name": "@repo/example-tanstack-otp",
       "dependencies": {
@@ -114,6 +123,7 @@
       "name": "@repo/example-tanstack-otp-passkey",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
+        "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
@@ -136,6 +146,7 @@
       "name": "@repo/example-tanstack-otp-passkey-strict",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
+        "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
@@ -158,6 +169,7 @@
       "name": "@repo/example-tanstack-passkey",
       "dependencies": {
         "@repo/auth-react": "workspace:*",
+        "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
@@ -532,6 +544,8 @@
     "@repo/example-tanstack-passkey-otp": ["@repo/example-tanstack-passkey-otp@workspace:examples/tanstack-start-react/passkey-otp-memory"],
 
     "@repo/example-tanstack-start": ["@repo/example-tanstack-start@workspace:examples/tmp/tanstack-start"],
+
+    "@repo/shared-webauthn": ["@repo/shared-webauthn@workspace:examples/shared/webauthn"],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.5", "", { "os": "android", "cpu": "arm" }, "sha512-DLe/i+l8ynIBY7XEQ191TeZvCoowIGa18R+dIV30GW7DiOtp74i/xX8hs8GUjW5ARV7VZuie3d6AumSmCwbeRA=="],
 
