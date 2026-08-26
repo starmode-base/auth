@@ -10,7 +10,7 @@ import {
   OtpInput,
   Toolbar,
   AuthLayout,
-} from "@repo/auth-react";
+} from "@repo/shared-react";
 import { useToken } from "./token";
 
 type Viewer = { userId: string; email: string };

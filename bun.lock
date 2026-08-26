@@ -15,7 +15,7 @@
       "name": "@repo/example-bun-otp",
       "version": "0.1.0",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
         "react": "^19.2.8",
@@ -33,7 +33,7 @@
       "name": "@repo/example-bun-otp-header",
       "version": "0.1.0",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
         "react": "^19.2.8",
@@ -50,7 +50,7 @@
     "examples/convex-react/otp": {
       "name": "@repo/example-convex-otp",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "convex": "^1.45.0",
@@ -71,7 +71,7 @@
       "name": "@repo/example-nextjs-otp",
       "version": "0.1.0",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "next": "^16.3.3",
         "react": "^19.2.8",
@@ -88,6 +88,17 @@
         "typescript": "^6.0.3",
       },
     },
+    "examples/shared/react": {
+      "name": "@repo/shared-react",
+      "devDependencies": {
+        "@types/react": "^19.2.18",
+        "typescript": "^6.0.3",
+      },
+      "peerDependencies": {
+        "react": "^19.2.8",
+        "tailwindcss": "^4.3.3",
+      },
+    },
     "examples/shared/webauthn": {
       "name": "@repo/shared-webauthn",
       "dependencies": {
@@ -100,7 +111,7 @@
     "examples/tanstack-start-react/otp-memory": {
       "name": "@repo/example-tanstack-otp",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
@@ -122,7 +133,7 @@
     "examples/tanstack-start-react/otp-passkey-memory": {
       "name": "@repo/example-tanstack-otp-passkey",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
@@ -145,7 +156,7 @@
     "examples/tanstack-start-react/otp-passkey-strict-memory": {
       "name": "@repo/example-tanstack-otp-passkey-strict",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
@@ -168,7 +179,7 @@
     "examples/tanstack-start-react/passkey-memory": {
       "name": "@repo/example-tanstack-passkey",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
@@ -191,7 +202,7 @@
     "examples/tanstack-start-react/passkey-otp-memory": {
       "name": "@repo/example-tanstack-passkey-otp",
       "dependencies": {
-        "@repo/auth-react": "workspace:*",
+        "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
         "@starmode/auth2": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
@@ -262,18 +273,6 @@
         "@tanstack/react-start",
         "next",
       ],
-    },
-    "packages/auth-react": {
-      "name": "@repo/auth-react",
-      "version": "0.0.1",
-      "devDependencies": {
-        "@types/react": "^19.2.18",
-      },
-      "peerDependencies": {
-        "@starmode/auth": "workspace:*",
-        "react": "^19.2.8",
-        "tailwindcss": "^4.3.3",
-      },
     },
     "packages/auth2": {
       "name": "@starmode/auth2",
@@ -522,8 +521,6 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.147.0", "", {}, "sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg=="],
 
-    "@repo/auth-react": ["@repo/auth-react@workspace:packages/auth-react"],
-
     "@repo/example-bun-memory": ["@repo/example-bun-memory@workspace:examples/tmp/bun-memory"],
 
     "@repo/example-bun-otp": ["@repo/example-bun-otp@workspace:examples/bun-react/otp-memory-cookie"],
@@ -545,6 +542,8 @@
     "@repo/example-tanstack-passkey-otp": ["@repo/example-tanstack-passkey-otp@workspace:examples/tanstack-start-react/passkey-otp-memory"],
 
     "@repo/example-tanstack-start": ["@repo/example-tanstack-start@workspace:examples/tmp/tanstack-start"],
+
+    "@repo/shared-react": ["@repo/shared-react@workspace:examples/shared/react"],
 
     "@repo/shared-webauthn": ["@repo/shared-webauthn@workspace:examples/shared/webauthn"],
 

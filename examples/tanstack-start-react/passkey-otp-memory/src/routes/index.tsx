@@ -25,7 +25,7 @@ import {
   AuthLayout,
   PasskeyList,
   Toolbar,
-} from "@repo/auth-react";
+} from "@repo/shared-react";
 import {
   usePasskeyAuthentication,
   usePasskeyRegistration,

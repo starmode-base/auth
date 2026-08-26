@@ -18,7 +18,7 @@ import {
   OtpInput,
   Toolbar,
   AuthLayout,
-} from "@repo/auth-react";
+} from "@repo/shared-react";
 
 export const Route = createFileRoute("/")({
   loader: () => getViewer(),

@@ -1,22 +1,18 @@
 {
-  "name": "@repo/auth-react",
-  "private": false,
-  "license": "MIT",
-  "version": "0.0.1",
+  "name": "@repo/shared-react",
+  "private": true,
+  "license": "MIT-0",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css"
   },
-  "files": [
-    "src/"
-  ],
   "peerDependencies": {
-    "@starmode/auth": "workspace:*",
     "react": "^19.2.8",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18"
+    "@types/react": "^19.2.18",
+    "typescript": "^6.0.3"
   }
 }

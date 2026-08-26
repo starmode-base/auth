@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@starmode/auth2": "workspace:*",
-    "@repo/auth-react": "workspace:*",
+    "@repo/shared-react": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
     "convex": "^1.45.0",
     "react": "^19.2.8",

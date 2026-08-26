@@ -18,7 +18,7 @@ import {
   Toolbar,
   AuthLayout,
   useAsync,
-} from "@repo/auth-react";
+} from "@repo/shared-react";
 
 type Viewer = { userId: string; email: string };
 
