@@ -32,7 +32,7 @@ function upsertUser(email: string): { userId: string; isNew: boolean } {
  * creation. Returns a registration token for passkey registration.
  */
 export const signUp = createServerFn({ method: "POST" })
-  .inputValidator(validate.verifyOtp)
+  .validator(validate.verifyOtp)
   .handler(async ({ data }) => {
     const result = await auth.verifyOtp({
       identifier: data.identifier,

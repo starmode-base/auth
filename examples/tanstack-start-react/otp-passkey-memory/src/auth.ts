@@ -1,42 +1,58 @@
 import {
   makeAuth,
-  memoryOtpStorage,
-  memorySessionStorage,
-  sessionHmac,
-  registrationHmac,
-  otpTransportConsole,
-} from "@starmode/auth";
-import {
-  sessionTransportTanstack,
-  sessionCookieDefaults,
-} from "@starmode/auth/tanstack";
+  makeOpaqueSession,
+  makeOtp,
+  makeOtpStrategy,
+  makePasskey,
+  makePasskeyStrategy,
+} from "@starmode/auth2";
 import { db } from "./db";
 
-export const auth = makeAuth({
-  session: {
-    storage: memorySessionStorage(),
-    codec: sessionHmac({
-      secret: "dev-secret-do-not-use-in-production",
-      ttl: 600,
-    }),
-    transport: sessionTransportTanstack(sessionCookieDefaults),
-    ttl: Infinity,
-  },
-  otp: {
-    storage: memoryOtpStorage(),
-    transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
-  },
-  passkey: {
-    storage: db.credentials,
-    registrationCodec: registrationHmac({
-      secret: "dev-registration-secret",
-      ttl: 5 * 60 * 1000,
-    }),
-    webAuthn: {
-      rpId: "localhost",
-      rpName: "Auth OTP → Passkey Demo",
-      challengeTtl: 5 * 60 * 1000,
+const session = makeOpaqueSession({
+  storage: db.sessions,
+  ttl: 30 * 24 * 60 * 60 * 1000,
+});
+
+export const emailOtp = makeOtp({
+  storage: db.otps,
+  delivery: {
+    send: async (identifier, otp) => {
+      console.log(`[OTP] ${identifier}: ${otp}`);
     },
   },
+  ttl: 10 * 60 * 1000,
+  attempts: 3,
+});
+
+const passkey = makePasskey({
+  storage: db.credentials,
+  challenge: { storage: db.challenges, ttl: 5 * 60 * 1000 },
+  webAuthn: {
+    rpId: "localhost",
+    rpName: "Auth OTP → Passkey Demo",
+    allowedOrigins: ["http://localhost:3102"],
+  },
+  displayName: async (context) =>
+    context.intent === "add"
+      ? (db.users.get(context.userId)?.email ?? "Unknown user")
+      : "New user",
+  signUp: null,
   debug: true,
 });
+
+export const auth = makeAuth(session, (kernel) => ({
+  email: makeOtpStrategy(kernel, {
+    request: async ({ identifier }) => {
+      await emailOtp.request(identifier);
+      return { success: true };
+    },
+    authenticate: async ({ identifier, otp }) => {
+      if (!(await emailOtp.verify(identifier, otp))) {
+        return { success: false, error: "invalid_otp" };
+      }
+
+      return { success: true, data: db.users.upsert(identifier) };
+    },
+  }),
+  passkeys: makePasskeyStrategy(kernel, passkey),
+}));

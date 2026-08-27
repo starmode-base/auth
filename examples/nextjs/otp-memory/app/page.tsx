@@ -1,5 +1,5 @@
 import { getViewer } from "./actions";
-import { AuthLayout } from "@repo/auth-react";
+import { AuthLayout } from "@repo/shared-react";
 import { HomePage } from "./home";
 
 export default async function Page() {

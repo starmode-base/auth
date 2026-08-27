@@ -1,36 +1,30 @@
 import {
-  makePasskeyAuth,
-  memorySessionStorage,
-  sessionHmac,
-  registrationHmac,
-} from "@starmode/auth";
-import {
-  sessionTransportTanstack,
-  sessionCookieDefaults,
-} from "@starmode/auth/tanstack";
+  makeAuth,
+  makeOpaqueSession,
+  makePasskey,
+  makePasskeyStrategy,
+} from "@starmode/auth2";
 import { db } from "./db";
 
-export const auth = makePasskeyAuth({
-  session: {
-    storage: memorySessionStorage(),
-    codec: sessionHmac({
-      secret: "dev-secret-do-not-use-in-production",
-      ttl: 600,
-    }),
-    transport: sessionTransportTanstack(sessionCookieDefaults),
-    ttl: Infinity,
+const session = makeOpaqueSession({
+  storage: db.sessions,
+  ttl: 30 * 24 * 60 * 60 * 1000,
+});
+
+const passkey = makePasskey({
+  storage: db.credentials,
+  challenge: { storage: db.challenges, ttl: 5 * 60 * 1000 },
+  webAuthn: {
+    rpId: "localhost",
+    rpName: "Auth Passkey Demo",
+    allowedOrigins: ["http://localhost:3107"],
   },
-  passkey: {
-    storage: db.credentials,
-    registrationCodec: registrationHmac({
-      secret: "dev-registration-secret",
-      ttl: 5 * 60 * 1000,
-    }),
-    webAuthn: {
-      rpId: "localhost",
-      rpName: "Auth Passkey Demo",
-      challengeTtl: 5 * 60 * 1000,
-    },
-  },
+  displayName: async (context) =>
+    context.intent === "add" ? context.userId : "New user",
+  signUp: async () => db.users.create().userId,
   debug: true,
 });
+
+export const auth = makeAuth(session, (kernel) => ({
+  passkeys: makePasskeyStrategy(kernel, passkey),
+}));

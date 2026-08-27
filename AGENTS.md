@@ -8,10 +8,9 @@
 
 Read before working, in order:
 
-1. `packages/auth/src/spike/contracts.ts` + `spike/mechanisms.ts`
+1. `packages/auth2/src/contracts.ts` + `packages/auth2/README.md`
 2. `TODO.md`
 3. `SPEC.md`
-4. For builder or session API work, `packages/auth/src/spike/usage-api/README.md` + `packages/auth/src/spike/session-lifecycle/README.md`
 
 ## Documentation map
 
@@ -32,6 +31,7 @@ At promotion (only after the implementation has proven the contract):
 ## Development workflow
 
 - Order of work: types → tests → implementation, in small chunks — one unit at a time
+- PoC phase (since 2026-08-22): `packages/auth2` is the build site. Only the kernel (`make-auth.ts`) gets tests. Other units get tests once a second example uses them unchanged. Examples hand write bindings and client calls. Helpers come only from repetition observed across examples.
 - Adapter interfaces are trust boundaries. Core relies on their documented semantics; it does not attempt to compensate for an incorrect custom implementation. Shipped adapters and mechanisms must be tested, and custom adapter authors are responsible for satisfying the contract.
 - Type files are split by layer; file organization mirrors the layers:
   - Contracts — the adapter interfaces, the product. Semantic, never mechanical; core runs on anything satisfying them.

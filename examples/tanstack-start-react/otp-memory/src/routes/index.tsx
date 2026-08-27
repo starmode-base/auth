@@ -3,6 +3,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import {
   requestOtp,
   verifyOtp,
+  changeEmail,
   signOut,
   signOutAll,
   getViewer,
@@ -17,7 +18,7 @@ import {
   OtpInput,
   Toolbar,
   AuthLayout,
-} from "@repo/auth-react";
+} from "@repo/shared-react";
 
 export const Route = createFileRoute("/")({
   loader: () => getViewer(),
@@ -87,14 +88,131 @@ function AuthFlow(props: { onSignedIn: () => void }) {
       >
         Continue
       </Button>
+      <Button
+        variant="secondary"
+        type="button"
+        onClick={async () => {
+          await requestOtp({ data: { identifier: email } });
+          setOtp("");
+          setError(null);
+        }}
+      >
+        Send a new one-time password
+      </Button>
     </Page>
   );
 }
 
-function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
+function ChangeEmailFlow(props: { onDone: () => void; onCancel: () => void }) {
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  if (step === "email") {
+    return (
+      <Page
+        as="form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const result = await requestOtp({ data: { identifier: email } });
+          if (result.success) {
+            setStep("otp");
+            setError(null);
+          } else {
+            setError("Failed to send one-time password");
+          }
+        }}
+      >
+        <Header
+          title="Change email"
+          description="Enter your new email address."
+        />
+        <EmailInput value={email} onChange={setEmail} error={error} />
+        <Button
+          type="submit"
+          disabled={!requestOtpSchema.safeParse({ identifier: email }).success}
+        >
+          Send one-time password
+        </Button>
+        <Button variant="secondary" type="button" onClick={props.onCancel}>
+          Cancel
+        </Button>
+      </Page>
+    );
+  }
+
+  return (
+    <Page
+      as="form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const result = await changeEmail({
+          data: { identifier: email, otp },
+        });
+        if (result.success) {
+          props.onDone();
+        } else {
+          setError("Invalid one-time password");
+        }
+      }}
+    >
+      <Header
+        title="Check your email"
+        description="Enter your one-time password."
+      />
+      <OtpInput value={otp} onChange={setOtp} error={error} />
+      <Button
+        type="submit"
+        disabled={
+          !verifyOtpSchema.safeParse({ identifier: email, otp }).success
+        }
+      >
+        Continue
+      </Button>
+      <Button
+        variant="secondary"
+        type="button"
+        onClick={async () => {
+          await requestOtp({ data: { identifier: email } });
+          setOtp("");
+          setError(null);
+        }}
+      >
+        Send a new one-time password
+      </Button>
+      <Button variant="secondary" type="button" onClick={props.onCancel}>
+        Cancel
+      </Button>
+    </Page>
+  );
+}
+
+function Authenticated(props: {
+  viewer: Viewer;
+  onSignedOut: () => void;
+  onEmailChanged: () => void;
+}) {
+  const [changingEmail, setChangingEmail] = useState(false);
+
+  if (changingEmail) {
+    return (
+      <ChangeEmailFlow
+        onDone={() => {
+          setChangingEmail(false);
+          props.onEmailChanged();
+        }}
+        onCancel={() => setChangingEmail(false)}
+      />
+    );
+  }
+
   return (
     <Page>
       <Toolbar email={props.viewer.email} />
+      <Button variant="secondary" onClick={() => setChangingEmail(true)}>
+        Change email
+      </Button>
       <Button
         onClick={async () => {
           await signOut();
@@ -126,6 +244,7 @@ function App() {
         <Authenticated
           viewer={viewer}
           onSignedOut={() => router.invalidate()}
+          onEmailChanged={() => router.invalidate()}
         />
       ) : (
         <AuthFlow onSignedIn={() => router.invalidate()} />

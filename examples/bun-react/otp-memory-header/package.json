@@ -1,0 +1,25 @@
+{
+  "name": "@repo/example-bun-otp-header",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT-0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts --port 3106",
+    "start": "NODE_ENV=production bun src/index.ts"
+  },
+  "dependencies": {
+    "@starmode/auth2": "workspace:*",
+    "@repo/shared-react": "workspace:*",
+    "bun-plugin-tailwind": "^0.1.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@types/bun": "^1.4.0"
+  }
+}
