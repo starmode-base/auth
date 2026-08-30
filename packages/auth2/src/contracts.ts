@@ -171,14 +171,25 @@ export type OtpNamespace<User extends AuthUser, SessionCreateResult> = {
   }) => Promise<OtpAuthenticateResult<User, SessionCreateResult>>;
 };
 
-/** The two registration workflows have different session consequences */
-export type RegistrationIntent = "sign-up" | "add";
+/** The three registration workflows have different authority and session consequences */
+export type RegistrationIntent = "sign-up" | "vouched" | "add";
 
-/** Registration context established by the strategy from current authority */
+/**
+ * Registration context carried through the ceremony.
+ *
+ * sign-up founds a new account. vouched attaches to an existing user the
+ * application has verified by its own proof; it is minted by a server-side
+ * operation only, never from client input. add attaches to the current
+ * session's user.
+ */
 export type RegistrationContext =
   | {
       intent: "sign-up";
       userId: null;
+    }
+  | {
+      intent: "vouched";
+      userId: string;
     }
   | {
       intent: "add";
@@ -234,10 +245,15 @@ export type WithPasskeyConfig = {
   >;
 };
 
-/** Result of completing either public passkey registration workflow */
+/** Result of completing any public passkey registration workflow */
 export type VerifyRegistrationResult<SessionCreateResult> = Result<
   | {
       intent: "sign-up";
+      userId: string;
+      session: SessionCreateResult;
+    }
+  | {
+      intent: "vouched";
       userId: string;
       session: SessionCreateResult;
     }
@@ -262,6 +278,17 @@ export type VerifyRegistrationResult<SessionCreateResult> = Result<
 export type PasskeyNamespace<SessionCreateResult> = {
   /** Begins passkey-first signup */
   createRegistrationOptions: () => Promise<
+    Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
+  >;
+  /**
+   * Begins registration for a user the application has verified by its own
+   * proof (OTP, invite), with no session in play. Server-side only: the
+   * userId must come from the application's verification, never from client
+   * input. Completion establishes a session.
+   */
+  createVouchedRegistrationOptions: (args: {
+    userId: string;
+  }) => Promise<
     Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
   >;
   /** Begins adding a passkey for the authenticated user */

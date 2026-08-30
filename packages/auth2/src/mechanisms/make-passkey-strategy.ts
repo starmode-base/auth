@@ -21,6 +21,8 @@ export function makePasskeyStrategy<
         intent: "sign-up",
         userId: null,
       }),
+    createVouchedRegistrationOptions: ({ userId }) =>
+      config.createRegistrationOptions({ intent: "vouched", userId }),
     createAdditionalRegistrationOptions: async (token) => {
       const identity = await kernel.current(token);
 
@@ -57,6 +59,7 @@ export function makePasskeyStrategy<
         };
       }
 
+      const intent = registration.data.intent;
       const authentication = await kernel.authenticate<AuthUser, never>(
         async (): Promise<Result<AuthUser, never>> => ({
           success: true,
@@ -67,7 +70,7 @@ export function makePasskeyStrategy<
       return {
         success: true,
         data: {
-          intent: "sign-up",
+          intent,
           userId: authentication.data.user.userId,
           session: authentication.data.session,
         },

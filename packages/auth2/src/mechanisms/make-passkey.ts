@@ -113,17 +113,17 @@ export function makePasskey(config: MakePasskeyConfig): WithPasskeyConfig {
       const challenge = await makeChallenge(context);
 
       const excludeCredentials =
-        context.intent === "add"
-          ? (await config.storage.list(context.userId)).map((credential) => ({
+        context.userId === null
+          ? []
+          : (await config.storage.list(context.userId)).map((credential) => ({
               id: credential.credentialId,
               type: "public-key",
-            }))
-          : [];
+            }));
 
       const userId =
-        context.intent === "add"
-          ? base64urlEncode(new TextEncoder().encode(context.userId))
-          : randomBase64url(16);
+        context.userId === null
+          ? randomBase64url(16)
+          : base64urlEncode(new TextEncoder().encode(context.userId));
 
       return {
         success: true,
@@ -179,7 +179,7 @@ export function makePasskey(config: MakePasskeyConfig): WithPasskeyConfig {
       }
 
       let userId: string;
-      if (record.registration.intent === "add") {
+      if (record.registration.userId !== null) {
         userId = record.registration.userId;
       } else if (config.signUp === null) {
         return { success: false, error: "registration_disabled" };
