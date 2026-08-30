@@ -10,6 +10,19 @@ Prove one small server API that is easy to wire into any framework while its con
 
 `makeAuth` is a small authentication microkernel with two arguments. The session adapter comes first. The strategy map callback comes second.
 
+The vocabulary:
+
+- **Kernel** — `makeAuth`. Takes exactly two inputs, one session and a map of strategies.
+- **Session** — the role that represents signed in state. One per app.
+- **Strategy** — the role that proves who a user is. Zero or more, mounted under caller chosen names.
+- **Mechanism** — a shipped implementation of either role, delivered as a `make*` factory. Strategy mechanisms come as an engine plus a small wrapper that mounts it on the kernel.
+- **Adapter** — the storage and delivery functions a mechanism consumes. Hand written or shipped, they are the trust boundary to your infrastructure.
+- **Binding** — environment glue that moves credential values between a transport and the API. Zero logic.
+
+_You satisfy the kernel's two inputs, mechanisms build those inputs from adapters, adapters touch your infrastructure._
+
+Every level is an exit ramp — implement any contract directly and the levels above it disappear.
+
 ```ts
 const auth = makeAuth(session, (kernel) => ({
   emailOtp: makeOtpStrategy(kernel, emailOtpConfig),
