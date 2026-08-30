@@ -5,7 +5,7 @@ import {
 } from "@repo/shared-webauthn";
 import { z } from "zod";
 import { db } from "./db";
-import { auth, hasPasskeys } from "./auth";
+import { auth, emailOtp, hasPasskeys } from "./auth";
 import { sessionCookie } from "./session-cookie";
 
 /**
@@ -86,7 +86,57 @@ export const verifyRegistration = createServerFn({ method: "POST" })
 
     if (!result.success) return { success: false as const };
 
+    if (result.data.intent !== "add") {
+      sessionCookie.set(
+        result.data.session.token,
+        result.data.session.expiresAt,
+      );
+    }
+
     return { success: true as const };
+  });
+
+/**
+ * Server function: Request a recovery OTP
+ *
+ * Sends an OTP through the proof primitive, bypassing the strict strategy
+ * gate: recovery is identity proof for a passkey holder, not authentication.
+ * Never reveals whether the account exists.
+ */
+export const requestRecoveryOtp = createServerFn({ method: "POST" })
+  .validator(requestOtpSchema)
+  .handler(async ({ data }) => {
+    if (await hasPasskeys(data.identifier)) {
+      await emailOtp.request(data.identifier);
+    }
+
+    return { success: true as const };
+  });
+
+/**
+ * Server function: Start passkey recovery
+ *
+ * Verifies the recovery OTP, then returns registration options vouched for
+ * the account's user. Completing the ceremony registers the new passkey and
+ * signs the user in.
+ */
+export const startRecovery = createServerFn({ method: "POST" })
+  .validator(verifyOtpSchema)
+  .handler(async ({ data }) => {
+    const verified = await emailOtp.verify(data.identifier, data.otp);
+    if (!verified) return { success: false as const };
+
+    const user = db.users.findByEmail(data.identifier);
+    if (!user) return { success: false as const };
+
+    const result =
+      await auth.strategies.passkeys.createVouchedRegistrationOptions({
+        userId: user.userId,
+      });
+
+    if (!result.success) return { success: false as const };
+
+    return { success: true as const, options: result.data };
   });
 
 /**

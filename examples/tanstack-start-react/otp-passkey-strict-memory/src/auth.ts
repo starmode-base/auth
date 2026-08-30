@@ -45,9 +45,9 @@ const passkey = makePasskey({
     allowedOrigins: ["http://localhost:3103"],
   },
   displayName: async (context) =>
-    context.intent === "add"
-      ? (db.users.get(context.userId)?.email ?? "Unknown user")
-      : "New user",
+    context.userId === null
+      ? "New user"
+      : (db.users.get(context.userId)?.email ?? "Unknown user"),
   signUp: null,
   debug: true,
 });

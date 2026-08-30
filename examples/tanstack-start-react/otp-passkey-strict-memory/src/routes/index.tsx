@@ -4,6 +4,8 @@ import {
   requestOtp,
   verifyOtp,
   checkHasPasskeys,
+  requestRecoveryOtp,
+  startRecovery,
   startAddPasskey,
   verifyRegistration,
   startAuthentication,
@@ -123,8 +125,83 @@ function SignUpFlow(props: { onSignedIn: () => void }) {
   );
 }
 
+function RecoveryFlow(props: { onSignedIn: () => void; onCancel: () => void }) {
+  const [step, setStep] = useState<"email" | "otp">("email");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const recover = usePasskeyRegistration({
+    start: () => startRecovery({ data: { identifier: email, otp } }),
+    verify: (credential) => verifyRegistration({ data: { credential } }),
+    onSuccess: () => props.onSignedIn(),
+  });
+
+  if (step === "email") {
+    return (
+      <Page
+        as="form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          await requestRecoveryOtp({ data: { identifier: email } });
+          setStep("otp");
+          setError(null);
+        }}
+      >
+        <Header
+          title="Recover your account"
+          description="Enter your email to receive a one-time password."
+        />
+        <EmailInput value={email} onChange={setEmail} error={error} />
+        <Button
+          type="submit"
+          disabled={!requestOtpSchema.safeParse({ identifier: email }).success}
+        >
+          Send one-time password
+        </Button>
+        <Button variant="secondary" type="button" onClick={props.onCancel}>
+          Cancel
+        </Button>
+      </Page>
+    );
+  }
+
+  return (
+    <Page>
+      <Header
+        title="Check your email"
+        description="Enter your one-time password, then create a new passkey."
+      />
+      <OtpInput value={otp} onChange={setOtp} error={error ?? recover.error} />
+      <Button
+        onClick={recover.submit}
+        disabled={
+          !verifyOtpSchema.safeParse({ identifier: email, otp }).success ||
+          recover.loading
+        }
+      >
+        Create a new passkey
+      </Button>
+      <Button
+        variant="secondary"
+        type="button"
+        onClick={async () => {
+          await requestRecoveryOtp({ data: { identifier: email } });
+          setOtp("");
+          setError(null);
+        }}
+      >
+        Send a new one-time password
+      </Button>
+      <Button variant="secondary" type="button" onClick={props.onCancel}>
+        Cancel
+      </Button>
+    </Page>
+  );
+}
+
 function UnauthenticatedView(props: { onSignedIn: () => void }) {
-  const [mode, setMode] = useState<"choose" | "signup">("choose");
+  const [mode, setMode] = useState<"choose" | "signup" | "recover">("choose");
 
   const authenticate = usePasskeyAuthentication({
     start: () => startAuthentication(),
@@ -134,6 +211,15 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
 
   if (mode === "signup") {
     return <SignUpFlow onSignedIn={props.onSignedIn} />;
+  }
+
+  if (mode === "recover") {
+    return (
+      <RecoveryFlow
+        onSignedIn={props.onSignedIn}
+        onCancel={() => setMode("choose")}
+      />
+    );
   }
 
   return (
@@ -150,6 +236,9 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
           disabled={authenticate.loading}
         >
           Sign in with a passkey
+        </Button>
+        <Button variant="secondary" onClick={() => setMode("recover")}>
+          Lost your passkey?
         </Button>
       </div>
       {authenticate.error ? (
