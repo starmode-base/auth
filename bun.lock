@@ -102,6 +102,7 @@
     "examples/shared/webauthn": {
       "name": "@repo/shared-webauthn",
       "dependencies": {
+        "@starmode/auth2": "workspace:*",
         "zod": "^4.4.3",
       },
       "devDependencies": {

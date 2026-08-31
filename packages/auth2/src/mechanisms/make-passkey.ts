@@ -13,8 +13,6 @@ export type CredentialRecord = {
   publicKey: Uint8Array;
   /** WebAuthn signature counter (clone detection) */
   counter: number;
-  /** null = the client reported no transport hints */
-  transports: AuthenticatorTransport[] | null;
 };
 
 /** Credential (passkey) storage adapter */
@@ -192,7 +190,6 @@ export function makePasskey(config: MakePasskeyConfig): WithPasskeyConfig {
         userId,
         publicKey: verified.publicKey,
         counter: verified.counter,
-        transports: verified.transports,
       });
 
       return {

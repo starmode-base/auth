@@ -33,6 +33,7 @@ export function usePasskeyRegistration(options: UsePasskeyRegistrationOptions) {
       const credential = await createPasskey(start.options);
 
       if (!credential) {
+        setError("Passkey creation was cancelled");
         setLoading(false);
         return;
       }
@@ -44,7 +45,8 @@ export function usePasskeyRegistration(options: UsePasskeyRegistrationOptions) {
       } else {
         setError("Failed to register passkey");
       }
-    } catch {
+    } catch (cause) {
+      console.error("Passkey registration failed:", cause);
       setError("Passkey registration failed");
     }
 
@@ -88,6 +90,7 @@ export function usePasskeyAuthentication(
       const credential = await getPasskey(start.options);
 
       if (!credential) {
+        setError("Passkey sign-in was cancelled");
         setLoading(false);
         return;
       }
@@ -99,7 +102,8 @@ export function usePasskeyAuthentication(
       } else {
         setError("Failed to sign in");
       }
-    } catch {
+    } catch (cause) {
+      console.error("Passkey sign-in failed:", cause);
       setError("Passkey sign-in failed");
     }
 

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
-  authenticationResponseSchema,
-  registrationResponseSchema,
+  authenticationCredentialSchema,
+  registrationCredentialSchema,
 } from "@repo/shared-webauthn";
 import { z } from "zod";
 import { db } from "./db";
@@ -77,7 +77,7 @@ export const startAddPasskey = createServerFn({ method: "POST" }).handler(
  * Verifies the credential from the browser ceremony and stores the passkey.
  */
 export const verifyRegistration = createServerFn({ method: "POST" })
-  .validator(z.object({ credential: registrationResponseSchema }))
+  .validator(z.object({ credential: registrationCredentialSchema }))
   .handler(async ({ data }) => {
     const result = await auth.strategies.passkeys.verifyRegistration(
       sessionCookie.get(),
@@ -155,7 +155,7 @@ export const startAuthentication = createServerFn({
  * Verify passkey authentication schema
  */
 const verifyAuthenticationSchema = z.object({
-  credential: authenticationResponseSchema,
+  credential: authenticationCredentialSchema,
 });
 
 /**

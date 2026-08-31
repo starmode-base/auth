@@ -1,42 +1,28 @@
 import { z } from "zod";
+import type {
+  PasskeyAuthenticationCredential,
+  PasskeyRegistrationCredential,
+} from "@starmode/auth2";
 
 /**
- * Zod mirrors of the lib.dom WebAuthn wire shapes, for validating ceremony
- * credentials at the transport boundary. The annotations make the compiler
- * prove each schema parses to the lib.dom type. Only required fields are
- * declared; everything else passes through untouched, so optional and future
- * wire fields are never silently dropped.
+ * Zod mirrors of the passkey ceremony input contracts, for validating
+ * credentials at the transport boundary. The satisfies checks make the
+ * compiler prove each schema parses to the contract type. The schemas declare the
+ * full consumed surface and strip everything else.
  */
 
-const clientExtensionResults =
-  z.custom<AuthenticationExtensionsClientOutputsJSON>(
-    (value: unknown) => typeof value === "object" && value !== null,
-  );
+export const registrationCredentialSchema = z.object({
+  response: z.object({
+    clientDataJSON: z.string(),
+    attestationObject: z.string(),
+  }),
+}) satisfies z.ZodType<PasskeyRegistrationCredential>;
 
-export const registrationResponseSchema: z.ZodType<RegistrationResponseJSON> =
-  z.looseObject({
-    id: z.string(),
-    rawId: z.string(),
-    type: z.string(),
-    clientExtensionResults,
-    response: z.looseObject({
-      attestationObject: z.string(),
-      authenticatorData: z.string(),
-      clientDataJSON: z.string(),
-      publicKeyAlgorithm: z.number(),
-      transports: z.array(z.string()),
-    }),
-  });
-
-export const authenticationResponseSchema: z.ZodType<AuthenticationResponseJSON> =
-  z.looseObject({
-    id: z.string(),
-    rawId: z.string(),
-    type: z.string(),
-    clientExtensionResults,
-    response: z.looseObject({
-      authenticatorData: z.string(),
-      clientDataJSON: z.string(),
-      signature: z.string(),
-    }),
-  });
+export const authenticationCredentialSchema = z.object({
+  id: z.string(),
+  response: z.object({
+    clientDataJSON: z.string(),
+    authenticatorData: z.string(),
+    signature: z.string(),
+  }),
+}) satisfies z.ZodType<PasskeyAuthenticationCredential>;

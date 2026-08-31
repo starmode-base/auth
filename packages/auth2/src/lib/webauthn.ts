@@ -1,3 +1,7 @@
+import type {
+  PasskeyAuthenticationCredential,
+  PasskeyRegistrationCredential,
+} from "../contracts";
 import { base64urlDecode, base64urlEncode, sha256 } from "./crypto";
 
 const encoder = new TextEncoder();
@@ -283,25 +287,6 @@ function derToRaw(der: Uint8Array): Uint8Array {
   return raw;
 }
 
-function toTransports(
-  transports: string[] | undefined,
-): AuthenticatorTransport[] | null {
-  if (transports === undefined) return null;
-  const known: AuthenticatorTransport[] = [];
-  for (const t of transports) {
-    if (
-      t === "ble" ||
-      t === "hybrid" ||
-      t === "internal" ||
-      t === "nfc" ||
-      t === "usb"
-    ) {
-      known.push(t);
-    }
-  }
-  return known;
-}
-
 function arrayEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -328,11 +313,10 @@ type RegistrationVerification = {
   credentialId: string;
   publicKey: Uint8Array;
   counter: number;
-  transports: AuthenticatorTransport[] | null;
 };
 
 export async function verifyRegistrationCredential(
-  credential: RegistrationResponseJSON,
+  credential: PasskeyRegistrationCredential,
   expectedChallenge: string,
   policy: WebAuthnPolicy,
 ): Promise<RegistrationVerification> {
@@ -380,7 +364,6 @@ export async function verifyRegistrationCredential(
     credentialId: base64urlEncode(parsed.credentialId),
     publicKey: serializeCoseKey(parsed.coseKey),
     counter: parsed.signCount,
-    transports: toTransports(credential.response.transports),
   };
 }
 
@@ -389,7 +372,7 @@ type AuthenticationVerification = {
 };
 
 export async function verifyAuthenticationCredential(
-  credential: AuthenticationResponseJSON,
+  credential: PasskeyAuthenticationCredential,
   stored: { publicKey: Uint8Array; counter: number },
   expectedChallenge: string,
   policy: WebAuthnPolicy,

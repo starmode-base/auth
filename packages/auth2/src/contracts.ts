@@ -171,6 +171,30 @@ export type OtpNamespace<User extends AuthUser, SessionCreateResult> = {
   }) => Promise<OtpAuthenticateResult<User, SessionCreateResult>>;
 };
 
+/**
+ * Passkey ceremony inputs, picked from the standard WebAuthn JSON types:
+ * exactly the fields verification consumes. Everything outside the signed bytes
+ * is unauthenticated and not accepted. The output of
+ * PublicKeyCredential.toJSON() satisfies these shapes.
+ */
+export type PasskeyRegistrationCredential = {
+  response: Pick<
+    AuthenticatorAttestationResponseJSON,
+    "clientDataJSON" | "attestationObject"
+  >;
+};
+
+/** See PasskeyRegistrationCredential. id locates the stored credential; the signature check binds it. */
+export type PasskeyAuthenticationCredential = Pick<
+  AuthenticationResponseJSON,
+  "id"
+> & {
+  response: Pick<
+    AuthenticatorAssertionResponseJSON,
+    "clientDataJSON" | "authenticatorData" | "signature"
+  >;
+};
+
 /** The three registration workflows have different authority and session consequences */
 export type RegistrationIntent = "sign-up" | "vouched" | "add";
 
@@ -222,7 +246,7 @@ export type WithPasskeyConfig = {
     Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
   >;
   verifyRegistration: (args: {
-    credential: RegistrationResponseJSON;
+    credential: PasskeyRegistrationCredential;
   }) => Promise<
     Result<
       RegisteredPasskeyUser,
@@ -233,7 +257,7 @@ export type WithPasskeyConfig = {
     Result<PublicKeyCredentialRequestOptionsJSON, never>
   >;
   verifyAuthentication: (args: {
-    credential: AuthenticationResponseJSON;
+    credential: PasskeyAuthenticationCredential;
   }) => Promise<
     Result<
       AuthUser,
@@ -303,14 +327,14 @@ export type PasskeyNamespace<SessionCreateResult> = {
   /** The strategy result determines whether completion signs in or adds */
   verifyRegistration: (
     token: string | null,
-    args: { credential: RegistrationResponseJSON },
+    args: { credential: PasskeyRegistrationCredential },
   ) => Promise<VerifyRegistrationResult<SessionCreateResult>>;
   createAuthenticationOptions: () => Promise<
     Result<PublicKeyCredentialRequestOptionsJSON, never>
   >;
   /** Verifies the assertion and establishes a session */
   verifyAuthentication: (args: {
-    credential: AuthenticationResponseJSON;
+    credential: PasskeyAuthenticationCredential;
   }) => Promise<
     Result<
       {
