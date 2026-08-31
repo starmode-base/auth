@@ -6,7 +6,7 @@
 import {
   makeAuth,
   makeOpaqueSession,
-  makeOpaqueSessionReader,
+  makeOpaqueSessionResolver,
   makeOtp,
   makeOtpStrategy,
 } from "@starmode/auth2";
@@ -164,5 +164,5 @@ export function authFor(ctx: MutationCtx) {
 }
 
 export function sessionReaderFor(ctx: QueryCtx) {
-  return makeOpaqueSessionReader({ storage: sessionReadStorage(ctx) });
+  return makeOpaqueSessionResolver({ storage: sessionReadStorage(ctx) });
 }

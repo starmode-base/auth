@@ -11,14 +11,14 @@ import type {
  * full consumed surface and strip everything else.
  */
 
-export const registrationCredentialSchema = z.object({
+export const passkeyRegistrationCredentialSchema = z.object({
   response: z.object({
     clientDataJSON: z.string(),
     attestationObject: z.string(),
   }),
 }) satisfies z.ZodType<PasskeyRegistrationCredential>;
 
-export const authenticationCredentialSchema = z.object({
+export const passkeyAuthenticationCredentialSchema = z.object({
   id: z.string(),
   response: z.object({
     clientDataJSON: z.string(),

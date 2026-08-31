@@ -62,7 +62,7 @@ const auth = makeAuth(session, (kernel) => ({
 
 Preconfigured setups ship per half, a session preset plus a strategy preset. Framework helpers are postponed until the examples show what repeat code people actually write.
 
-The exact shipped OTP and passkey factory APIs are not settled. The sandboxes prove only that any complete object satisfying `WithOtpConfig` or `WithPasskeyConfig` composes correctly. The playground's bundle factories are illustrative shapes, not decisions, and an application or third party package may implement the strategy contracts directly.
+The exact shipped OTP and passkey factory APIs are not settled. The sandboxes prove only that any complete object satisfying `OtpEngine` or `PasskeyEngine` composes correctly. The playground's bundle factories are illustrative shapes, not decisions, and an application or third party package may implement the strategy contracts directly.
 
 ## Scope rule
 

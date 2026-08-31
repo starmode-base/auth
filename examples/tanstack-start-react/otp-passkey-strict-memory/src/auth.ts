@@ -3,7 +3,7 @@ import {
   makeOpaqueSession,
   makeOtp,
   makeOtpStrategy,
-  makePasskey,
+  makePasskeyEngine,
   makePasskeyStrategy,
 } from "@starmode/auth2";
 import { db } from "./db";
@@ -36,7 +36,7 @@ export async function hasPasskeys(identifier: string) {
   return passkeys.length > 0;
 }
 
-const passkey = makePasskey({
+const passkey = makePasskeyEngine({
   storage: db.credentials,
   challenge: { storage: db.challenges, ttl: 5 * 60 * 1000 },
   webAuthn: {

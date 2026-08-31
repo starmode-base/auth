@@ -32,7 +32,7 @@ export type OpaqueSessionCredential = {
   expiresAt: Date;
 };
 
-export type MakeOpaqueSessionReaderConfig = {
+export type MakeOpaqueSessionResolverConfig = {
   storage: SessionReadStorage;
 };
 
@@ -40,8 +40,8 @@ export type MakeOpaqueSessionReaderConfig = {
  * Read-only resolution over the same storage and expiry rules, for execution
  * contexts that cannot construct a write-capable adapter.
  */
-export function makeOpaqueSessionReader(
-  config: MakeOpaqueSessionReaderConfig,
+export function makeOpaqueSessionResolver(
+  config: MakeOpaqueSessionResolverConfig,
 ): SessionResolver<SessionIdentity> {
   return {
     resolve: async (token) => {
@@ -92,7 +92,7 @@ export function makeOpaqueSession(
 
         return { token, expiresAt };
       },
-      resolve: makeOpaqueSessionReader({ storage: config.storage }).resolve,
+      resolve: makeOpaqueSessionResolver({ storage: config.storage }).resolve,
     },
     capabilities: {
       end: async (token) => {

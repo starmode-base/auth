@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
-  authenticationCredentialSchema,
-  registrationCredentialSchema,
+  passkeyAuthenticationCredentialSchema,
+  passkeyRegistrationCredentialSchema,
 } from "@repo/shared-webauthn";
 import { z } from "zod";
 import { db } from "./db";
@@ -46,7 +46,7 @@ export const startRegistration = createServerFn({ method: "POST" }).handler(
  * Completing a sign-up registration establishes a session.
  */
 export const verifyRegistration = createServerFn({ method: "POST" })
-  .validator(z.object({ credential: registrationCredentialSchema }))
+  .validator(z.object({ credential: passkeyRegistrationCredentialSchema }))
   .handler(async ({ data }) => {
     const result = await auth.strategies.passkeys.verifyRegistration(
       sessionCookie.get(),
@@ -103,7 +103,7 @@ export const startAuthentication = createServerFn({
  * establishes a session.
  */
 export const verifyAuthentication = createServerFn({ method: "POST" })
-  .validator(z.object({ credential: authenticationCredentialSchema }))
+  .validator(z.object({ credential: passkeyAuthenticationCredentialSchema }))
   .handler(async ({ data }) => {
     const result = await auth.strategies.passkeys.verifyAuthentication({
       credential: data.credential,

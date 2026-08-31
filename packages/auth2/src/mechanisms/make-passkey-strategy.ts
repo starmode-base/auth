@@ -1,20 +1,20 @@
 import type {
   AuthUser,
-  PasskeyNamespace,
+  PasskeyStrategy,
   Result,
   SessionIdentity,
   StrategyKernel,
-  WithPasskeyConfig,
+  PasskeyEngine,
 } from "../contracts";
 
 /** Mounts a complete passkey strategy on the kernel */
 export function makePasskeyStrategy<
   Identity extends SessionIdentity,
-  SessionCreateResult,
+  SessionCredential,
 >(
-  kernel: StrategyKernel<Identity, SessionCreateResult>,
-  config: WithPasskeyConfig,
-): PasskeyNamespace<SessionCreateResult> {
+  kernel: StrategyKernel<Identity, SessionCredential>,
+  config: PasskeyEngine,
+): PasskeyStrategy<SessionCredential> {
   return {
     createRegistrationOptions: () =>
       config.createRegistrationOptions({

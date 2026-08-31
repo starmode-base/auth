@@ -1,4 +1,4 @@
-import type { RegistrationContext, WithPasskeyConfig } from "../contracts";
+import type { RegistrationContext, PasskeyEngine } from "../contracts";
 import { base64urlEncode, randomBase64url } from "../lib/crypto";
 import {
   parseClientData,
@@ -54,7 +54,7 @@ export type WebAuthnConfig = {
   allowedOrigins: string[];
 };
 
-export type MakePasskeyConfig = {
+export type MakePasskeyEngineConfig = {
   storage: CredentialStorage;
   challenge: {
     storage: ChallengeStorage;
@@ -74,8 +74,8 @@ export type MakePasskeyConfig = {
   debug: boolean;
 };
 
-/** Builds the complete trusted passkey strategy from its primitives */
-export function makePasskey(config: MakePasskeyConfig): WithPasskeyConfig {
+/** Builds the complete trusted passkey engine from its primitives */
+export function makePasskeyEngine(config: MakePasskeyEngineConfig): PasskeyEngine {
   const policy = {
     rpId: config.webAuthn.rpId,
     allowedOrigins: config.webAuthn.allowedOrigins,

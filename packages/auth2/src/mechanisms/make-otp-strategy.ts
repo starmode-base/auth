@@ -1,20 +1,20 @@
 import type {
   AuthUser,
-  OtpNamespace,
+  OtpStrategy,
   SessionIdentity,
   StrategyKernel,
-  WithOtpConfig,
+  OtpEngine,
 } from "../contracts";
 
 /** Mounts a complete OTP strategy on the kernel */
 export function makeOtpStrategy<
   Identity extends SessionIdentity,
-  SessionCreateResult,
+  SessionCredential,
   User extends AuthUser,
 >(
-  kernel: StrategyKernel<Identity, SessionCreateResult>,
-  config: WithOtpConfig<User>,
-): OtpNamespace<User, SessionCreateResult> {
+  kernel: StrategyKernel<Identity, SessionCredential>,
+  config: OtpEngine<User>,
+): OtpStrategy<User, SessionCredential> {
   return {
     request: (args) => config.request(args),
     authenticate: (args) =>

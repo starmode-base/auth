@@ -2,7 +2,7 @@ import {
   makeAuth,
   makeOpaqueSession,
   makeOtp,
-  makePasskey,
+  makePasskeyEngine,
   makePasskeyStrategy,
 } from "@starmode/auth2";
 import { db } from "./db";
@@ -27,7 +27,7 @@ export const emailOtp = makeOtp({
   attempts: 3,
 });
 
-const passkey = makePasskey({
+const passkey = makePasskeyEngine({
   storage: db.credentials,
   challenge: { storage: db.challenges, ttl: 5 * 60 * 1000 },
   webAuthn: {

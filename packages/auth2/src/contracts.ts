@@ -49,9 +49,9 @@ export type SessionResolver<Identity extends SessionIdentity> = {
  */
 export type SessionKernel<
   Identity extends SessionIdentity,
-  CreateResult,
+  SessionCredential,
 > = SessionResolver<Identity> & {
-  establish: (userId: string) => Promise<CreateResult>;
+  establish: (userId: string) => Promise<SessionCredential>;
 };
 
 /** Capability names reserved for the kernel's public projection */
@@ -74,15 +74,15 @@ export type SessionCapabilitySet<Capabilities extends object> =
  */
 export type SessionAdapter<
   Identity extends SessionIdentity,
-  CreateResult,
+  SessionCredential,
   Capabilities extends object,
 > = {
-  kernel: SessionKernel<Identity, CreateResult>;
+  kernel: SessionKernel<Identity, SessionCredential>;
   capabilities: SessionCapabilitySet<Capabilities>;
 };
 
 /** Session access plus exactly the configured mechanism capabilities */
-export type SessionManagementNamespace<
+export type SessionNamespace<
   Identity extends SessionIdentity,
   Capabilities extends object,
 > = {
@@ -99,7 +99,7 @@ export type SessionManagementNamespace<
  */
 export type StrategyKernel<
   Identity extends SessionIdentity,
-  SessionCreateResult,
+  SessionCredential,
 > = {
   authenticate: <User extends AuthUser, E extends string>(
     prove: () => Promise<Result<User, E>>,
@@ -107,7 +107,7 @@ export type StrategyKernel<
     Result<
       {
         user: User;
-        session: SessionCreateResult;
+        session: SessionCredential;
       },
       E
     >
@@ -121,12 +121,12 @@ export type Auth<
   Capabilities extends object,
   Namespaces extends Record<string, object>,
 > = {
-  session: SessionManagementNamespace<Identity, Capabilities>;
+  session: SessionNamespace<Identity, Capabilities>;
   strategies: Namespaces;
 };
 
 /**
- * Complete trusted OTP authentication strategy.
+ * Complete trusted OTP authentication engine.
  *
  * request owns request policy, OTP generation, expiry, persistence, and
  * delivery. authenticate owns verification, consumption, authentication
@@ -141,7 +141,7 @@ export type Auth<
  * A direct implementation replaces the OTP authentication engine. Helpers may
  * produce this same object from lower-level OTP primitives.
  */
-export type WithOtpConfig<User extends AuthUser> = {
+export type OtpEngine<User extends AuthUser> = {
   request: (args: { identifier: string }) => Promise<Result<void, never>>;
   authenticate: (args: {
     identifier: string;
@@ -152,23 +152,23 @@ export type WithOtpConfig<User extends AuthUser> = {
 /** Result of the public orchestrated OTP authentication operation */
 export type OtpAuthenticateResult<
   User extends AuthUser,
-  SessionCreateResult,
+  SessionCredential,
 > = Result<
   {
     user: User;
-    session: SessionCreateResult;
+    session: SessionCredential;
   },
   "invalid_otp" | "authentication_disabled"
 >;
 
 /** OTP authentication workflows */
-export type OtpNamespace<User extends AuthUser, SessionCreateResult> = {
+export type OtpStrategy<User extends AuthUser, SessionCredential> = {
   request: (args: { identifier: string }) => Promise<Result<void, never>>;
   /** Authenticates the resolved user and establishes a session */
   authenticate: (args: {
     identifier: string;
     otp: string;
-  }) => Promise<OtpAuthenticateResult<User, SessionCreateResult>>;
+  }) => Promise<OtpAuthenticateResult<User, SessionCredential>>;
 };
 
 /**
@@ -227,7 +227,7 @@ export type RegisteredPasskeyUser = {
 };
 
 /**
- * Complete trusted passkey authentication strategy.
+ * Complete trusted passkey authentication engine.
  *
  * The object owns user provisioning, application policy, WebAuthn, challenge
  * lifecycle, credential persistence, and counter handling. Its operations are
@@ -239,7 +239,7 @@ export type RegisteredPasskeyUser = {
  * may produce this same object from lower-level WebAuthn, challenge, storage,
  * and application-user primitives.
  */
-export type WithPasskeyConfig = {
+export type PasskeyEngine = {
   createRegistrationOptions: (
     context: RegistrationContext,
   ) => Promise<
@@ -270,16 +270,16 @@ export type WithPasskeyConfig = {
 };
 
 /** Result of completing any public passkey registration workflow */
-export type VerifyRegistrationResult<SessionCreateResult> = Result<
+export type VerifyRegistrationResult<SessionCredential> = Result<
   | {
       intent: "sign-up";
       userId: string;
-      session: SessionCreateResult;
+      session: SessionCredential;
     }
   | {
       intent: "vouched";
       userId: string;
-      session: SessionCreateResult;
+      session: SessionCredential;
     }
   | {
       intent: "add";
@@ -299,7 +299,7 @@ export type VerifyRegistrationResult<SessionCreateResult> = Result<
  * token as their first positional argument. The strategy derives userId from
  * that authority and never accepts an arbitrary public userId.
  */
-export type PasskeyNamespace<SessionCreateResult> = {
+export type PasskeyStrategy<SessionCredential> = {
   /** Begins passkey-first signup */
   createRegistrationOptions: () => Promise<
     Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
@@ -328,7 +328,7 @@ export type PasskeyNamespace<SessionCreateResult> = {
   verifyRegistration: (
     token: string | null,
     args: { credential: PasskeyRegistrationCredential },
-  ) => Promise<VerifyRegistrationResult<SessionCreateResult>>;
+  ) => Promise<VerifyRegistrationResult<SessionCredential>>;
   createAuthenticationOptions: () => Promise<
     Result<PublicKeyCredentialRequestOptionsJSON, never>
   >;
@@ -339,7 +339,7 @@ export type PasskeyNamespace<SessionCreateResult> = {
     Result<
       {
         userId: string;
-        session: SessionCreateResult;
+        session: SessionCredential;
       },
       | "authentication_disabled"
       | "credential_not_found"
@@ -359,12 +359,12 @@ export type PasskeyNamespace<SessionCreateResult> = {
  */
 export declare function makeAuth<
   Identity extends SessionIdentity,
-  SessionCreateResult,
+  SessionCredential,
   Capabilities extends object,
   const Namespaces extends Record<string, object>,
 >(
-  session: SessionAdapter<Identity, SessionCreateResult, Capabilities>,
+  session: SessionAdapter<Identity, SessionCredential, Capabilities>,
   strategies: (
-    kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCreateResult>>,
+    kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCredential>>,
   ) => Namespaces,
 ): Auth<Identity, Capabilities, Namespaces>;

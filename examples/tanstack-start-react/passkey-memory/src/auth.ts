@@ -1,7 +1,7 @@
 import {
   makeAuth,
   makeOpaqueSession,
-  makePasskey,
+  makePasskeyEngine,
   makePasskeyStrategy,
 } from "@starmode/auth2";
 import { db } from "./db";
@@ -11,7 +11,7 @@ const session = makeOpaqueSession({
   ttl: 30 * 24 * 60 * 60 * 1000,
 });
 
-const passkey = makePasskey({
+const passkey = makePasskeyEngine({
   storage: db.credentials,
   challenge: { storage: db.challenges, ttl: 5 * 60 * 1000 },
   webAuthn: {

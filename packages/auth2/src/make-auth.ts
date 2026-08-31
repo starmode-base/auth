@@ -16,10 +16,10 @@ import type {
 
 function makeStrategyKernel<
   Identity extends SessionIdentity,
-  SessionCreateResult,
+  SessionCredential,
 >(
-  session: SessionKernel<Identity, SessionCreateResult>,
-): StrategyKernel<Identity, SessionCreateResult> {
+  session: SessionKernel<Identity, SessionCredential>,
+): StrategyKernel<Identity, SessionCredential> {
   return {
     authenticate: async (prove) => {
       const proof = await prove();
@@ -50,13 +50,13 @@ function makeStrategyKernel<
 /** Candidate public constructor for the kernel bound namespace map */
 export function makeAuth<
   Identity extends SessionIdentity,
-  SessionCreateResult,
+  SessionCredential,
   Capabilities extends object,
   const Namespaces extends Record<string, object>,
 >(
-  session: SessionAdapter<Identity, SessionCreateResult, Capabilities>,
+  session: SessionAdapter<Identity, SessionCredential, Capabilities>,
   strategies: (
-    kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCreateResult>>,
+    kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCredential>>,
   ) => Namespaces,
 ): Auth<Identity, Capabilities, Namespaces> {
   return {
