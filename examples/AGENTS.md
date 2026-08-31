@@ -38,13 +38,6 @@ Convex examples are named by flow alone (`convex-react/otp`) since Convex dictat
 
 ✅ = done, — = planned. Convex columns read by flow only; storage rows are n/a there.
 
-### Legacy examples (delete when covered)
-
-These live in `tmp/` and use older patterns:
-
-- `tmp/tanstack-start` — full OTP → passkey, uses `authClient` direct and local atoms. Replaced by `tanstack-start-react/otp-passkey-memory`.
-- `tmp/bun-memory` — minimal in-memory test. Delete anytime.
-
 ## Framework-native data fetching
 
 Each framework should use its own data-loading pattern:

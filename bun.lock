@@ -223,38 +223,6 @@
         "vite": "^8.2.2",
       },
     },
-    "examples/tmp/bun-memory": {
-      "name": "@repo/example-bun-memory",
-      "dependencies": {
-        "@starmode/auth": "workspace:*",
-      },
-      "devDependencies": {
-        "@types/bun": "^1.4.0",
-      },
-      "peerDependencies": {
-        "typescript": "^6.0.3",
-      },
-    },
-    "examples/tmp/tanstack-start": {
-      "name": "@repo/example-tanstack-start",
-      "dependencies": {
-        "@starmode/auth": "workspace:*",
-        "@tailwindcss/vite": "^4.3.3",
-        "@tanstack/react-router": "^1.170.32",
-        "@tanstack/react-start": "^1.168.49",
-        "react": "^19.2.8",
-        "react-dom": "^19.2.8",
-        "tailwindcss": "^4.3.3",
-      },
-      "devDependencies": {
-        "@types/node": "^26.4.0",
-        "@types/react": "^19.2.18",
-        "@types/react-dom": "^19.2.5",
-        "@vitejs/plugin-react": "^6.1.1",
-        "typescript": "^6.0.3",
-        "vite": "^8.2.2",
-      },
-    },
     "packages/auth": {
       "name": "@starmode/auth",
       "version": "0.0.1",
@@ -522,8 +490,6 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.147.0", "", {}, "sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg=="],
 
-    "@repo/example-bun-memory": ["@repo/example-bun-memory@workspace:examples/tmp/bun-memory"],
-
     "@repo/example-bun-otp": ["@repo/example-bun-otp@workspace:examples/bun-react/otp-memory-cookie"],
 
     "@repo/example-bun-otp-header": ["@repo/example-bun-otp-header@workspace:examples/bun-react/otp-memory-header"],
@@ -541,8 +507,6 @@
     "@repo/example-tanstack-passkey": ["@repo/example-tanstack-passkey@workspace:examples/tanstack-start-react/passkey-memory"],
 
     "@repo/example-tanstack-passkey-otp": ["@repo/example-tanstack-passkey-otp@workspace:examples/tanstack-start-react/passkey-otp-memory"],
-
-    "@repo/example-tanstack-start": ["@repo/example-tanstack-start@workspace:examples/tmp/tanstack-start"],
 
     "@repo/shared-react": ["@repo/shared-react@workspace:examples/shared/react"],
 
