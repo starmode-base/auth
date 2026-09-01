@@ -208,6 +208,10 @@ Framework compatibility normally tests a binding, not the `SessionAdapter` itsel
 | Electron            | Desktop clients add protected OS storage plus a privileged main-process boundary that must not leak renewable credentials into the renderer.                        | Credential boundary and binding | Primary   |
 | SolidStart          | A non-React full-stack confirmation that the design has not accidentally absorbed React, Next.js, or TanStack assumptions. It adds less new architectural pressure. | Binding                         | Secondary |
 
+Convex receives a separate audience-bound identity token derived from the authoritative session. An opaque session handle is never passed to Convex as though it were a JWT.
+
+Expo and Electron keep the access credential in memory. Durable protected storage holds only the renewable credential.
+
 Compatibility means that an application can support the target through a session implementation and/or binding without changing core. It does not mean the library must ship or maintain that integration on day one.
 
 Other frameworks should initially be classified by the constraints above rather than added by name. A new target joins the primary set only when it reveals a capability shape that the existing representatives do not exercise.
