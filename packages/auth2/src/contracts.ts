@@ -16,7 +16,16 @@
  * strategy.
  */
 
-/** Expected command result; infrastructure failures throw */
+/**
+ * Command result.
+ *
+ * Expected failures, including malformed client input, are values the caller
+ * branches on. E lists exactly the failures the command can produce. E = never
+ * removes the failure branch. T is returned in data. T = void removes data for
+ * commands that return nothing. Infrastructure failures throw.
+ *
+ * Queries return values directly and use null for expected absence.
+ */
 export type Result<T, E extends string> =
   | ([T] extends [void] ? { success: true } : { success: true; data: T })
   | ([E] extends [never] ? never : { success: false; error: E });
@@ -234,6 +243,10 @@ export type RegisteredPasskeyUser = {
  * called independently because they span separate public workflows and server
  * requests. Credential management is not part of the strategy; the
  * application manages stored credentials directly.
+ *
+ * Engine operations prove or provision a user but never establish a session.
+ * The strategy wrapper owns session establishment for the workflows that
+ * authenticate a user.
  *
  * A direct implementation replaces the passkey authentication engine. Helpers
  * may produce this same object from lower-level WebAuthn, challenge, storage,

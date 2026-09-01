@@ -3,6 +3,7 @@ export type OtpRecord = {
   /** Identifier (email address, phone number, etc.) */
   identifier: string;
   otp: string;
+  /** Expired only when expiresAt < now. Equality remains valid. */
   expiresAt: Date;
   /** Verification attempts left before the OTP is consumed */
   attempts: number;

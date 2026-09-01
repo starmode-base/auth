@@ -9,6 +9,7 @@ import { randomBase64url } from "../lib/crypto";
 export type SessionRecord = {
   sessionId: string;
   userId: string;
+  /** Expired only when expiresAt < now. Equality remains valid. */
   expiresAt: Date;
 };
 

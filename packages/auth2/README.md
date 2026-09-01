@@ -81,7 +81,23 @@ The kernel's internal session dependency and the public session API are separate
 
 The session implementation may expose application defined claims together with `userId`. Core requires only `userId` and treats additional claims as opaque.
 
-[`session-capability-typecheck.ts`](./session-capability-typecheck.ts) pressure tests this split against direct opaque access, signed access backed by persisted authority, a denylist backed signed session, and a custom session with a binary credential and no lifecycle capabilities.
+### Session authority and access
+
+An opaque credential is an unguessable reference to authoritative server state. A signed credential is a client-carried snapshot trusted through its signature. Memoizing an opaque lookup and issuing a signed snapshot for the same duration make the same bounded-staleness promise. They differ in where the snapshot lives and why it is trusted.
+
+A renew capability on an opaque session must reject an unknown, ended, or expired session and extend its lifetime in one atomic storage operation.
+
+Short-lived signed access can retain opaque persisted authority as its refresh credential. Refresh resolves current authority and issues a new snapshot. It does not inherently rotate the authority credential. A signed access snapshot must not outlive its authority, so its expiry is capped by the authority credential's expiry.
+
+A denylist-backed signed session has no persisted positive authority. Its credential may span the complete session lifetime. Each credential carries a unique identifier, and validation rejects identifiers present in the denylist. Ending the session records the credential identifier in the denylist. A denylist entry is needed only until that credential expires. This mechanism does not inherently support refresh or active-session listing.
+
+The contract must represent persisted opaque sessions, signed access backed by persisted authority, signed sessions backed by a denylist, and custom semantic sessions without mechanism branches in core. Representable, shipped, and recommended are distinct coverage levels, and all four families must be representable. A self-contained signed session with neither persisted authority nor denylist-backed revocation is outside required production coverage because it cannot revoke one session before expiry.
+
+Previously issued signed credentials retain their claims until they expire or additional revocation state rejects them. Updating claims therefore requires refreshed or replacement credentials, or accepting bounded staleness. A denylist mechanism changes claims only by issuing a replacement credential and denying the previous one. Signed credentials provide integrity, not confidentiality, so claims must not depend on their contents being hidden.
+
+For signed credential mechanisms, `validate` means complete credential acceptance including integrity, structure, and expiry. `verify` names only the narrower cryptographic check.
+
+[`session-capability-typecheck.ts`](./src/session-capability-typecheck.ts) pressure tests this split against direct opaque access, signed access backed by persisted authority, a denylist-backed signed session, and a custom session with a binary credential and no lifecycle capabilities.
 
 ## Execution boundaries
 
@@ -91,7 +107,7 @@ There is no reader API. The read and write split lives at the platform, not in t
 - Convex mutations receive storage capabilities per invocation, so the session adapter and auth are constructed inside the handler. The strategies half stays static module level code.
 - Convex queries can construct no write capable adapter, so they construct no auth at all. The session mechanism's read operation is the entire surface there.
 
-[`invocation-sandbox.ts`](./invocation-sandbox.ts) exercises these shapes.
+The [Convex example](../../examples/convex-react/otp/convex/lib.ts) exercises these shapes with separate read and write storage capabilities.
 
 ## Strategy kernel
 
@@ -99,19 +115,15 @@ Strategies receive `authenticate` and `current` and nothing else, never the sess
 
 Core contains no debug flag because core swallows no causes. A shipped mechanism that catches an exception and returns a sanitized error code takes its own debug flag, since the log is the only correct channel for the swallowed cause.
 
-## Spike boundaries
+## Current files
 
-Nothing in this directory is exported by the current package entry point.
-
-| Location                                                       | Role                                                                                    |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| [`contracts.ts`](./contracts.ts)                               | Candidate public contract, construction plus session split plus shipped strategy shapes |
-| [`make-auth-sandbox.ts`](./make-auth-sandbox.ts)               | Runtime `makeAuth` candidate, no mechanism branches                                     |
-| [`strategy-session-sandbox.ts`](./strategy-session-sandbox.ts) | Runtime orchestration proof, OTP and passkey strategies through the real constructor    |
-| [`kernel-map-playground.ts`](./kernel-map-playground.ts)       | Consumer sketch, bundle tiers, a third party OIDC namespace, inert fixtures             |
-| [`playground.ts`](./playground.ts)                             | Request handler plumbing sketch, token in, credential values out                        |
-| [`contracts-typecheck.ts`](./contracts-typecheck.ts)           | Compile time proofs for construction, projection, and the call convention               |
-| [`strategy-composition/`](./strategy-composition/)             | Evidence for why this construction won, retained until promotion                        |
+| Location                                                                     | Role                                                                                       |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [`src/contracts.ts`](./src/contracts.ts)                                     | Public construction, session, OTP, and passkey contracts                                   |
+| [`src/make-auth.ts`](./src/make-auth.ts)                                     | Runtime microkernel with no mechanism branches                                             |
+| [`src/contracts-typecheck.ts`](./src/contracts-typecheck.ts)                 | Compile-time proofs for construction, projection, strategy boundaries, and exact inference |
+| [`src/session-capability-typecheck.ts`](./src/session-capability-typecheck.ts) | Compile-time proofs for capability-dependent session surfaces                              |
+| [`src/mechanisms/`](./src/mechanisms/)                                       | Environment-free session, OTP, and passkey mechanisms                                      |
 
 The intended library has more than one public layer.
 
@@ -157,8 +169,8 @@ Strategies do not repeat a generic user lookup DI. OTP binds a verified external
 
 ## OIDC boundary
 
-Consumer side OIDC is a future authentication strategy beside OTP and passkeys, already proven as an arbitrary namespace in the playground and the composition evidence. Making ΛUTH an OIDC or OAuth provider is a separate identity server product and out of scope.
+Consumer side OIDC is a future authentication strategy beside OTP and passkeys, already proven as an arbitrary third-party namespace in [`src/contracts-typecheck.ts`](./src/contracts-typecheck.ts). Making ΛUTH an OIDC or OAuth provider is a separate identity server product and out of scope.
 
 ## Relationship to the other spikes
 
-[`strategy-composition/`](./strategy-composition/) supplied the evidence that settled this construction, the kernel map over fixed overloads and accumulating builders. The session-lifecycle spike is supporting evidence for session authority, access representations, and execution targets. After review, the settled model replaces the corresponding sections of the main spike contract, and the superseded spike directories are removed once their evidence is represented.
+The earlier strategy-composition and session-lifecycle spikes supplied the evidence that settled this construction. Their surviving contract proofs and session model are now represented in this package. The old spike files are no longer authoritative.

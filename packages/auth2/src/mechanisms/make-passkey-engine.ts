@@ -30,6 +30,7 @@ export type ChallengeRecord = {
   challenge: string;
   /** The registration this challenge authorizes, null for authentication */
   registration: RegistrationContext | null;
+  /** Expired only when expiresAt < now. Equality remains valid. */
   expiresAt: Date;
 };
 
