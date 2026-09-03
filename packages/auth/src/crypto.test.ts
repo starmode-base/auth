@@ -20,6 +20,10 @@ describe("base64url encoding/decoding", () => {
     expect(base64urlDecode(encoded)).toStrictEqual(data);
   });
 
+  it("base64urlEncode encodes a string as unpadded base64url", () => {
+    expect(base64urlEncode("{}")).toBe("e30");
+  });
+
   it("base64urlDecode returns null for invalid base64", () => {
     expect(base64urlDecode("not!valid!base64!")).toBeNull();
   });

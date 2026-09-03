@@ -18,7 +18,6 @@
     "paths": {
       "@/*": ["./*"]
     },
-
     /* Base */
     "moduleDetection": "force",
     "verbatimModuleSyntax": true,
@@ -31,7 +30,8 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noImplicitOverride": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "strict": true
   },
   "include": [
     "next-env.d.ts",

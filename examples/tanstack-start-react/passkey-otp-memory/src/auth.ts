@@ -1,42 +1,48 @@
 import {
   makeAuth,
-  memoryOtpStorage,
-  memorySessionStorage,
-  sessionHmac,
-  registrationHmac,
-  otpTransportConsole,
-} from "@starmode/auth";
-import {
-  sessionTransportTanstack,
-  sessionCookieDefaults,
-} from "@starmode/auth/tanstack";
+  makeOpaqueSession,
+  makeOtp,
+  makePasskeyEngine,
+  makePasskeyStrategy,
+} from "@starmode/auth2";
 import { db } from "./db";
 
-export const auth = makeAuth({
-  session: {
-    storage: memorySessionStorage(),
-    codec: sessionHmac({
-      secret: "dev-secret-do-not-use-in-production",
-      ttl: 600,
-    }),
-    transport: sessionTransportTanstack(sessionCookieDefaults),
-    ttl: Infinity,
-  },
-  otp: {
-    storage: memoryOtpStorage(),
-    transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
-  },
-  passkey: {
-    storage: db.credentials,
-    registrationCodec: registrationHmac({
-      secret: "dev-registration-secret",
-      ttl: 5 * 60 * 1000,
-    }),
-    webAuthn: {
-      rpId: "localhost",
-      rpName: "Auth Passkey → OTP Demo",
-      challengeTtl: 5 * 60 * 1000,
+const session = makeOpaqueSession({
+  storage: db.sessions,
+  ttl: 30 * 24 * 60 * 60 * 1000,
+});
+
+/**
+ * OTP as a pure proof primitive: it verifies address ownership for adding an
+ * email, and is never an authentication strategy in this flow.
+ */
+export const emailOtp = makeOtp({
+  storage: db.otps,
+  delivery: {
+    send: async (identifier, otp) => {
+      console.log(`[OTP] ${identifier}: ${otp}`);
     },
   },
+  ttl: 10 * 60 * 1000,
+  attempts: 3,
+});
+
+const passkey = makePasskeyEngine({
+  storage: db.credentials,
+  challenge: { storage: db.challenges, ttl: 5 * 60 * 1000 },
+  webAuthn: {
+    rpId: "localhost",
+    rpName: "Auth Passkey → OTP Demo",
+    allowedOrigins: ["http://localhost:3104"],
+  },
+  displayName: async (context) =>
+    context.intent === "add"
+      ? (db.users.get(context.userId)?.email ?? context.userId)
+      : "New user",
+  signUp: async () => db.users.create().userId,
   debug: true,
 });
+
+export const auth = makeAuth(session, (kernel) => ({
+  passkeys: makePasskeyStrategy(kernel, passkey),
+}));

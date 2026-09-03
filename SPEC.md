@@ -6,17 +6,66 @@ The LLM-friendly auth library. Auth that AI can set up in one prompt.
 
 Passkeys + OTP as composable primitives. Apps choose their flow.
 
+## Current API direction
+
+> **Decided 2026-07-26:** The active usage model is specified in `packages/auth/src/spike/usage-api/`, since carried into `packages/auth2/`. It supersedes the older pure-primitive, application-orchestrated flow decisions that remain below as history.
+
+The main spike contract still contains the earlier fixed session surface while the replacement boundary is being designed. For builder and session work, read the usage API README together with `packages/auth/src/spike/session-lifecycle/README.md`. Those documents record the active candidate and its open questions until the surviving types are promoted into the main spike contract.
+
+`makeAuth` is a small authentication kernel configured by literal objects. Sessions are mandatory. Chained OTP and passkey objects are complete trusted authentication strategies: they own their feature-specific workflows, while core owns builder composition, session establishment after successful authentication, and current-user scoping for auth-resource management.
+
+### Microkernel boundary
+
+> **Clarified 2026-07-27:** This is a microkernel architecture, with one important qualification: “feature logic lives in DI” does not mean the kernel is logic-free. Injected modules own feature and mechanism logic; the kernel retains the small shared control plane.
+
+The trust boundary is:
+
+```text
+strategy: prove and resolve an application user
+    ↓
+kernel: convert that successful result into a session
+    ↓
+session DI: implement that session
+```
+
+The kernel guarantees only what it controls:
+
+- A failed authentication result creates no session.
+- A successful result creates a session for exactly the userId returned by the strategy, using the one session implementation configured in `makeAuth`.
+- Strategies do not receive the session implementation and cannot create sessions themselves.
+- Auth-resource operations derive userId from the current session; their public methods never accept an arbitrary userId.
+- Installed strategies hide direct session creation from the normal public usage surface.
+
+The strategy remains a trusted authentication authority. A bespoke OTP strategy can return an arbitrary user without verifying an OTP; core cannot detect that lie. Directly implementing the strategy contract therefore replaces that authentication engine. Core’s guarantee begins at the strategy result: it controls how an authenticated identity becomes a session, not whether the strategy proved that identity correctly.
+
+This separation applies least authority. OTP and passkey strategies can authenticate but cannot issue sessions; the session DI can issue sessions but does not decide whether OTP or passkey proof succeeded; the kernel alone connects those capabilities. Giving every strategy the session DI would make each strategy reimplement the shared transition and would prevent the library from guaranteeing consistent session behavior.
+
+The admission test for kernel logic is strict:
+
+> Core owns only behavior that every session-establishing strategy or current-user auth-resource operation must obey identically.
+
+OTP generation and delivery, WebAuthn verification, challenges, credential counters, identity binding, and feature policy remain outside the kernel. If strategy-specific branches begin accumulating in core, the microkernel boundary has been violated. Moving the shared transition into another file or helper would not change its architectural ownership; the component with sole control of that transition is the kernel.
+
+Literal objects are the contract. A one-off implementation may be written inline, a fixed reusable implementation is a preconfigured vanilla object, and a parameterized reusable implementation may be produced by a `make*` helper. Object-producing helpers add no capability; they only package construction or retain supplied configuration. Lower-level primitives remain independently importable and can be used to implement the same strategy contracts.
+
+A DI operation exists only where core needs an independent decision point: different public operations or requests, conditional invocation, a cross-strategy security boundary, current-session authority, or an atomic boundary. Mechanics that core would only run together belong behind one semantic operation. Accordingly OTP exposes complete request and authenticate strategy operations, passkey ceremony phases remain independent across requests, and credential removal is one atomic strategy operation rather than list followed by policy followed by delete.
+
+Strategies normalize successful authentication to at least `{ userId }`. Strategy-specific identity binding remains inside each strategy because OTP identifier resolution, passkey credential identity, and future OAuth identity resolution do not have the same inputs or authority. An operation that becomes genuinely identical across strategies moves to `makeAuth`; it is never repeated under every chained feature.
+
+Session and passkey management lists return generic application-defined safe projections extending stable identifiers. Core treats additional fields as opaque and passes them through. Raw storage records, secrets, cryptographic material, and internal policy state are never management projections.
+
 ## Core philosophy
 
 - **Primitives-first** — core API is low-level primitives, flows are composed on top
 - **Library-first** — your database is the source of truth, with an optional hosted service
+- **User owns the database** — the library doesn't care: storage adapters map exchange shapes to your schema; no dictated tables, indexes, or drivers (decided 2026-07-17)
 - **LLM-friendly** — no DNS config, no OAuth dashboards, no external clicks required
 - **Explicit over implicit** — no magic defaults, everything is a visible import
 - **Semantic contracts** — adapter interfaces state meaning (`verify`), never mechanism (`take`), so core stays frozen while implementations evolve freely
 - **Nano scope** — intentionally small, won't grow into Auth0
 - **Zero dependencies** — no runtime dependencies, peer dependencies only where unavoidable
 - **Strong typings** — no type assertions (`as`), full type inference from API design
-- **All fields required** — config types have no optional fields. Explicit beats convenient.
+- **All fields required** — no optional parameters and no defaults, anywhere (decided 2026-07-17). Noisier but more distinct; explicit beats convenient. Optionals/defaults may be reconsidered later, not now.
 
 ### Inverted architecture
 
@@ -55,14 +104,15 @@ This means:
 
 These are independent primitives. Apps decide how to combine them:
 
-| Flow                       | Description                                           | Use case                                           |
-| -------------------------- | ----------------------------------------------------- | -------------------------------------------------- |
-| **Passkeys only**          | Passkey sign-up and sign-in, no OTP                   | Anonymous/pseudonymous apps, maximum privacy       |
-| **OTP only**               | OTP sign-up and sign-in, no passkeys                  | Simple apps, Clerk-like DX                         |
-| **Passkey → OTP**          | Passkey first, OTP to collect email later             | Privacy-first, email optional for communication    |
-| **OTP → Passkey**          | OTP to verify email, then passkey (current default)   | Most apps — verified email + passkey auth          |
-| **OTP → Passkey (strict)** | OTP for initial sign-up only, passkey-only after      | High security — no OTP backdoor for existing users |
-| **OTP for email changes**  | Use OTP to verify new email/phone while authenticated | Common feature — add/change contact info           |
+| Flow                        | Description                                                                 | Use case                                                        |
+| --------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Passkeys only**           | Passkey sign-up and sign-in, no OTP                                         | Anonymous/pseudonymous apps, maximum privacy                    |
+| **OTP only**                | OTP sign-up and sign-in, no passkeys                                        | Simple apps, Clerk-like DX                                      |
+| **Passkey → OTP**           | Passkey first, OTP to collect email later                                   | Privacy-first, email optional for communication                 |
+| **OTP → Passkey**           | OTP to verify email, then passkey (current default)                         | Most apps — verified email + passkey auth                       |
+| **OTP → Passkey (strict)**  | OTP for initial sign-up only, passkey-only after                            | High security — no OTP backdoor for existing users              |
+| **OTP while authenticated** | Verify a new email/phone, or step-up before a sensitive action              | Add/change contact info, sudo mode                              |
+| **Bring your own**          | Session core only — app verifies by its own means, then creates the session | Invite tokens, recovery codes, SSO assertions, guest-first apps |
 
 The library provides primitives. Your app composes the flow that fits your security/UX tradeoffs.
 
@@ -70,28 +120,32 @@ The library provides primitives. Your app composes the flow that fits your secur
 
 See `CoreMethods`, `OtpMethods`, `PasskeyMethods`, and `AuthClient` types in `packages/auth/src/types.ts` for the complete API with JSDoc documentation.
 
-| Primitive                                               | What it does                         | Client |
-| ------------------------------------------------------- | ------------------------------------ | ------ |
-| `createSession({ userId })`                             | Create session for user              | ❌     |
-| `requestOtp({ identifier })`                            | Send OTP to identifier (email/phone) | ✅     |
-| `verifyOtp({ identifier, otp })`                        | Verify OTP → `{ success }`           | ✅     |
-| `createRegistrationToken({ userId, identifier })`       | Create registration token            | ❌     |
-| `validateRegistrationToken({ token })`                  | Validate → `{ userId, identifier }`  | ❌     |
-| `generateRegistrationOptions({ registrationToken })`    | WebAuthn registration options        | ✅     |
-| `verifyRegistration({ registrationToken, credential })` | Verify + store + session             | ✅     |
-| `generateAuthenticationOptions()`                       | WebAuthn sign-in options             | ✅     |
-| `verifyAuthentication({ credential })`                  | Verify + session                     | ✅     |
-| `getSession()`                                          | Get session data                     | ❌     |
-| `signOut()`                                             | End session                          | ✅     |
-| `signOutAll()`                                          | End all sessions for user            | ❌     |
+| Primitive                                               | What it does                          | Client |
+| ------------------------------------------------------- | ------------------------------------- | ------ |
+| `createSession({ userId })`                             | Create session for user               | ❌     |
+| `requestOtp({ identifier })`                            | Send OTP to identifier (email/phone)  | ✅     |
+| `verifyOtp({ identifier, otp })`                        | Verify OTP → `{ success }`            | ✅     |
+| `createRegistrationToken({ userId, identifier })`       | Create registration token             | ❌     |
+| `validateRegistrationToken({ token })`                  | Validate → `{ userId, identifier }`   | ❌     |
+| `generateRegistrationOptions({ registrationToken })`    | WebAuthn registration options         | ✅     |
+| `verifyRegistration({ registrationToken, credential })` | Verify + store passkey → `{ userId }` | ✅     |
+| `generateAuthenticationOptions()`                       | WebAuthn sign-in options              | ✅     |
+| `verifyAuthentication({ credential })`                  | Verify passkey → `{ userId }`         | ✅     |
+| `getSession()`                                          | Get session data                      | ❌     |
+| `signOut()`                                             | End session                           | ✅     |
+| `signOutAll()`                                          | End all sessions for user             | ❌     |
 
 **Client column:** ✅ = exposed via `makeAuthClient` / callable from browser. ❌ = server-side only.
 
-**Key design:** `verifyOtp` only verifies — it doesn't create sessions. For OTP-only auth, apps call `createSession` explicitly after verification. `verifyRegistration` and `verifyAuthentication` create sessions implicitly. Apps compose the flow they need.
+**Key design:** Verification never creates sessions. `verifyOtp`, `verifyRegistration`, and `verifyAuthentication` only prove facts and return the verified `userId` — apps create sessions explicitly via `createSession`. One rule, no exceptions.
+
+> **Decided (2026-07-17): Pure verification.** Previously `verifyRegistration`/`verifyAuthentication` created sessions implicitly. Removed: core produces verified facts; a session is policy, and policy lives in userland — passkey sign-in is verify then `createSession`, identical in shape to the otp flow. The uniform rule unlocks zero-feature composition (multi-factor, step-up, custom flows need no library support) and fails closed (forgetting the session call yields no session). Consequences: (1) a browser-only REST flow can't complete sign-in — composing verify + createSession requires an app server function, which sharpens the open question about `makeAuthHandler`'s role; (2) the app now binds the verified userId to the session — examples must always thread the verify result's `userId` into `createSession` (see branded verified ids under Future).
+
+> **Decided (2026-07-17): Return-type model — commands, queries, throws.** Commands return `Result<T, E>` with a per-method error union: expected failures (wrong otp, bad token, malformed client input) are values the caller branches on, and `E = never` collapses the type to an always-success envelope so methods without failure modes carry no dead error branch. Queries return the value or `null` — absence is not failure. Adapter interfaces return plain values/null — the envelope is how the library speaks, not how it listens. Infrastructure failures throw everywhere: they are breakage, not outcomes — throws feed the error monitor (and the wire layers convert them to `internal_error` envelopes), Results feed the user. Rationale: signatures must teach callers exactly what to handle — a `Result` that cannot fail teaches dead branches, a thrown expected failure forces try/catch as flow control (rejected; cf. tRPC client ergonomics), and catch-all Result wrapping shadows infrastructure errors into user-facing paths (the Zod `safeParse` split, applied consistently). Evolution: a method gaining a failure mode widens its `E` without changing shape. Replaces the earlier blanket rule "all public API functions return Result and never throw."
 
 ### Flows
 
-The library provides primitives. Apps compose flows. Below are common patterns.
+The library provides primitives. Apps compose flows. Below are common patterns. In the diagrams, `session` at the end of a chain is an explicit `createSession` call by your app — nothing creates sessions implicitly.
 
 **Passkeys only** (no OTP):
 
@@ -288,9 +342,15 @@ Storage is split by concern: `OtpStorage`, `SessionStorage`, `CredentialStorage`
 
 > **Decided (2026-07-16): Semantic contracts, frozen core.** `OtpStorage.verify` stays the contract — it states meaning ("is this valid"), never mechanism. This keeps core frozen (policy changes are adapter releases, not core majors) and keeps the contract maximally general: delegated verification (e.g. Twilio Verify, where the provider checks the otp and no local record exists) is a valid adapter. Power lives at the edges; core hardly ever changes.
 
-> **Decided (2026-07-16): Mechanisms make the common case correct by construction.** We ship factories that produce correct adapters from dumb atomic primitives: `makeOtpStorage({ store, take })` returns an `OtpStorage` with expiry check, comparison, and one-time consumption built in — written and race-tested once by us. `take(identifier)` is atomic fetch-and-delete (`DELETE … RETURNING`, `GETDEL`); that one-word guarantee — atomic — is the entire adapter obligation, and the lazy implementation fails closed. Database recipes target `store`/`take`; power users (delegated verification, custom lockouts, dev bypasses) implement `OtpStorage` raw — full control, visibly off the blessed path. Conformance tests ship alongside: sequential (take twice → second null) plus deterministic barrier-based race checks — no hammering (see https://www.lirbank.com/harnessing-postgres-race-conditions.md).
+> **Decided (2026-07-16, corrected 2026-07-29): Mechanisms implement and test the common case once.** `makeOtpStorage({ store, take })` returns an `OtpStorage` with expiry checks, comparison, and one-time consumption implemented and race-tested by us. `take(identifier)` must be an atomic fetch-and-delete (`DELETE … RETURNING`, `GETDEL`); database recipes show how to satisfy that obligation. Power users may implement `OtpStorage` directly for delegated verification, custom lockouts, or other policies, but that implementation is application code and must satisfy the documented contract. Core trusts adapter results and cannot make an incorrect custom adapter safe. Conformance tests cover the shipped mechanism and document observable adapter behavior: sequential consumption plus deterministic barrier-based race checks — no hammering (see https://www.lirbank.com/harnessing-postgres-race-conditions.md).
 
-> **Decided (2026-07-16): One attempt per otp.** A wrong otp consumes it — the user starts over with a fresh request. No attempt budgets, no re-store logic; every failure path fails closed. The typo cost is one email round-trip; acceptable for v1, revisit only on observed user friction. Per-identifier/per-IP rate limiting remains out of scope (infrastructure layer).
+> **Decided (2026-07-17): User owns the database; the API is request-scoped.** The library never dictates schema — record types (`SessionRecord`, `OtpRecord`, `CredentialRecord`) are exchange shapes at the adapter boundary, mapped to and from the user's own representation; reads must return records equivalent to what writes received, nothing more. Two placement rules follow. A namespace method exists only for request-scoped protocol operations — state named by the token riding the current request: `session.end` stays because only the library can name "the current session" and the transport pair is its own (create sets the cookie, end clears it). An adapter method exists only where core calls it during a protocol operation. Everything identifier-keyed — sign out everywhere, list sessions, revoke one session, remove a passkey — is plain CRUD on tables the user owns, done storage-direct, and deletion converges within the codec ttl on every token format (immediately with opaque). Accordingly `session.endAll`, `SessionStorage.deleteAll`, and `CredentialStorage.delete` are cut — superseding the shipped `signOutAll`/`deleteAll` noted in the roadmap. The sessionId-keyed `deleteAll` also failed open: a missing current-session record made it a silent no-op exactly when compromise response matters. The README gets a management-recipes table at promotion; management surfaces on convenience adapters are a later layer's question, tabled.
+
+> **Decided (2026-07-17): TTLs — unit policy on unit configs; mechanism TTLs in mechanism factories, never on the SPI.** Core stamps every record deadline (`expiresAt` on session, otp, and challenge records) from unit config (`MakeAuthConfig.ttl`, `WithOtpConfig.ttl`, `WithPasskeyConfig.challengeTtl`). Token TTLs are mechanism-private: only self-contained codecs have a revocation window, so the number lives in the codec factory (`sessionHmac({ secret, ttl })`) — `SessionCodec.ttl` is removed from the SPI, and an opaque user configures no dead knob; the registration-token window is likewise codec-private. `TokenStatus.expiresAt` is the storage-check deadline — the time after which the carried record must be checked against storage: self-contained tokens embed it, lookup codecs report now (per-decode trust, `expired` never true — the zero-length revocation window that is opaque's known trade-off). Encode's directive stays `token: { expiresAt: Date | null }`: null = mint a deadline from the codec's own TTL, a Date = preserve the supplied deadline — that null branch is the seam that keeps deadline policy inside the only component that has one. Pressure-tested against splitting the codec into self-contained and lookup interfaces: rejected — it forks core into two algorithms (variation belongs at the edges; core stays frozen) and closes the taxonomy to hybrids such as lookup-with-short-cache; if lookup boilerplate ever matters, `makeLookupCodec({ lookup })` is a mechanisms-layer wrapper and the contract never moves. Accepted cost: a delivery template rendering "expires in N minutes" duplicates the otp ttl (config + template) — policy stays off the SPI.
+
+> **Decided (2026-07-16): One attempt per otp.** A wrong otp consumes it — the user starts over with a fresh request. No attempt budgets, no re-store logic; every failure path fails closed. The typo cost is one email round-trip; acceptable for v1, revisit only on observed user friction. Per-IP rate limiting stays with the app; per-identifier cooldown is mechanism-layer (decided 2026-07-17, below).
+
+> **Decided (2026-07-17): Rate limiting splits by who holds the state.** A rate limit is a decision over state and is enforced where that state lives, atomically — or it isn't real. The library owns exactly one relevant state, the otp record, so it enforces exactly one limit: per-identifier issuance frequency. `OtpStorage.store` may refuse (returns `false`), `requestOtp` fails with `rate_limited` and sends nothing, and the cooldown knob lives on `makeOtpStorage` (required field, `0` = explicitly off), enforced by an atomic conditional-put `store` primitive — the same one-word obligation as `take`. Per-IP/volume/bot defense stays with the app (it holds the request); sender reputation stays with the sending service (it holds cross-app outcomes). Full vector map and deployment shapes: THREAT-MODEL.md. Supersedes the blanket "rate limiting (infrastructure-layer concern)" exclusion.
 
 **Why no database drivers?**
 
@@ -576,7 +636,7 @@ Note: the legacy `examples/tmp/tanstack-start/` has working versions of several 
 Library additions (as needed):
 
 - [ ] `allowCredentials` in `generateAuthenticationOptions()` — see design notes below
-- [ ] Make `identifier` optional in `createRegistrationToken()` — support passkey-only sign-up
+- [x] `identifier: string | null` in `createRegistrationToken()` — explicit null for passkey-only sign-up (nullable, not optional, per the no-optionals rule; decided 2026-07-17, spiked)
 - [x] Session management: `signOutAll()` on core methods, `deleteAll()` on `SessionStorage`
 - [x] Passkey management: `delete()` on `CredentialStorage` — apps call storage directly for list/delete
 
@@ -630,9 +690,11 @@ _Future:_
 - Feature: E2EE/PRF module — WebAuthn PRF for key derivation
 - Feature: Recovery codes — generate/verify with KDF (80-bit entropy, e.g. `7KF3-M9PN-2XLT-8HVQ`). For regular apps: code → session. For E2EE: code → recovery key → unwrap DEK client-side, then create new passkey
 - Feature: Cross-ecosystem add-device — QR code flow with ephemeral key exchange. Device A (signed in) displays QR, device B scans and creates passkey. For E2EE: securely transfers KEK so device A can wrap DEK for the new credential. Same flow works for regular apps (ignore the KEK)
+- Feature: Branded verified ids — verification results return a branded `VerifiedUserId` that `createSession` prefers, making the verified-user-to-session binding type-enforced (closes the wrong-userId composition footgun where an app passes its own lookup's id instead of the verify result's). Deferred until evidence it's needed — no just-in-case abstractions.
 - Feature: LLM rules — ship Cursor/AI rules with the package, like `bun init` generates
 - Service: Hosted user dashboard
 - Service: Email relay service — hosted OTP email sending so users don't need to set up Resend/SendGrid, DNS, SPF, etc. (workspace in this repo, deployed separately)
+- Service: Hosted session storage (idea, 2026-07-17) — a plain `SessionStorage` adapter, HMAC codec only (storage is consulted only at token refresh, so latency amortizes and outages degrade in token-TTL windows). The line: the service may host library-owned state (sessions, otp records, challenges), never app-owned state (users) — the Clerk problem is sync direction, not hosting, and library-state references only `userId` strings, so there is nothing to sync. Fits OTP-shaped apps, which already depend on a remote sender at sign-in; passkey-only apps lose self-sufficiency and should stay local. Credentials are borderline — UIs list passkeys, so hosting them adds a remote query; per-concern adapters mean you can host sessions and keep credentials local
 
 **Exclusions:**
 
@@ -641,7 +703,7 @@ _Future:_
 - ❌ Password-based auth
 - ❌ Legacy browser support
 - ❌ SAML / SSO / enterprise features
-- ❌ Rate limiting (infrastructure-layer concern)
+- ❌ IP/volume rate limiting and bot defense — request-layer state the library never sees (app middleware, WAF, captcha). Per-identifier cooldown is in scope — see THREAT-MODEL.md
 
 **Constraints:**
 
@@ -670,7 +732,7 @@ The through-line: **flow ownership**. Flow-owning libraries (NextAuth, Better Au
 5. **Frozen core via semantic contracts.** Interfaces state meaning (`verify`), not mechanism, so policy evolution ships as adapters and mechanisms — not core majors with migration guides.
 6. **Misconfiguration is a type error.** Builder steps take exact concrete configs — no optional fields, no unknown keys, no runtime options validation. The invalid setup doesn't compile.
 7. **Agent-native, not agent-adapted.** No OAuth dashboards, no DNS, no external clicks. Signature-as-spec interfaces, flows visible in app code where an agent reads and writes them, and a core small enough to audit in one sitting.
-8. **Fail-closed by construction.** The lazy or broken implementation of every interface denies access rather than granting it — and we ship the conformance tests that prove it.
+8. **Tested mechanisms, explicit trust boundary.** Shipped mechanisms are tested against their contracts. A custom adapter is application code: core trusts it, the documentation states its obligations, and its author is responsible for getting it right.
 
 **Why passkey-first:**
 

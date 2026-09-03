@@ -1,0 +1,99 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tanstack-otp-passkey",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/tanstack-start-react/otp-passkey-memory",
+      "port": 3102
+    },
+    {
+      "name": "tanstack-otp-memory",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": [
+        "vite",
+        "dev",
+        "--port",
+        "3199"
+      ],
+      "cwd": "examples/tanstack-start-react/otp-memory",
+      "port": 3199
+    },
+    {
+      "name": "convex-otp",
+      "runtimeExecutable": "bunx",
+      "runtimeArgs": [
+        "vite",
+        "dev",
+        "--port",
+        "3105"
+      ],
+      "cwd": "examples/convex-react/otp",
+      "port": 3105
+    },
+    {
+      "name": "nextjs-otp",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/nextjs/otp-memory",
+      "port": 3200
+    },
+    {
+      "name": "bun-otp",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/bun-react/otp-memory-cookie",
+      "port": 3101
+    },
+    {
+      "name": "bun-otp-header",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/bun-react/otp-memory-header",
+      "port": 3106
+    },
+    {
+      "name": "tanstack-passkey",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/tanstack-start-react/passkey-memory",
+      "port": 3107
+    },
+    {
+      "name": "tanstack-strict",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/tanstack-start-react/otp-passkey-strict-memory",
+      "port": 3103
+    },
+    {
+      "name": "tanstack-passkey-otp",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "examples/tanstack-start-react/passkey-otp-memory",
+      "port": 3104
+    }
+  ]
+}
