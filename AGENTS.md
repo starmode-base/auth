@@ -8,14 +8,14 @@
 
 Read before working, in order:
 
-1. `packages/auth2/src/contracts.ts` + `packages/auth2/README.md`
+1. `packages/auth2/src/contracts.ts` + `docs/spike/README-auth2.md`
 2. `TODO.md`
 3. `SPEC.md`
 
 ## Documentation map
 
 - `packages/auth2/src/contracts.ts` — the contract: the typed API spec. Wins over README and code.
-- `packages/auth2/README.md` — the settled construction, session split, and signed-session design record, with the compile-time proofs it links.
+- `docs/spike/README-auth2.md` — the settled construction, session split, and signed-session design record, with the compile-time proofs it links.
 - `SPEC.md` — rationale and decision record. Partially stale; never treat it as the contract.
 - `docs/spike/` — design records moved unedited from the retired spike. auth2 wins where they disagree. Folding them into the documentation is pending.
 - `TODO.md` — the work queue. Gitignored, local to this machine. Never delete items: mark `[x]` with a resolution note; add new items for follow-on work.
