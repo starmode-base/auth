@@ -7,7 +7,7 @@ import {
   sessionHmac,
   registrationHmac,
   sessionTransportMemory,
-} from "./legacy-index";
+} from "./index";
 import type { OtpTransportAdapter } from "./types";
 import type {
   MemoryOtpStorage,

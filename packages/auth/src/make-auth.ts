@@ -1,59 +1,20 @@
-import type {
-  Auth,
-  SessionAdapter,
-  SessionIdentity,
-  SessionKernel,
-  StrategyKernel,
-} from "./contracts";
+import type { FullAuthConfig, MakeAuthResult } from "./types";
+import { makeCoreAuth } from "./make-core-auth";
+import { makeOtpMethods } from "./make-otp-auth";
+import { makePasskeyMethods } from "./make-passkey-auth";
 
-function makeStrategyKernel<
-  Identity extends SessionIdentity,
-  SessionCredential,
->(
-  session: SessionKernel<Identity, SessionCredential>,
-): StrategyKernel<Identity, SessionCredential> {
-  return {
-    authenticate: async (prove) => {
-      const proof = await prove();
+export function makeAuth(config: FullAuthConfig): MakeAuthResult {
+  const { methods: core, storeSession, result } = makeCoreAuth(config);
 
-      if (!proof.success) {
-        return proof;
-      }
+  const otp = makeOtpMethods(config.otp.storage, config.otp.transport, result);
 
-      if (!("data" in proof)) {
-        // Invariant: successful authentication always returns an AuthUser.
-        throw new Error("Successful authentication returned no user");
-      }
+  const passkey = makePasskeyMethods(
+    config.passkey.storage,
+    config.passkey.registrationCodec,
+    config.passkey.webAuthn,
+    storeSession,
+    result,
+  );
 
-      const createdSession = await session.establish(proof.data.userId);
-
-      return result.ok({ user: proof.data, session: createdSession });
-    },
-    current: (credential) => session.resolve(credential),
-  };
+  return { ...core, ...otp, ...passkey };
 }
-
-/** Constructs the session namespace and configured strategy namespaces */
-export function makeAuth<
-  Identity extends SessionIdentity,
-  SessionCredential,
-  Capabilities extends object,
-  const Namespaces extends Record<string, object>,
->(
-  session: SessionAdapter<Identity, SessionCredential, Capabilities>,
-  strategies: (
-    kernel: StrategyKernel<NoInfer<Identity>, NoInfer<SessionCredential>>,
-  ) => Namespaces,
-): Auth<Identity, Capabilities, Namespaces> {
-  return {
-    session: {
-      ...session.capabilities,
-      get: (credential) => session.kernel.resolve(credential),
-    },
-    strategies: strategies(makeStrategyKernel(session.kernel)),
-  };
-}
-
-const result = {
-  ok: <T>(data: T): { success: true; data: T } => ({ success: true, data }),
-};

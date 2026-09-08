@@ -3,7 +3,7 @@ import {
   makeOpaqueSession,
   makeOtp,
   makeOtpStrategy,
-} from "@starmode/auth";
+} from "@starmode/auth2";
 import { db } from "./db";
 
 const session = makeOpaqueSession({

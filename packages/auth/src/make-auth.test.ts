@@ -1,209 +1,295 @@
-import { expect, test } from "vitest";
-import type { Result, SessionAdapter, SessionIdentity } from "./contracts";
-import { makeAuth } from "./make-auth";
+import { describe, expect, it } from "vitest";
+import {
+  makeAuth,
+  memoryOtpStorage,
+  memorySessionStorage,
+  memoryCredentialStorage,
+  otpTransportConsole,
+  sessionHmac,
+  registrationHmac,
+  sessionTransportMemory,
+} from "./index";
 
-function makeSession() {
-  const records = new Map<string, SessionIdentity>();
-  const session: SessionAdapter<
-    SessionIdentity,
-    string,
-    { end: (token: string) => Promise<void> }
-  > = {
-    kernel: {
-      establish: async (userId) => {
-        const token = `session-${records.size}`;
-        records.set(token, { userId });
-        return token;
+describe("makeAuth", () => {
+  const otpStorage = memoryOtpStorage();
+  const sessionStorage = memorySessionStorage();
+  const sessionTransport = sessionTransportMemory();
+
+  const auth = makeAuth({
+    session: {
+      storage: sessionStorage,
+      codec: sessionHmac({ secret: "test", ttl: 10 * 60 * 1000 }),
+      transport: sessionTransport,
+      ttl: Infinity,
+    },
+    otp: {
+      storage: otpStorage,
+      transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+    },
+    passkey: {
+      storage: memoryCredentialStorage(),
+      registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+      webAuthn: {
+        rpId: "localhost",
+        rpName: "Test App",
+        challengeTtl: 5 * 60 * 1000,
       },
-      resolve: async (token) =>
-        token === null ? null : (records.get(token) ?? null),
     },
-    capabilities: {
-      end: async (token) => {
-        records.delete(token);
-      },
-    },
-  };
-  return { records, session };
-}
+    debug: false,
+  });
 
-test("makeAuth constructs namespaces without reading or establishing a session", () => {
-  const auth = makeAuth(
-    {
-      kernel: {
-        establish: async () => {
-          throw new Error("Construction cannot establish a session");
-        },
-        resolve: async () => {
-          throw new Error("Construction cannot resolve a session");
-        },
-      },
-      capabilities: {},
-    },
-    () => ({ custom: { value: "configured" } }),
-  );
+  it("requestOtp returns success", async () => {
+    const result = await auth.requestOtp({ identifier: "test@example.com" });
+    expect(result).toStrictEqual({ success: true });
+  });
 
-  expect(auth.strategies.custom.value).toBe("configured");
-  expect(Object.keys(auth.session)).toStrictEqual(["get"]);
-});
+  it("verifyOtp returns success only (no session)", async () => {
+    await otpStorage.store({
+      identifier: "test@example.com",
+      otp: "123456",
+      expiresAt: new Date(Date.now() + 60000),
+    });
 
-test("authenticate establishes the exact proven user and preserves the proof's additional data", async () => {
-  const { session } = makeSession();
-  const user = { userId: "proven-user", isNew: true };
-  const auth = makeAuth(session, (kernel) => ({
-    custom: {
-      authenticate: () =>
-        kernel.authenticate<typeof user, never>(
-          async (): Promise<Result<typeof user, never>> => ({
-            success: true,
-            data: user,
-          }),
-        ),
-    },
-  }));
+    const result = await auth.verifyOtp({
+      identifier: "test@example.com",
+      otp: "123456",
+    });
+    expect(result).toStrictEqual({ success: true });
+  });
 
-  const outcome = await auth.strategies.custom.authenticate();
+  it("verifyOtp returns failure for wrong otp", async () => {
+    const result = await auth.verifyOtp({
+      identifier: "test@example.com",
+      otp: "000000",
+    });
+    expect(result).toStrictEqual({ success: false, error: "invalid_otp" });
+  });
 
-  expect(outcome.data.user).toStrictEqual(user);
-  expect(await auth.session.get(outcome.data.session)).toStrictEqual({
-    userId: "proven-user",
+  it("createRegistrationToken returns token", async () => {
+    const result = await auth.createRegistrationToken({
+      userId: "user_1",
+      identifier: "test@example.com",
+    });
+    expect(result.registrationToken).toBeDefined();
+  });
+
+  it("validateRegistrationToken returns userId and identifier", async () => {
+    const { registrationToken } = await auth.createRegistrationToken({
+      userId: "user_1",
+      identifier: "test@example.com",
+    });
+    const result = await auth.validateRegistrationToken({
+      token: registrationToken,
+    });
+    expect(result).toStrictEqual({
+      userId: "user_1",
+      identifier: "test@example.com",
+      success: true,
+    });
+  });
+
+  it("validateRegistrationToken returns failure for bad token", async () => {
+    const result = await auth.validateRegistrationToken({
+      token: "invalid-token",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("getSession returns userId from token", async () => {
+    await sessionStorage.store({
+      sessionId: "session_1",
+      userId: "user_1",
+      expiresAt: new Date(Date.now() + 60000),
+    });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 10 * 60 * 1000 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_1",
+      sessionExp: null,
+      userId: "user_1",
+    });
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+    expect(session).toStrictEqual({ userId: "user_1" });
+  });
+
+  it("getSession returns null for invalid token", async () => {
+    sessionTransport.setToken("invalid-token");
+    const session = await auth.getSession();
+    expect(session).toBeNull();
+  });
+
+  it("signOut completes without error", async () => {
+    await sessionStorage.store({
+      sessionId: "session_2",
+      userId: "user_1",
+      expiresAt: new Date(Date.now() + 60000),
+    });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 10 * 60 * 1000 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_2",
+      sessionExp: null,
+      userId: "user_1",
+    });
+
+    sessionTransport.setToken(token);
+    await expect(auth.signOut()).resolves.toBeUndefined();
   });
 });
 
-test("authenticate returns a failed proof without establishing a session", async () => {
-  const { session, records } = makeSession();
-  const auth = makeAuth(session, (kernel) => ({
-    custom: {
-      authenticate: () =>
-        kernel.authenticate(
-          async (): Promise<Result<SessionIdentity, "denied">> => ({
-            success: false,
-            error: "denied",
-          }),
-        ),
-    },
-  }));
+describe("makeAuth sessionTtl", () => {
+  it("forever session (null expiresAt) is always valid", async () => {
+    const sessionStorage = memorySessionStorage();
+    const sessionTransport = sessionTransportMemory();
 
-  expect(await auth.strategies.custom.authenticate()).toStrictEqual({
-    success: false,
-    error: "denied",
-  });
-  expect([...records.values()]).toStrictEqual([]);
-});
-
-test("authenticate waits for a successful proof before establishing a session", async () => {
-  const { session, records } = makeSession();
-  const proof = Promise.withResolvers<Result<SessionIdentity, never>>();
-  const auth = makeAuth(session, (kernel) => ({
-    custom: {
-      authenticate: () =>
-        kernel.authenticate<SessionIdentity, never>(() => proof.promise),
-    },
-  }));
-
-  const pending = auth.strategies.custom.authenticate();
-
-  expect([...records.values()]).toStrictEqual([]);
-  proof.resolve({ success: true, data: { userId: "proven-user" } });
-  const outcome = await pending;
-  expect(await auth.session.get(outcome.data.session)).toStrictEqual({
-    userId: "proven-user",
-  });
-});
-
-test("authenticate propagates proof failures without establishing a session", async () => {
-  const { session, records } = makeSession();
-  const failure = new Error("Proof infrastructure unavailable");
-  const auth = makeAuth(session, (kernel) => ({
-    custom: {
-      authenticate: () =>
-        kernel.authenticate(async () => {
-          throw failure;
-        }),
-    },
-  }));
-
-  await expect(auth.strategies.custom.authenticate()).rejects.toBe(failure);
-  expect([...records.values()]).toStrictEqual([]);
-});
-
-test("authenticate propagates session establishment failures", async () => {
-  const { session } = makeSession();
-  const failure = new Error("Session infrastructure unavailable");
-  const auth = makeAuth(
-    {
-      ...session,
-      kernel: {
-        ...session.kernel,
-        establish: async () => {
-          throw failure;
+    const auth = makeAuth({
+      session: {
+        storage: sessionStorage,
+        codec: sessionHmac({ secret: "test", ttl: 50 }),
+        transport: sessionTransport,
+        ttl: Infinity,
+      },
+      otp: {
+        storage: memoryOtpStorage(),
+        transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+      },
+      passkey: {
+        storage: memoryCredentialStorage(),
+        registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+        webAuthn: {
+          rpId: "localhost",
+          rpName: "Test App",
+          challengeTtl: 5 * 60 * 1000,
         },
       },
-    },
-    (kernel) => ({
-      custom: {
-        authenticate: () =>
-          kernel.authenticate(
-            async (): Promise<Result<SessionIdentity, never>> => ({
-              success: true,
-              data: { userId: "proven-user" },
-            }),
-          ),
+      debug: false,
+    });
+
+    await sessionStorage.store({
+      sessionId: "session_forever",
+      userId: "user_1",
+      expiresAt: null,
+    });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 50 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_forever",
+      sessionExp: null,
+      userId: "user_1",
+    });
+
+    // Wait for token to expire
+    await new Promise((r) => setTimeout(r, 100));
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+
+    expect(session).toStrictEqual({ userId: "user_1" });
+  });
+
+  it("inactivity timeout expires session after TTL", async () => {
+    const sessionStorage = memorySessionStorage();
+    const sessionTransport = sessionTransportMemory();
+
+    const auth = makeAuth({
+      session: {
+        storage: sessionStorage,
+        codec: sessionHmac({ secret: "test", ttl: 10000 }),
+        transport: sessionTransport,
+        ttl: 50,
       },
-    }),
-  );
-
-  await expect(auth.strategies.custom.authenticate()).rejects.toBe(failure);
-});
-
-test.each(["first", "second", "unknown", null])(
-  "get and current resolve the same presented credential (%s)",
-  async (token) => {
-    const { session, records } = makeSession();
-    records.set("first", { userId: "first-user" });
-    records.set("second", { userId: "second-user" });
-    const original = [...records.entries()];
-    const auth = makeAuth(session, (kernel) => ({
-      custom: {
-        current: (credential: string | null) => kernel.current(credential),
+      otp: {
+        storage: memoryOtpStorage(),
+        transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
       },
-    }));
-    const expected = token === null ? null : (records.get(token) ?? null);
-
-    expect(await auth.session.get(token)).toStrictEqual(expected);
-    expect(await auth.strategies.custom.current(token)).toStrictEqual(expected);
-    expect([...records.entries()]).toStrictEqual(original);
-  },
-);
-
-test("makeAuth projects configured session capabilities unchanged", async () => {
-  const { session, records } = makeSession();
-  records.set("presented", { userId: "owner" });
-  const auth = makeAuth(session, () => ({}));
-
-  expect(auth.session.end).toBe(session.capabilities.end);
-  await auth.session.end("presented");
-  expect(await auth.session.get("presented")).toBeNull();
-});
-
-test("get and current propagate resolution failures", async () => {
-  const { session } = makeSession();
-  const failure = new Error("Resolution unavailable");
-  const auth = makeAuth(
-    {
-      ...session,
-      kernel: {
-        ...session.kernel,
-        resolve: async () => {
-          throw failure;
+      passkey: {
+        storage: memoryCredentialStorage(),
+        registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+        webAuthn: {
+          rpId: "localhost",
+          rpName: "Test App",
+          challengeTtl: 5 * 60 * 1000,
         },
       },
-    },
-    (kernel) => ({
-      custom: { current: () => kernel.current("presented") },
-    }),
-  );
+      debug: false,
+    });
 
-  await expect(auth.session.get("presented")).rejects.toBe(failure);
-  await expect(auth.strategies.custom.current()).rejects.toBe(failure);
+    const sessionExp = new Date(Date.now() + 50);
+    await sessionStorage.store({
+      sessionId: "session_expiring",
+      userId: "user_1",
+      expiresAt: sessionExp,
+    });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 10000 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_expiring",
+      sessionExp,
+      userId: "user_1",
+    });
+
+    // Wait for sessionExp to expire
+    await new Promise((r) => setTimeout(r, 100));
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+
+    expect(session).toBeNull();
+  });
+
+  it("sliding refresh updates expiresAt on DB fallback", async () => {
+    const sessionStorage = memorySessionStorage();
+    const sessionTransport = sessionTransportMemory();
+    const sessionTtl = 10000;
+
+    const auth = makeAuth({
+      session: {
+        storage: sessionStorage,
+        codec: sessionHmac({ secret: "test", ttl: 50 }),
+        transport: sessionTransport,
+        ttl: sessionTtl,
+      },
+      otp: {
+        storage: memoryOtpStorage(),
+        transport: otpTransportConsole({ ttl: 10 * 60 * 1000 }),
+      },
+      passkey: {
+        storage: memoryCredentialStorage(),
+        registrationCodec: registrationHmac({ secret: "test", ttl: 300 }),
+        webAuthn: {
+          rpId: "localhost",
+          rpName: "Test App",
+          challengeTtl: 5 * 60 * 1000,
+        },
+      },
+      debug: false,
+    });
+
+    const sessionExp = new Date(Date.now() + sessionTtl);
+    await sessionStorage.store({
+      sessionId: "session_sliding",
+      userId: "user_1",
+      expiresAt: sessionExp,
+    });
+    const sessionCodec = sessionHmac({ secret: "test", ttl: 50 });
+    const token = await sessionCodec.encode({
+      sessionId: "session_sliding",
+      sessionExp,
+      userId: "user_1",
+    });
+
+    // Wait for exp to expire but not sessionExp
+    await new Promise((r) => setTimeout(r, 100));
+
+    sessionTransport.setToken(token);
+    const session = await auth.getSession();
+
+    expect(session).toStrictEqual({ userId: "user_1" });
+
+    // Check that expiresAt was updated (sliding refresh)
+    const storedSession = await sessionStorage.get("session_sliding");
+    expect(storedSession).not.toBeNull();
+    expect(storedSession!.expiresAt).not.toBeNull();
+    expect(storedSession!.expiresAt!.getTime()).toBeGreaterThan(
+      sessionExp.getTime(),
+    );
+  });
 });

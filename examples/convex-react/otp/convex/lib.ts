@@ -9,8 +9,8 @@ import {
   makeOpaqueSessionResolver,
   makeOtp,
   makeOtpStrategy,
-} from "@starmode/auth";
-import type { Otp, SessionReadStorage, SessionStorage } from "@starmode/auth";
+} from "@starmode/auth2";
+import type { Otp, SessionReadStorage, SessionStorage } from "@starmode/auth2";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000;

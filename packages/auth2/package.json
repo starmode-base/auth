@@ -14,9 +14,6 @@
     "lint": "eslint --fix",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@starmode/auth": "workspace:*"
-  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
