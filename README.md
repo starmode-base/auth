@@ -1,6 +1,6 @@
 # ΛUTH
 
-Monorepo for [`@starmode/auth`](packages/auth/README.md).
+Monorepo for [`@starmode/auth`](packages/auth).
 
 ## Licensing
 

@@ -19,7 +19,7 @@ Read before working, in order:
 - `SPEC.md` — rationale and decision record. Partially stale; never treat it as the contract.
 - `docs/spike/` — design records moved unedited from the retired spike. auth2 wins where they disagree. Folding them into the documentation is pending.
 - `TODO.md` — the work queue. Gitignored, local to this machine. Never delete items: mark `[x]` with a resolution note; add new items for follow-on work.
-- `packages/auth/README.md` — stale. At promotion it is rewritten from the settled spike and becomes the contract.
+- `packages/auth/README.md` — absent. Written at promotion from the design records in docs/spike and becomes the contract.
 
 At promotion (only after the implementation has proven the contract):
 
