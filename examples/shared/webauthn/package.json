@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "zod": "^4.5.4",
-    "@starmode/auth2": "workspace:*"
+    "@starmode/auth": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

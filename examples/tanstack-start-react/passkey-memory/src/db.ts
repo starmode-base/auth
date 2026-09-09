@@ -8,7 +8,7 @@ import type {
   ChallengeRecord,
   CredentialRecord,
   SessionRecord,
-} from "@starmode/auth2";
+} from "@starmode/auth";
 
 const users = new Map<string, { userId: string }>();
 let userIdCounter = 0;

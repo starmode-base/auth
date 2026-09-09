@@ -4,7 +4,7 @@
  * Simple in-memory stores for demonstration purposes. In a real app these
  * would be replaced with database queries.
  */
-import type { OtpRecord, SessionRecord } from "@starmode/auth2";
+import type { OtpRecord, SessionRecord } from "@starmode/auth";
 
 const users = new Map<string, { userId: string; email: string }>();
 let userIdCounter = 0;
