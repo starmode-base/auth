@@ -5,7 +5,7 @@ import {
   makeOtpStrategy,
   makePasskeyEngine,
   makePasskeyStrategy,
-} from "@starmode/auth2";
+} from "@starmode/auth";
 import { db } from "./db";
 
 const session = makeOpaqueSession({

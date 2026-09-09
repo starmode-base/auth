@@ -9,7 +9,7 @@ import type {
   CredentialRecord,
   OtpRecord,
   SessionRecord,
-} from "@starmode/auth2";
+} from "@starmode/auth";
 
 const users = new Map<string, { userId: string; email?: string }>();
 let userIdCounter = 0;

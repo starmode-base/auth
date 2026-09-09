@@ -8,18 +8,18 @@
 
 Read before working, in order:
 
-1. `packages/auth2/src/contracts.ts` + `docs/spike/README-auth2.md`
+1. `packages/auth/src/contracts.ts` + `docs/spike/README-auth2.md`
 2. `TODO.md`
 3. `SPEC.md`
 
 ## Documentation map
 
-- `packages/auth2/src/contracts.ts` — the contract: the typed API spec. Wins over README and code.
+- `packages/auth/src/contracts.ts` — the contract: the typed API spec. Wins over README and code.
 - `docs/spike/README-auth2.md` — the settled construction, session split, and signed-session design record, with the compile-time proofs it links.
 - `SPEC.md` — rationale and decision record. Partially stale; never treat it as the contract.
 - `docs/spike/` — design records moved unedited from the retired spike. auth2 wins where they disagree. Folding them into the documentation is pending.
 - `TODO.md` — the work queue. Gitignored, local to this machine. Never delete items: mark `[x]` with a resolution note; add new items for follow-on work.
-- `packages/auth/README.md` — stale. At promotion it is rewritten from the settled spike and becomes the contract.
+- `packages/auth/README.md` — absent. Written at promotion from the design records in docs/spike and becomes the contract.
 
 At promotion (only after the implementation has proven the contract):
 
@@ -31,7 +31,7 @@ At promotion (only after the implementation has proven the contract):
 ## Development workflow
 
 - Order of work: types → tests → implementation, in small chunks — one unit at a time
-- PoC phase (since 2026-08-22): `packages/auth2` is the build site. Units get tests once a second example uses them unchanged. Examples hand write bindings and client calls. Helpers come only from repetition observed across examples.
+- PoC phase (since 2026-08-22): `packages/auth` is the build site. Units get tests once a second example uses them unchanged. Examples hand write bindings and client calls. Helpers come only from repetition observed across examples.
 - Adapter interfaces are trust boundaries. Core relies on their documented semantics; it does not attempt to compensate for an incorrect custom implementation. Shipped adapters and mechanisms must be tested, and custom adapter authors are responsible for satisfying the contract.
 - Type files are split by layer; file organization mirrors the layers:
   - Contracts — the adapter interfaces, the product. Semantic, never mechanical; core runs on anything satisfying them.

@@ -16,7 +16,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@repo/shared-react": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
@@ -34,7 +34,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@repo/shared-react": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "bun-plugin-tailwind": "^0.1.2",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
@@ -51,7 +51,7 @@
       "name": "@repo/example-convex-otp",
       "dependencies": {
         "@repo/shared-react": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "convex": "^1.45.0",
         "react": "^19.2.8",
@@ -72,7 +72,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@repo/shared-react": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "next": "^16.3.3",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
@@ -102,7 +102,7 @@
     "examples/shared/webauthn": {
       "name": "@repo/shared-webauthn",
       "dependencies": {
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "zod": "^4.5.4",
       },
       "devDependencies": {
@@ -113,7 +113,7 @@
       "name": "@repo/example-tanstack-otp",
       "dependencies": {
         "@repo/shared-react": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
         "@tanstack/react-start": "^1.168.49",
@@ -136,7 +136,7 @@
       "dependencies": {
         "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
         "@tanstack/react-start": "^1.168.49",
@@ -159,7 +159,7 @@
       "dependencies": {
         "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
         "@tanstack/react-start": "^1.168.49",
@@ -182,7 +182,7 @@
       "dependencies": {
         "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
         "@tanstack/react-start": "^1.168.49",
@@ -205,7 +205,7 @@
       "dependencies": {
         "@repo/shared-react": "workspace:*",
         "@repo/shared-webauthn": "workspace:*",
-        "@starmode/auth2": "workspace:*",
+        "@starmode/auth": "workspace:*",
         "@tailwindcss/vite": "^4.3.3",
         "@tanstack/react-router": "^1.170.32",
         "@tanstack/react-start": "^1.168.49",
@@ -242,16 +242,6 @@
         "@tanstack/react-start",
         "next",
       ],
-    },
-    "packages/auth2": {
-      "name": "@starmode/auth2",
-      "version": "0.0.1",
-      "devDependencies": {
-        "@eslint/js": "^10.0.1",
-        "eslint": "^10.9.1",
-        "globals": "^17.11.0",
-        "typescript-eslint": "^8.68.0",
-      },
     },
   },
   "trustedDependencies": [
@@ -547,8 +537,6 @@
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
     "@starmode/auth": ["@starmode/auth@workspace:packages/auth"],
-
-    "@starmode/auth2": ["@starmode/auth2@workspace:packages/auth2"],
 
     "@swc/helpers": ["@swc/helpers@0.5.23", "", { "dependencies": { "tslib": "^2.8.0" } }, "sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw=="],
 
