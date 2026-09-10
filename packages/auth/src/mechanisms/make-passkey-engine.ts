@@ -1,10 +1,10 @@
 import type { RegistrationContext, PasskeyEngine } from "../contracts";
-import { base64urlEncode, randomBase64url } from "../lib/crypto";
+import { base64urlEncode, randomBase64url } from "../crypto";
 import {
   parseClientData,
   verifyAuthenticationCredential,
   verifyRegistrationCredential,
-} from "../lib/webauthn";
+} from "../webauthn";
 
 /** Credential record — the shape exchanged with credential storage, not a stored schema */
 export type CredentialRecord = {

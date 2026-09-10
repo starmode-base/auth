@@ -3,7 +3,7 @@ import type {
   SessionIdentity,
   SessionResolver,
 } from "../contracts";
-import { randomBase64url } from "../lib/crypto";
+import { randomBase64url } from "../crypto";
 
 /** Session record — the shape exchanged with session storage, not a stored schema */
 export type SessionRecord = {
