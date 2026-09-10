@@ -12,12 +12,12 @@
     "@starmode/auth": "workspace:*",
     "@repo/shared-react": "workspace:*",
     "@tailwindcss/vite": "^4.3.3",
-    "@tanstack/react-router": "^1.170.34",
-    "@tanstack/react-start": "^1.168.51",
+    "@tanstack/react-router": "^1.170.35",
+    "@tanstack/react-start": "^1.168.52",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
-    "zod": "^4.6.1"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",
