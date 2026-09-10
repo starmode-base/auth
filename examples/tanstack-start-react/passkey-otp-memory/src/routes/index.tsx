@@ -172,7 +172,14 @@ function Authenticated(props: {
   };
 
   if (addingEmail) {
-    return <AddEmailFlow onSuccess={props.onChanged} />;
+    return (
+      <AddEmailFlow
+        onSuccess={() => {
+          setAddingEmail(false);
+          props.onChanged();
+        }}
+      />
+    );
   }
 
   return (
