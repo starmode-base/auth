@@ -11,16 +11,16 @@
   "dependencies": {
     "@starmode/auth": "workspace:*",
     "@repo/shared-react": "workspace:*",
-    "next": "^16.3.3",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "zod": "^4.5.4"
+    "next": "^16.3.4",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^26.4.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3"

@@ -8,11 +8,11 @@
     "./styles.css": "./src/styles.css"
   },
   "peerDependencies": {
-    "react": "^19.2.8",
+    "react": "^19.3.0",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@types/react": "^19.2.18",
+    "@types/react": "^19.3.0",
     "typescript": "^6.0.3"
   }
 }
