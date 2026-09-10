@@ -1,11 +1,10 @@
 /**
- * Server usage API candidate.
+ * Server usage API.
  *
- * Names in this spike are provisional. The contract under examination is the
- * ownership and composition model: literal objects are the DI contract, the
- * strategy map callback mounts complete authentication strategies under
- * caller chosen names, strategy DIs own feature workflows, and core owns
- * composition, session establishment, and current-user scoping.
+ * The contract is the ownership and composition model: literal objects are the
+ * DI contract, the strategy map callback mounts complete authentication
+ * strategies under caller chosen names, strategy DIs own feature workflows, and
+ * core owns composition, session establishment, and current-user scoping.
  *
  * auth is a module singleton. Construction touches no request. Every
  * operation that uses current session authority receives the presented
@@ -404,12 +403,11 @@ export type PasskeyStrategy<SessionCredential> = {
 };
 
 /**
- * Candidate constructor. Session adapter first, strategy map callback second.
+ * Constructor. Session adapter first, strategy map callback second.
  *
  * The callback receives the narrow strategy kernel and returns the final
  * named namespace map. Namespace names are caller chosen literal keys that
- * core never enumerates. The partial runtime candidate lives in
- * make-auth-sandbox.ts.
+ * core never enumerates.
  */
 export declare function makeAuth<
   Identity extends SessionIdentity,
