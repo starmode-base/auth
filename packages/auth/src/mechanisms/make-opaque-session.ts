@@ -3,10 +3,11 @@ import type {
   SessionIdentity,
   SessionResolver,
 } from "../contracts";
-import { randomBase64url } from "../crypto";
+import { base64urlEncode, randomBase64url, sha256 } from "../crypto";
 
 /** Session record — the shape exchanged with session storage, not a stored schema */
 export type SessionRecord = {
+  /** SHA-256 of the token, base64url. The token itself is never stored. */
   sessionId: string;
   userId: string;
   /** Expired only when expiresAt < now. Equality remains valid. */
@@ -33,6 +34,10 @@ export type OpaqueSessionCredential = {
   expiresAt: Date;
 };
 
+async function sessionIdOf(token: string): Promise<string> {
+  return base64urlEncode(await sha256(new TextEncoder().encode(token)));
+}
+
 export type MakeOpaqueSessionResolverConfig = {
   storage: SessionReadStorage;
 };
@@ -50,7 +55,7 @@ export function makeOpaqueSessionResolver(
         return null;
       }
 
-      const record = await config.storage.get(token);
+      const record = await config.storage.get(await sessionIdOf(token));
 
       if (record === null || record.expiresAt < new Date()) {
         return null;
@@ -89,7 +94,11 @@ export function makeOpaqueSession(
         const token = randomBase64url(32);
         const expiresAt = new Date(Date.now() + config.ttl);
 
-        await config.storage.store({ sessionId: token, userId, expiresAt });
+        await config.storage.store({
+          sessionId: await sessionIdOf(token),
+          userId,
+          expiresAt,
+        });
 
         return { token, expiresAt };
       },
@@ -98,7 +107,7 @@ export function makeOpaqueSession(
     capabilities: {
       end: async (token) => {
         if (token !== null) {
-          await config.storage.delete(token);
+          await config.storage.delete(await sessionIdOf(token));
         }
       },
     },
