@@ -35,64 +35,48 @@ export function makePasskeyStrategy<
         userId: identity.userId,
       });
     },
-    verifyRegistration: async (token, { credential }) => {
-      const registration = await config.verifyRegistration({ credential });
+    verifyRegistration: ({ credential }) =>
+      signIn(() => config.verifyRegistration({ credential })),
+    verifyVouchedRegistration: ({ credential }) =>
+      signIn(() => config.verifyVouchedRegistration({ credential })),
+    verifyAdditionalRegistration: async (token, { credential }) => {
+      const identity = await kernel.current(token);
+
+      if (identity === null) {
+        return { success: false, error: "not_authenticated" };
+      }
+
+      const registration = await config.verifyAdditionalRegistration({
+        credential,
+        userId: identity.userId,
+      });
 
       if (!registration.success) {
         return registration;
       }
 
-      if (registration.data.intent === "add") {
-        const identity = await kernel.current(token);
-
-        if (identity === null) {
-          return { success: false, error: "not_authenticated" };
-        }
-
-        if (identity.userId !== registration.data.userId) {
-          return { success: false, error: "user_mismatch" };
-        }
-
-        return {
-          success: true,
-          data: { intent: "add", userId: registration.data.userId },
-        };
-      }
-
-      const intent = registration.data.intent;
-      const authentication = await kernel.authenticate<AuthUser, never>(
-        async (): Promise<Result<AuthUser, never>> => ({
-          success: true,
-          data: { userId: registration.data.userId },
-        }),
-      );
-
-      return {
-        success: true,
-        data: {
-          intent,
-          userId: authentication.data.user.userId,
-          session: authentication.data.session,
-        },
-      };
+      return { success: true, data: { userId: registration.data.userId } };
     },
     createAuthenticationOptions: () => config.createAuthenticationOptions(),
-    verifyAuthentication: async ({ credential }) => {
-      const outcome = await kernel.authenticate(() =>
-        config.verifyAuthentication({ credential }),
-      );
-
-      if (!outcome.success) {
-        return outcome;
-      }
-
-      return {
-        success: true,
-        data: {
-          userId: outcome.data.user.userId,
-          session: outcome.data.session,
-        },
-      };
-    },
+    verifyAuthentication: ({ credential }) =>
+      signIn(() => config.verifyAuthentication({ credential })),
   };
+
+  async function signIn<E extends string>(
+    prove: () => Promise<Result<AuthUser, E>>,
+  ): Promise<Result<{ userId: string; session: SessionCredential }, E>> {
+    const outcome = await kernel.authenticate(prove);
+
+    if (!outcome.success) {
+      return outcome;
+    }
+
+    return {
+      success: true,
+      data: {
+        userId: outcome.data.user.userId,
+        session: outcome.data.session,
+      },
+    };
+  }
 }

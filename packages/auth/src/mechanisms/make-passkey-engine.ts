@@ -1,9 +1,16 @@
-import type { RegistrationContext, PasskeyEngine } from "../contracts";
+import type {
+  PasskeyEngine,
+  PasskeyRegistrationCredential,
+  RegistrationContext,
+  RegistrationIntent,
+  Result,
+} from "../contracts";
 import { base64urlEncode, randomBase64url } from "../crypto";
 import {
   parseClientData,
   verifyAuthenticationCredential,
   verifyRegistrationCredential,
+  type VerifyRegistrationResult,
 } from "../webauthn";
 
 /** Credential record — the shape exchanged with credential storage, not a stored schema */
@@ -75,8 +82,17 @@ export type MakePasskeyEngineConfig = {
   debug: boolean;
 };
 
+function hasIntent<Intent extends RegistrationIntent>(
+  registration: RegistrationContext,
+  intent: Intent,
+): registration is Extract<RegistrationContext, { intent: Intent }> {
+  return registration.intent === intent;
+}
+
 /** Builds the complete trusted passkey engine from its primitives */
-export function makePasskeyEngine(config: MakePasskeyEngineConfig): PasskeyEngine {
+export function makePasskeyEngine(
+  config: MakePasskeyEngineConfig,
+): PasskeyEngine {
   const policy = {
     rpId: config.webAuthn.rpId,
     allowedOrigins: config.webAuthn.allowedOrigins,
@@ -100,6 +116,71 @@ export function makePasskeyEngine(config: MakePasskeyEngineConfig): PasskeyEngin
     });
 
     return challenge;
+  }
+
+  async function completeRegistrationCeremony<
+    Intent extends RegistrationIntent,
+  >(
+    credential: PasskeyRegistrationCredential,
+    intent: Intent,
+  ): Promise<
+    Result<
+      {
+        registration: Extract<RegistrationContext, { intent: Intent }>;
+        verified: VerifyRegistrationResult;
+      },
+      "challenge_expired" | "verification_failed"
+    >
+  > {
+    const clientData = parseClientData(credential.response.clientDataJSON);
+    if (clientData === null) {
+      swallow("invalid clientDataJSON");
+      return { success: false, error: "verification_failed" };
+    }
+
+    const record = await config.challenge.storage.take(clientData.challenge);
+    if (record === null || record.expiresAt < new Date()) {
+      return { success: false, error: "challenge_expired" };
+    }
+    if (record.registration === null) {
+      swallow("authentication challenge presented for registration");
+      return { success: false, error: "verification_failed" };
+    }
+    if (!hasIntent(record.registration, intent)) {
+      swallow(
+        `${record.registration.intent} challenge presented for ${intent}`,
+      );
+      return { success: false, error: "verification_failed" };
+    }
+
+    let verified;
+    try {
+      verified = await verifyRegistrationCredential(
+        credential,
+        record.challenge,
+        policy,
+      );
+    } catch (cause) {
+      swallow(cause);
+      return { success: false, error: "verification_failed" };
+    }
+
+    return {
+      success: true,
+      data: { registration: record.registration, verified },
+    };
+  }
+
+  async function storeCredential(
+    verified: VerifyRegistrationResult,
+    userId: string,
+  ): Promise<void> {
+    await config.storage.store({
+      credentialId: verified.credentialId,
+      userId,
+      publicKey: verified.publicKey,
+      counter: verified.counter,
+    });
   }
 
   return {
@@ -150,53 +231,50 @@ export function makePasskeyEngine(config: MakePasskeyEngineConfig): PasskeyEngin
     },
 
     verifyRegistration: async ({ credential }) => {
-      const clientData = parseClientData(credential.response.clientDataJSON);
-      if (clientData === null) {
-        swallow("invalid clientDataJSON");
-        return { success: false, error: "verification_failed" };
+      const ceremony = await completeRegistrationCeremony(
+        credential,
+        "sign-up",
+      );
+      if (!ceremony.success) {
+        return ceremony;
       }
-
-      const record = await config.challenge.storage.take(clientData.challenge);
-      if (record === null || record.expiresAt < new Date()) {
-        return { success: false, error: "challenge_expired" };
-      }
-      if (record.registration === null) {
-        swallow("authentication challenge presented for registration");
-        return { success: false, error: "verification_failed" };
-      }
-
-      let verified;
-      try {
-        verified = await verifyRegistrationCredential(
-          credential,
-          record.challenge,
-          policy,
-        );
-      } catch (cause) {
-        swallow(cause);
-        return { success: false, error: "verification_failed" };
-      }
-
-      let userId: string;
-      if (record.registration.userId !== null) {
-        userId = record.registration.userId;
-      } else if (config.signUp === null) {
+      if (config.signUp === null) {
         return { success: false, error: "registration_disabled" };
-      } else {
-        userId = await config.signUp();
       }
 
-      await config.storage.store({
-        credentialId: verified.credentialId,
-        userId,
-        publicKey: verified.publicKey,
-        counter: verified.counter,
-      });
+      const userId = await config.signUp();
+      await storeCredential(ceremony.data.verified, userId);
 
-      return {
-        success: true,
-        data: { intent: record.registration.intent, userId },
-      };
+      return { success: true, data: { userId } };
+    },
+
+    verifyVouchedRegistration: async ({ credential }) => {
+      const ceremony = await completeRegistrationCeremony(
+        credential,
+        "vouched",
+      );
+      if (!ceremony.success) {
+        return ceremony;
+      }
+
+      const { userId } = ceremony.data.registration;
+      await storeCredential(ceremony.data.verified, userId);
+
+      return { success: true, data: { userId } };
+    },
+
+    verifyAdditionalRegistration: async ({ credential, userId }) => {
+      const ceremony = await completeRegistrationCeremony(credential, "add");
+      if (!ceremony.success) {
+        return ceremony;
+      }
+      if (ceremony.data.registration.userId !== userId) {
+        return { success: false, error: "user_mismatch" };
+      }
+
+      await storeCredential(ceremony.data.verified, userId);
+
+      return { success: true, data: { userId } };
     },
 
     createAuthenticationOptions: async () => {

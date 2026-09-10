@@ -69,27 +69,20 @@ export const startAddPasskey = createServerFn({ method: "POST" }).handler(
 );
 
 /**
- * Server function: Verify passkey registration
+ * Server function: Verify adding a passkey
  *
- * Verifies the credential from the browser ceremony and stores the passkey.
- * Completing a sign-up registration establishes a session.
+ * Verifies the credential from the browser ceremony and stores the passkey
+ * for the current user. No session is established.
  */
-export const verifyRegistration = createServerFn({ method: "POST" })
+export const verifyAddPasskey = createServerFn({ method: "POST" })
   .validator(z.object({ credential: passkeyRegistrationCredentialSchema }))
   .handler(async ({ data }) => {
-    const result = await auth.strategies.passkeys.verifyRegistration(
+    const result = await auth.strategies.passkeys.verifyAdditionalRegistration(
       sessionCookie.get(),
       { credential: data.credential },
     );
 
     if (!result.success) return { success: false as const };
-
-    if (result.data.intent === "sign-up") {
-      sessionCookie.set(
-        result.data.session.token,
-        result.data.session.expiresAt,
-      );
-    }
 
     return { success: true as const };
   });

@@ -4,7 +4,7 @@ import {
   requestOtp,
   verifyOtp,
   startAddPasskey,
-  verifyRegistration,
+  verifyAddPasskey,
   startAuthentication,
   verifyAuthentication,
   listPasskeys,
@@ -155,7 +155,7 @@ function Authenticated(props: {
 }) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (credential) => verifyRegistration({ data: { credential } }),
+    verify: (credential) => verifyAddPasskey({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 

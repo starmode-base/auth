@@ -229,12 +229,6 @@ export type RegistrationContext =
       userId: string;
     };
 
-/** Registration identity returned by the strategy after verification */
-export type RegisteredPasskeyUser = {
-  intent: RegistrationIntent;
-  userId: string;
-};
-
 /**
  * Complete trusted passkey authentication engine.
  *
@@ -258,12 +252,44 @@ export type PasskeyEngine = {
   ) => Promise<
     Result<PublicKeyCredentialCreationOptionsJSON, "registration_disabled">
   >;
+  /**
+   * Completes passkey-first sign-up: verifies the ceremony, provisions the
+   * user, and stores the credential. The challenge must have been created
+   * with intent sign-up; any other intent fails verification. The challenge
+   * is consumed on every outcome.
+   */
   verifyRegistration: (args: {
     credential: PasskeyRegistrationCredential;
   }) => Promise<
     Result<
-      RegisteredPasskeyUser,
+      AuthUser,
       "registration_disabled" | "challenge_expired" | "verification_failed"
+    >
+  >;
+  /**
+   * Completes vouched registration: verifies the ceremony and stores the
+   * credential for the user recorded in the challenge. The challenge must
+   * have been created with intent vouched; any other intent fails
+   * verification. The challenge is consumed on every outcome.
+   */
+  verifyVouchedRegistration: (args: {
+    credential: PasskeyRegistrationCredential;
+  }) => Promise<Result<AuthUser, "challenge_expired" | "verification_failed">>;
+  /**
+   * Completes adding a passkey: verifies the ceremony and stores the
+   * credential for the user recorded in the challenge. userId is the
+   * presenter, derived by the caller from current authority. It must equal
+   * the challenge's user; a mismatch is rejected before anything is stored.
+   * The challenge must have been created with intent add; any other intent
+   * fails verification. The challenge is consumed on every outcome.
+   */
+  verifyAdditionalRegistration: (args: {
+    credential: PasskeyRegistrationCredential;
+    userId: string;
+  }) => Promise<
+    Result<
+      AuthUser,
+      "user_mismatch" | "challenge_expired" | "verification_failed"
     >
   >;
   createAuthenticationOptions: () => Promise<
@@ -281,29 +307,6 @@ export type PasskeyEngine = {
     >
   >;
 };
-
-/** Result of completing any public passkey registration workflow */
-export type VerifyRegistrationResult<SessionCredential> = Result<
-  | {
-      intent: "sign-up";
-      userId: string;
-      session: SessionCredential;
-    }
-  | {
-      intent: "vouched";
-      userId: string;
-      session: SessionCredential;
-    }
-  | {
-      intent: "add";
-      userId: string;
-    },
-  | "registration_disabled"
-  | "challenge_expired"
-  | "verification_failed"
-  | "not_authenticated"
-  | "user_mismatch"
->;
 
 /**
  * Passkey authentication workflows.
@@ -337,11 +340,49 @@ export type PasskeyStrategy<SessionCredential> = {
       "not_authenticated" | "registration_disabled"
     >
   >;
-  /** The strategy result determines whether completion signs in or adds */
-  verifyRegistration: (
+  /** Completes passkey-first sign-up and establishes a session */
+  verifyRegistration: (args: {
+    credential: PasskeyRegistrationCredential;
+  }) => Promise<
+    Result<
+      {
+        userId: string;
+        session: SessionCredential;
+      },
+      "registration_disabled" | "challenge_expired" | "verification_failed"
+    >
+  >;
+  /** Completes vouched registration and establishes a session */
+  verifyVouchedRegistration: (args: {
+    credential: PasskeyRegistrationCredential;
+  }) => Promise<
+    Result<
+      {
+        userId: string;
+        session: SessionCredential;
+      },
+      "challenge_expired" | "verification_failed"
+    >
+  >;
+  /**
+   * Completes adding a passkey for the authenticated user. No session is
+   * established. The presented token must resolve, and to the user the
+   * challenge was created for, before the credential is stored.
+   */
+  verifyAdditionalRegistration: (
     token: string | null,
     args: { credential: PasskeyRegistrationCredential },
-  ) => Promise<VerifyRegistrationResult<SessionCredential>>;
+  ) => Promise<
+    Result<
+      {
+        userId: string;
+      },
+      | "not_authenticated"
+      | "user_mismatch"
+      | "challenge_expired"
+      | "verification_failed"
+    >
+  >;
   createAuthenticationOptions: () => Promise<
     Result<PublicKeyCredentialRequestOptionsJSON, never>
   >;

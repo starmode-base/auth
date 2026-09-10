@@ -5,6 +5,7 @@ import {
   startAuthentication,
   verifyAuthentication,
   startAddPasskey,
+  verifyAddPasskey,
   listPasskeys,
   removePasskey,
   signOut,
@@ -81,7 +82,7 @@ function Authenticated(props: {
 }) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (credential) => verifyRegistration({ data: { credential } }),
+    verify: (credential) => verifyAddPasskey({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 

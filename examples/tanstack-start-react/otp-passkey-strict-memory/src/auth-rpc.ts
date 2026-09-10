@@ -72,26 +72,20 @@ export const startAddPasskey = createServerFn({ method: "POST" }).handler(
 );
 
 /**
- * Server function: Verify passkey registration
+ * Server function: Verify adding a passkey
  *
- * Verifies the credential from the browser ceremony and stores the passkey.
+ * Verifies the credential from the browser ceremony and stores the passkey
+ * for the current user. No session is established.
  */
-export const verifyRegistration = createServerFn({ method: "POST" })
+export const verifyAddPasskey = createServerFn({ method: "POST" })
   .validator(z.object({ credential: passkeyRegistrationCredentialSchema }))
   .handler(async ({ data }) => {
-    const result = await auth.strategies.passkeys.verifyRegistration(
+    const result = await auth.strategies.passkeys.verifyAdditionalRegistration(
       sessionCookie.get(),
       { credential: data.credential },
     );
 
     if (!result.success) return { success: false as const };
-
-    if (result.data.intent !== "add") {
-      sessionCookie.set(
-        result.data.session.token,
-        result.data.session.expiresAt,
-      );
-    }
 
     return { success: true as const };
   });
@@ -137,6 +131,26 @@ export const startRecovery = createServerFn({ method: "POST" })
     if (!result.success) return { success: false as const };
 
     return { success: true as const, options: result.data };
+  });
+
+/**
+ * Server function: Verify passkey recovery
+ *
+ * Verifies the credential from the browser ceremony, stores the new passkey
+ * for the vouched user, and establishes a session.
+ */
+export const verifyRecovery = createServerFn({ method: "POST" })
+  .validator(z.object({ credential: passkeyRegistrationCredentialSchema }))
+  .handler(async ({ data }) => {
+    const result = await auth.strategies.passkeys.verifyVouchedRegistration({
+      credential: data.credential,
+    });
+
+    if (!result.success) return { success: false as const };
+
+    sessionCookie.set(result.data.session.token, result.data.session.expiresAt);
+
+    return { success: true as const };
   });
 
 /**

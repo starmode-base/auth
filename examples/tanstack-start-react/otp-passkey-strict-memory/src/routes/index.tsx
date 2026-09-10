@@ -7,7 +7,8 @@ import {
   requestRecoveryOtp,
   startRecovery,
   startAddPasskey,
-  verifyRegistration,
+  verifyRecovery,
+  verifyAddPasskey,
   startAuthentication,
   verifyAuthentication,
   listPasskeys,
@@ -133,7 +134,7 @@ function RecoveryFlow(props: { onSignedIn: () => void; onCancel: () => void }) {
 
   const recover = usePasskeyRegistration({
     start: () => startRecovery({ data: { identifier: email, otp } }),
-    verify: (credential) => verifyRegistration({ data: { credential } }),
+    verify: (credential) => verifyRecovery({ data: { credential } }),
     onSuccess: () => props.onSignedIn(),
   });
 
@@ -251,7 +252,7 @@ function UnauthenticatedView(props: { onSignedIn: () => void }) {
 function SetupPasskey(props: { viewer: Viewer; onChanged: () => void }) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (credential) => verifyRegistration({ data: { credential } }),
+    verify: (credential) => verifyAddPasskey({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 
@@ -287,7 +288,7 @@ function Authenticated(props: {
 }) {
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (credential) => verifyRegistration({ data: { credential } }),
+    verify: (credential) => verifyAddPasskey({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 

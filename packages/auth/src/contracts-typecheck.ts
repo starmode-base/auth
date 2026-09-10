@@ -11,7 +11,6 @@ import type {
   PasskeyEngine,
   PasskeyRegistrationCredential,
   PasskeyStrategy,
-  RegisteredPasskeyUser,
   Result,
   SessionAdapter,
   SessionIdentity,
@@ -213,10 +212,32 @@ declare const registrationProof: Awaited<
 >;
 
 if (registrationProof.success) {
-  expectType<RegisteredPasskeyUser>(registrationProof.data);
+  expectType<AuthUser>(registrationProof.data);
 
   // @ts-expect-error An engine proof never establishes a session.
   void registrationProof.data.session;
+}
+
+declare const vouchedRegistrationProof: Awaited<
+  ReturnType<PasskeyEngine["verifyVouchedRegistration"]>
+>;
+
+if (vouchedRegistrationProof.success) {
+  expectType<AuthUser>(vouchedRegistrationProof.data);
+
+  // @ts-expect-error An engine proof never establishes a session.
+  void vouchedRegistrationProof.data.session;
+}
+
+declare const additionalRegistrationProof: Awaited<
+  ReturnType<PasskeyEngine["verifyAdditionalRegistration"]>
+>;
+
+if (additionalRegistrationProof.success) {
+  expectType<AuthUser>(additionalRegistrationProof.data);
+
+  // @ts-expect-error An engine proof never establishes a session.
+  void additionalRegistrationProof.data.session;
 }
 
 declare const authenticationProof: Awaited<
@@ -234,12 +255,23 @@ void auth.strategies.passkeys.createVouchedRegistrationOptions({
   userId: "vouched-user",
 });
 void auth.strategies.passkeys.createAdditionalRegistrationOptions("token");
+void auth.strategies.passkeys.verifyRegistration({
+  credential: registrationCredential,
+});
+void auth.strategies.passkeys.verifyVouchedRegistration({
+  credential: registrationCredential,
+});
+void auth.strategies.passkeys.verifyAdditionalRegistration(null, {
+  credential: registrationCredential,
+});
+
+// @ts-expect-error Sign-up completion uses no current authority.
 void auth.strategies.passkeys.verifyRegistration(null, {
   credential: registrationCredential,
 });
 
-// @ts-expect-error Registration completion requires the token first.
-void auth.strategies.passkeys.verifyRegistration({
+// @ts-expect-error Adding a passkey requires the token first.
+void auth.strategies.passkeys.verifyAdditionalRegistration({
   credential: registrationCredential,
 });
 
@@ -325,8 +357,16 @@ type HeaderCredential = {
   refreshToken: string;
 };
 
-declare const cookieSession: SessionAdapter<SessionClaims, CookieCredential, {}>;
-declare const headerSession: SessionAdapter<SessionClaims, HeaderCredential, {}>;
+declare const cookieSession: SessionAdapter<
+  SessionClaims,
+  CookieCredential,
+  {}
+>;
+declare const headerSession: SessionAdapter<
+  SessionClaims,
+  HeaderCredential,
+  {}
+>;
 
 const cookieAuth = makeAuth(cookieSession, reusableStrategies);
 const headerAuth = makeAuth(headerSession, reusableStrategies);
