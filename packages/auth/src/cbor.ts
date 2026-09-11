@@ -8,6 +8,8 @@
  * - Major type 3: text string
  * - Major type 4: array
  * - Major type 5: map
+ *
+ * All reads are bounded by the input.
  */
 
 export type CborValue =
@@ -17,13 +19,21 @@ export function decodeCbor(data: Uint8Array): CborValue {
   let offset = 0;
 
   function read(n: number): Uint8Array {
+    if (offset + n > data.length) {
+      throw new Error("CBOR: input exhausted");
+    }
     const slice = data.subarray(offset, offset + n);
     offset += n;
     return slice;
   }
 
   function readUint8(): number {
-    return data[offset++]!;
+    const byte = data[offset];
+    if (byte === undefined) {
+      throw new Error("CBOR: input exhausted");
+    }
+    offset += 1;
+    return byte;
   }
 
   function readLength(additionalInfo: number): number {

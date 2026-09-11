@@ -11,7 +11,7 @@ import {
   EmailInput,
   OtpInput,
   Toolbar,
-} from "@repo/auth-react";
+} from "@repo/shared-react";
 
 type Viewer = { userId: string; email: string };
 
@@ -103,7 +103,7 @@ function Authenticated(props: { viewer: Viewer; onSignedOut: () => void }) {
   );
 }
 
-export function HomePage(props: { viewer?: Viewer | undefined }) {
+export function HomePage(props: { viewer: Viewer | null }) {
   const router = useRouter();
 
   if (props.viewer) {

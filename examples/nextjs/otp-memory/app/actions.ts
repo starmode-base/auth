@@ -2,7 +2,8 @@
 
 import { requestOtpSchema, verifyOtpSchema } from "./schema";
 import { db } from "./db";
-import { getAuth } from "./auth";
+import { auth, emailOtp } from "./auth";
+import { sessionCookie } from "./session-cookie";
 
 /**
  * Send OTP to identifier
@@ -11,30 +12,29 @@ export async function requestOtp(data: { identifier: string }) {
   const parsed = requestOtpSchema.safeParse(data);
   if (!parsed.success) return { success: false as const };
 
-  const auth = await getAuth();
-  return auth.requestOtp(parsed.data);
+  return auth.strategies.email.request(parsed.data);
 }
 
 /**
  * Verify OTP
  *
- * Verifies OTP, upserts user, creates session. Returns isNew to distinguish
- * sign-up from sign-in (for analytics, onboarding, etc.).
+ * Authenticates with the OTP, which upserts the user and establishes a
+ * session. Returns isNew to distinguish sign-up from sign-in (for analytics,
+ * onboarding, etc.).
  */
 export async function verifyOtp(data: { identifier: string; otp: string }) {
   const parsed = verifyOtpSchema.safeParse(data);
   if (!parsed.success) return { success: false as const };
 
-  const auth = await getAuth();
-  const result = await auth.verifyOtp(parsed.data);
+  const result = await auth.strategies.email.authenticate(parsed.data);
   if (!result.success) return { success: false as const };
 
-  const { userId, isNew } = db.users.upsert(parsed.data.identifier);
+  await sessionCookie.set(
+    result.data.session.token,
+    result.data.session.expiresAt,
+  );
 
-  const session = await auth.createSession({ userId });
-  if (!session.success) return { success: false as const };
-
-  return { success: true as const, isNew };
+  return { success: true as const, isNew: result.data.user.isNew };
 }
 
 /**
@@ -47,14 +47,16 @@ export async function changeEmail(data: { identifier: string; otp: string }) {
   const parsed = verifyOtpSchema.safeParse(data);
   if (!parsed.success) return { success: false as const };
 
-  const auth = await getAuth();
-  const session = await auth.getSession();
-  if (!session) return { success: false as const };
+  const identity = await auth.session.get(await sessionCookie.get());
+  if (!identity) return { success: false as const };
 
-  const result = await auth.verifyOtp(parsed.data);
-  if (!result.success) return { success: false as const };
+  const verified = await emailOtp.verify(
+    parsed.data.identifier,
+    parsed.data.otp,
+  );
+  if (!verified) return { success: false as const };
 
-  const user = db.users.updateEmail(session.userId, parsed.data.identifier);
+  const user = db.users.updateEmail(identity.userId, parsed.data.identifier);
   if (!user) return { success: false as const };
 
   return { success: true as const, viewer: user };
@@ -63,11 +65,11 @@ export async function changeEmail(data: { identifier: string; otp: string }) {
 /**
  * Sign out
  *
- * Invalidates the current session and clears the session cookie.
+ * Ends the current session and clears the session cookie.
  */
 export async function signOut() {
-  const auth = await getAuth();
-  await auth.signOut();
+  await auth.session.end(await sessionCookie.get());
+  await sessionCookie.clear();
 }
 
 /**
@@ -76,18 +78,19 @@ export async function signOut() {
  * Deletes every session for the current user and clears the session cookie.
  */
 export async function signOutAll() {
-  const auth = await getAuth();
-  await auth.signOutAll();
+  const identity = await auth.session.get(await sessionCookie.get());
+  if (identity) db.sessions.deleteAllForUser(identity.userId);
+  await sessionCookie.clear();
 }
 
 /**
  * Get viewer
  *
- * Returns the current user if authenticated, or undefined otherwise.
+ * Returns the current user if authenticated, or null otherwise. Read-only,
+ * safe to call during server component render.
  */
 export async function getViewer() {
-  const auth = await getAuth();
-  const session = await auth.getSession();
+  const identity = await auth.session.get(await sessionCookie.get());
 
-  return session ? db.users.get(session.userId) : undefined;
+  return identity ? (db.users.get(identity.userId) ?? null) : null;
 }

@@ -8,10 +8,9 @@
 import { base64urlDecode, base64urlEncode, sha256 } from "./crypto";
 import { decodeCbor, type CborValue } from "./cbor";
 import type {
-  RegistrationCredential,
-  AuthenticationCredential,
-  StoredCredential,
-} from "./types";
+  PasskeyRegistrationCredential,
+  PasskeyAuthenticationCredential,
+} from "./contracts";
 
 const encoder = new TextEncoder();
 
@@ -23,8 +22,37 @@ type ClientData = {
   /** https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-origin */
   origin: string;
   /** https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-crossorigin */
-  crossOrigin?: boolean;
+  crossOrigin: boolean;
 };
+
+/** Decodes and validates clientDataJSON. Malformed input returns null. */
+export function parseClientData(clientDataJSON: string): ClientData | null {
+  const bytes = base64urlDecode(clientDataJSON);
+  if (bytes === null) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const type = "type" in parsed ? parsed.type : null;
+  const challenge = "challenge" in parsed ? parsed.challenge : null;
+  const origin = "origin" in parsed ? parsed.origin : null;
+  const crossOrigin = "crossOrigin" in parsed ? parsed.crossOrigin : false;
+
+  if (
+    typeof type !== "string" ||
+    typeof challenge !== "string" ||
+    typeof origin !== "string"
+  ) {
+    return null;
+  }
+
+  return { type, challenge, origin, crossOrigin: crossOrigin === true };
+}
 
 type ParsedAuthData = {
   rpIdHash: Uint8Array;
@@ -53,24 +81,16 @@ function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
   return result;
 }
 
-/** Verify origin hostname matches rpId (exact match or subdomain) */
-function verifyOrigin(origin: string, expectedRpId: string): void {
-  try {
-    const originUrl = new URL(origin);
-    const originHostname = originUrl.hostname;
-    if (
-      originHostname !== expectedRpId &&
-      !originHostname.endsWith(`.${expectedRpId}`)
-    ) {
-      throw new Error(
-        `Origin hostname mismatch: got ${originHostname}, expected ${expectedRpId} or subdomain`,
-      );
-    }
-  } catch (err) {
-    if (err instanceof TypeError) {
-      throw new Error(`Invalid origin URL: ${origin}`, { cause: err });
-    }
-    throw err;
+/**
+ * The origin must match one allowed origin exactly (scheme + host + port),
+ * and cross-origin ceremonies are rejected.
+ */
+function verifyOrigin(clientData: ClientData, allowedOrigins: string[]): void {
+  if (clientData.crossOrigin) {
+    throw new Error("Cross-origin ceremony rejected");
+  }
+  if (!allowedOrigins.includes(clientData.origin)) {
+    throw new Error(`Origin not allowed: ${clientData.origin}`);
   }
 }
 
@@ -83,26 +103,40 @@ function verifyOrigin(origin: string, expectedRpId: string): void {
  * Web Crypto expects raw format: r || s (32 bytes each for P-256)
  */
 function derToRaw(der: Uint8Array): Uint8Array {
+  function byteAt(i: number): number {
+    const byte = der[i];
+    if (byte === undefined) {
+      throw new Error("DER signature truncated");
+    }
+    return byte;
+  }
+
   // Parse DER sequence
-  if (der[0] !== 0x30) {
+  if (byteAt(0) !== 0x30) {
     throw new Error("Invalid DER signature: expected sequence");
   }
 
   let offset = 2; // skip 0x30 and length byte
 
   // Parse r integer
-  if (der[offset] !== 0x02) {
+  if (byteAt(offset) !== 0x02) {
     throw new Error("Invalid DER signature: expected integer tag for r");
   }
-  const rLen = der[offset + 1]!;
+  const rLen = byteAt(offset + 1);
+  if (offset + 2 + rLen > der.length) {
+    throw new Error("DER signature truncated");
+  }
   let r = der.subarray(offset + 2, offset + 2 + rLen);
   offset += 2 + rLen;
 
   // Parse s integer
-  if (der[offset] !== 0x02) {
+  if (byteAt(offset) !== 0x02) {
     throw new Error("Invalid DER signature: expected integer tag for s");
   }
-  const sLen = der[offset + 1]!;
+  const sLen = byteAt(offset + 1);
+  if (offset + 2 + sLen > der.length) {
+    throw new Error("DER signature truncated");
+  }
   let s = der.subarray(offset + 2, offset + 2 + sLen);
 
   // DER integers may have leading zero for positive numbers
@@ -135,6 +169,10 @@ function derToRaw(der: Uint8Array): Uint8Array {
  *   credentialPublicKey (COSE, remaining bytes)
  */
 function parseAuthData(authData: Uint8Array): ParsedAuthData {
+  if (authData.length < 37) {
+    throw new Error("Authenticator data too short");
+  }
+
   const rpIdHash = authData.subarray(0, 32);
   const flags = authData[32]!;
   const signCount = new DataView(
@@ -151,16 +189,26 @@ function parseAuthData(authData: Uint8Array): ParsedAuthData {
   let coseKey: Map<CborValue, CborValue> | undefined;
 
   if (attestedCredentialData) {
+    if (authData.length < 55) {
+      throw new Error("Attested credential data too short");
+    }
     // Skip aaguid (16 bytes), read credentialIdLength
     const credIdLen = new DataView(
       authData.buffer,
       authData.byteOffset + 53,
       2,
     ).getUint16(0, false);
+    if (authData.length < 55 + credIdLen) {
+      throw new Error("Credential id out of bounds");
+    }
 
     credentialId = authData.subarray(55, 55 + credIdLen);
     const publicKeyBytes = authData.subarray(55 + credIdLen);
-    coseKey = decodeCbor(publicKeyBytes) as Map<CborValue, CborValue>;
+    const decoded = decodeCbor(publicKeyBytes);
+    if (!(decoded instanceof Map)) {
+      throw new Error("COSE key is not a map");
+    }
+    coseKey = decoded;
   }
 
   return {
@@ -188,8 +236,16 @@ function serializeCoseKey(coseKey: Map<CborValue, CborValue>): Uint8Array {
     throw new Error("Only ES256 (P-256) keys supported");
   }
 
-  const x = coseKey.get(-2) as Uint8Array;
-  const y = coseKey.get(-3) as Uint8Array;
+  const x = coseKey.get(-2);
+  const y = coseKey.get(-3);
+  if (
+    !(x instanceof Uint8Array) ||
+    !(y instanceof Uint8Array) ||
+    x.length !== 32 ||
+    y.length !== 32
+  ) {
+    throw new Error("Invalid P-256 coordinates");
+  }
 
   // Uncompressed point format: 0x04 || x || y
   const result = new Uint8Array(65);
@@ -226,33 +282,30 @@ async function importStoredKey(publicKey: Uint8Array): Promise<CryptoKey> {
   );
 }
 
+type WebAuthnPolicy = {
+  rpId: string;
+  allowedOrigins: string[];
+};
+
 export type VerifyRegistrationResult = {
   credentialId: string;
   publicKey: Uint8Array;
   counter: number;
-  transports?: AuthenticatorTransport[] | undefined;
 };
 
 /**
  * Verify a WebAuthn registration credential
- *
- * @param credential - The credential from navigator.credentials.create()
- * @param expectedChallenge - The challenge sent to the client
- * @param expectedRpId - The relying party ID (e.g., "example.com")
  */
 export async function verifyRegistrationCredential(
-  credential: RegistrationCredential,
+  credential: PasskeyRegistrationCredential,
   expectedChallenge: string,
-  expectedRpId: string,
+  policy: WebAuthnPolicy,
 ): Promise<VerifyRegistrationResult> {
   // 1. Decode and verify clientDataJSON
-  const clientDataBytes = base64urlDecode(credential.response.clientDataJSON);
-  if (!clientDataBytes) {
-    throw new Error("Invalid clientDataJSON encoding");
+  const clientData = parseClientData(credential.response.clientDataJSON);
+  if (!clientData) {
+    throw new Error("Invalid clientDataJSON");
   }
-  const clientData: ClientData = JSON.parse(
-    new TextDecoder().decode(clientDataBytes),
-  );
 
   // https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-type
   if (clientData.type !== "webauthn.create") {
@@ -263,7 +316,7 @@ export async function verifyRegistrationCredential(
     throw new Error("Challenge mismatch");
   }
 
-  verifyOrigin(clientData.origin, expectedRpId);
+  verifyOrigin(clientData, policy.allowedOrigins);
 
   // 2. Decode attestationObject (CBOR)
   const attestationBytes = base64urlDecode(
@@ -272,13 +325,13 @@ export async function verifyRegistrationCredential(
   if (!attestationBytes) {
     throw new Error("Invalid attestationObject encoding");
   }
-  const attestationObject = decodeCbor(attestationBytes) as Map<
-    CborValue,
-    CborValue
-  >;
+  const attestationObject = decodeCbor(attestationBytes);
+  if (!(attestationObject instanceof Map)) {
+    throw new Error("attestationObject is not a map");
+  }
 
-  const authData = attestationObject.get("authData") as Uint8Array;
-  if (!authData) {
+  const authData = attestationObject.get("authData");
+  if (!(authData instanceof Uint8Array)) {
     throw new Error("Missing authData in attestationObject");
   }
 
@@ -286,7 +339,7 @@ export async function verifyRegistrationCredential(
   const parsed = parseAuthData(authData);
 
   // 4. Verify rpIdHash
-  const expectedRpIdHash = await sha256(encoder.encode(expectedRpId));
+  const expectedRpIdHash = await sha256(encoder.encode(policy.rpId));
   if (!arrayEqual(parsed.rpIdHash, expectedRpIdHash)) {
     throw new Error("RP ID hash mismatch");
   }
@@ -308,7 +361,6 @@ export async function verifyRegistrationCredential(
     credentialId: base64urlEncode(parsed.credentialId),
     publicKey: serializeCoseKey(parsed.coseKey),
     counter: parsed.signCount,
-    transports: credential.response.transports,
   };
 }
 
@@ -318,26 +370,19 @@ export type VerifyAuthenticationResult = {
 
 /**
  * Verify a WebAuthn authentication credential
- *
- * @param credential - The credential from navigator.credentials.get()
- * @param storedCredential - The stored credential to verify against
- * @param expectedChallenge - The challenge sent to the client
- * @param expectedRpId - The relying party ID
  */
 export async function verifyAuthenticationCredential(
-  credential: AuthenticationCredential,
-  storedCredential: StoredCredential,
+  credential: PasskeyAuthenticationCredential,
+  storedCredential: { publicKey: Uint8Array; counter: number },
   expectedChallenge: string,
-  expectedRpId: string,
+  policy: WebAuthnPolicy,
 ): Promise<VerifyAuthenticationResult> {
   // 1. Decode and verify clientDataJSON
   const clientDataBytes = base64urlDecode(credential.response.clientDataJSON);
-  if (!clientDataBytes) {
-    throw new Error("Invalid clientDataJSON encoding");
+  const clientData = parseClientData(credential.response.clientDataJSON);
+  if (!clientDataBytes || !clientData) {
+    throw new Error("Invalid clientDataJSON");
   }
-  const clientData: ClientData = JSON.parse(
-    new TextDecoder().decode(clientDataBytes),
-  );
 
   // https://www.w3.org/TR/webauthn-3/#dom-collectedclientdata-type
   if (clientData.type !== "webauthn.get") {
@@ -348,7 +393,7 @@ export async function verifyAuthenticationCredential(
     throw new Error("Challenge mismatch");
   }
 
-  verifyOrigin(clientData.origin, expectedRpId);
+  verifyOrigin(clientData, policy.allowedOrigins);
 
   // 2. Decode authenticatorData
   const authData = base64urlDecode(credential.response.authenticatorData);
@@ -358,7 +403,7 @@ export async function verifyAuthenticationCredential(
   const parsed = parseAuthData(authData);
 
   // 3. Verify rpIdHash
-  const expectedRpIdHash = await sha256(encoder.encode(expectedRpId));
+  const expectedRpIdHash = await sha256(encoder.encode(policy.rpId));
   if (!arrayEqual(parsed.rpIdHash, expectedRpIdHash)) {
     throw new Error("RP ID hash mismatch");
   }

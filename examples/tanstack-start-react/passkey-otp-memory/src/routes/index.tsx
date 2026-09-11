@@ -6,6 +6,7 @@ import {
   startAuthentication,
   verifyAuthentication,
   startAddPasskey,
+  verifyAddPasskey,
   listPasskeys,
   removePasskey,
   requestOtp,
@@ -25,9 +26,11 @@ import {
   AuthLayout,
   PasskeyList,
   Toolbar,
-  usePasskeyRegistration,
+} from "@repo/shared-react";
+import {
   usePasskeyAuthentication,
-} from "@repo/auth-react";
+  usePasskeyRegistration,
+} from "../use-passkey";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -46,13 +49,13 @@ type PasskeyEntry = { id: string };
 function UnauthenticatedView(props: { onSignedIn: () => void }) {
   const register = usePasskeyRegistration({
     start: () => startRegistration(),
-    verify: (args) => verifyRegistration({ data: args }),
+    verify: (credential) => verifyRegistration({ data: { credential } }),
     onSuccess: () => props.onSignedIn(),
   });
 
   const authenticate = usePasskeyAuthentication({
     start: () => startAuthentication(),
-    verify: (args) => verifyAuthentication({ data: args }),
+    verify: (credential) => verifyAuthentication({ data: { credential } }),
     onSuccess: () => props.onSignedIn(),
   });
 
@@ -157,7 +160,7 @@ function Authenticated(props: {
 
   const addPasskey = usePasskeyRegistration({
     start: () => startAddPasskey(),
-    verify: (args) => verifyRegistration({ data: args }),
+    verify: (credential) => verifyAddPasskey({ data: { credential } }),
     onSuccess: () => props.onChanged(),
   });
 
@@ -169,7 +172,14 @@ function Authenticated(props: {
   };
 
   if (addingEmail) {
-    return <AddEmailFlow onSuccess={props.onChanged} />;
+    return (
+      <AddEmailFlow
+        onSuccess={() => {
+          setAddingEmail(false);
+          props.onChanged();
+        }}
+      />
+    );
   }
 
   return (

@@ -1,37 +1,13 @@
-// Core
-export { makeOtpAuth } from "./make-otp-auth";
-export { makePasskeyAuth } from "./make-passkey-auth";
 export { makeAuth } from "./make-auth";
-export { makeAuthHandler } from "./handler";
-
-// Presets - Storage
+export type * from "./contracts";
 export {
-  memoryOtpStorage,
-  memorySessionStorage,
-  memoryCredentialStorage,
-} from "./presets/storage-memory";
-
-// Presets - Codecs
-export { sessionOpaque } from "./presets/session-opaque";
-export { sessionHmac } from "./presets/session-hmac";
-export { registrationHmac } from "./presets/registration-hmac";
-
-// Presets - OTP Transport
-export { otpTransportConsole } from "./presets/otp-transport-console";
-
-// Presets - Session Transport (Layer 2)
-export {
-  sessionTransportCookie,
-  sessionCookieDefaults,
-} from "./presets/session-transport-cookie";
-export { sessionTransportHeader } from "./presets/session-transport-header";
-export { sessionTransportMemory } from "./presets/session-transport-memory";
-
-// Parser
-export { p } from "./parser";
-
-// Validators
-export { authValidators } from "./validators";
-
-// Types
-export type * from "./types";
+  makeOpaqueSession,
+  makeOpaqueSessionResolver,
+} from "./mechanisms/make-opaque-session";
+export type * from "./mechanisms/make-opaque-session";
+export { makeOtp } from "./mechanisms/make-otp";
+export type * from "./mechanisms/make-otp";
+export { makeOtpStrategy } from "./mechanisms/make-otp-strategy";
+export { makePasskeyEngine } from "./mechanisms/make-passkey-engine";
+export type * from "./mechanisms/make-passkey-engine";
+export { makePasskeyStrategy } from "./mechanisms/make-passkey-strategy";

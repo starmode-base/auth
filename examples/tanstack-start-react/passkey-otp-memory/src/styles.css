@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@repo/auth-react/styles.css";
+@import "@repo/shared-react/styles.css";
 
 /* Button cursor */
 @layer base {
