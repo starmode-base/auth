@@ -1,11 +1,3 @@
-/**
- * Candidate library implementation for strategy composition.
- *
- * makeAuth is the only public candidate exported from this file. The strategy
- * kernel constructor is an internal microkernel detail. This spike
- * implementation contains no mechanism branches and is not production
- * library code.
- */
 import type {
   Auth,
   SessionAdapter,
@@ -47,7 +39,7 @@ function makeStrategyKernel<
   };
 }
 
-/** Candidate public constructor for the kernel bound namespace map */
+/** Constructor for the kernel bound namespace map */
 export function makeAuth<
   Identity extends SessionIdentity,
   SessionCredential,
