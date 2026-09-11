@@ -3,3 +3,7 @@ node_modules/
 
 # Misc
 .DS_Store
+
+# Claude Code local files
+.claude/launch.json
+.claude/settings.local.json
