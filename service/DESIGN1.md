@@ -1,6 +1,6 @@
 # OTP email relay — design notes
 
-This document specifies the hosted sending service. It complements the sending-service section of `/THREAT-MODEL.md`.
+This document specifies the hosted sending service. It complements the sending-service section of `/docs/threat-model.md`.
 
 ## Invariant
 
@@ -70,12 +70,12 @@ The repository is open source and the design assumes it: no guard depends on sec
 - Neon Postgres behind Hyperdrive, with Smart Placement pinning the worker near the database. Counters are single-statement conditional writes (increment-if-under-cap with `RETURNING`). One relational database holds keys, counters, the send log, and suppression. Durable Objects are held in reserve for hot counters — the global ceiling is the single-row candidate. Previews connect to Neon directly; Hyperdrive is production-only, since its configs are static.
 - The ESP is Cloudflare Email Service, public beta accepted at this service's stakes. It binds directly to the Worker (no API key), configures SPF, DKIM, and DMARC on the zone automatically, ships built-in suppression with complaint feedback loops, and delivers lifecycle events to a Queue — `bounced` and `complained` feed the kill switch. The events feature is new; exercise it hard in development before trusting the kill switch to it. Pricing is $0.35 per 1,000 sends after the 3,000 per month included with Workers Paid. The fallback is SES ($0.10 per 1,000, mature); the migration surface is one fixed template and one send call.
 - Keys have a recognizable prefix, registered with GitHub secret scanning. A leaked key is low-value by design: sets and rates bound the damage, re-keying is cheap, and the content channel is dead regardless.
-- Library integration: service refusals surface through the delivery adapter as `rate_limited` (see THREAT-MODEL.md).
+- Library integration: service refusals surface through the delivery adapter as `rate_limited` (see docs/threat-model.md).
 
 ## Later
 
-- Verification-outcome feedback (the send-only trade-off is recorded in THREAT-MODEL.md). It would also let set slots confirm only on verified OTPs, so bot signups stop consuming sets and re-keying stops being the recovery.
+- Verification-outcome feedback (the send-only trade-off is recorded in docs/threat-model.md). It would also let set slots confirm only on verified OTPs, so bot signups stop consuming sets and re-keying stops being the recovery.
 - A per-key daily rate raise (for example 1,000 per day) if real hundred-user apps hit 100 per day. One config value.
-- End-user IP forwarding (THREAT-MODEL.md).
+- End-user IP forwarding (docs/threat-model.md).
 - Accounts and a dashboard (passkey, dogfooding the library) — only if a management surface earns its place.
 - SMS transport.

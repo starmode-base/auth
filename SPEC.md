@@ -350,7 +350,7 @@ Storage is split by concern: `OtpStorage`, `SessionStorage`, `CredentialStorage`
 
 > **Decided (2026-07-16): One attempt per otp.** A wrong otp consumes it — the user starts over with a fresh request. No attempt budgets, no re-store logic; every failure path fails closed. The typo cost is one email round-trip; acceptable for v1, revisit only on observed user friction. Per-IP rate limiting stays with the app; per-identifier cooldown is mechanism-layer (decided 2026-07-17, below).
 
-> **Decided (2026-07-17): Rate limiting splits by who holds the state.** A rate limit is a decision over state and is enforced where that state lives, atomically — or it isn't real. The library owns exactly one relevant state, the otp record, so it enforces exactly one limit: per-identifier issuance frequency. `OtpStorage.store` may refuse (returns `false`), `requestOtp` fails with `rate_limited` and sends nothing, and the cooldown knob lives on `makeOtpStorage` (required field, `0` = explicitly off), enforced by an atomic conditional-put `store` primitive — the same one-word obligation as `take`. Per-IP/volume/bot defense stays with the app (it holds the request); sender reputation stays with the sending service (it holds cross-app outcomes). Full vector map and deployment shapes: THREAT-MODEL.md. Supersedes the blanket "rate limiting (infrastructure-layer concern)" exclusion.
+> **Decided (2026-07-17): Rate limiting splits by who holds the state.** A rate limit is a decision over state and is enforced where that state lives, atomically — or it isn't real. The library owns exactly one relevant state, the otp record, so it enforces exactly one limit: per-identifier issuance frequency. `OtpStorage.store` may refuse (returns `false`), `requestOtp` fails with `rate_limited` and sends nothing, and the cooldown knob lives on `makeOtpStorage` (required field, `0` = explicitly off), enforced by an atomic conditional-put `store` primitive — the same one-word obligation as `take`. Per-IP/volume/bot defense stays with the app (it holds the request); sender reputation stays with the sending service (it holds cross-app outcomes). Full vector map and deployment shapes: docs/threat-model.md. Supersedes the blanket "rate limiting (infrastructure-layer concern)" exclusion.
 
 **Why no database drivers?**
 
@@ -703,7 +703,7 @@ _Future:_
 - ❌ Password-based auth
 - ❌ Legacy browser support
 - ❌ SAML / SSO / enterprise features
-- ❌ IP/volume rate limiting and bot defense — request-layer state the library never sees (app middleware, WAF, captcha). Per-identifier cooldown is in scope — see THREAT-MODEL.md
+- ❌ IP/volume rate limiting and bot defense — request-layer state the library never sees (app middleware, WAF, captcha). Per-identifier cooldown is in scope — see docs/threat-model.md
 
 **Constraints:**
 
